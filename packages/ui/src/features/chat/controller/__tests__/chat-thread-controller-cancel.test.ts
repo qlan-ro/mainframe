@@ -11,6 +11,7 @@ vi.mock('../../../../lib/api/chats', () => ({
   getChat: vi.fn().mockResolvedValue(null),
   getChatWorkflowRuns: vi.fn().mockResolvedValue([]),
   resumeChat: vi.fn().mockResolvedValue(undefined),
+  interruptChat: vi.fn().mockResolvedValue(undefined),
   cancelQueuedMessage: vi.fn().mockResolvedValue(true),
   editQueuedMessage: vi.fn().mockResolvedValue(undefined),
 }));
@@ -22,7 +23,7 @@ vi.mock('@/lib/toast', () => ({
   mfToast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn(), permission: vi.fn() },
 }));
 
-import { cancelQueuedMessage, getChat } from '../../../../lib/api/chats';
+import { cancelQueuedMessage, getChat, interruptChat } from '../../../../lib/api/chats';
 import { useHeldQueue } from '../../composer/queue/held-queue-store';
 import { forgetSent, noteQueued } from '../../composer/queue/sent-order';
 import { CHAT_ID, makeChat, makeController } from './acp-test-kit';
@@ -56,7 +57,7 @@ describe('AcpChatController.cancel — idle guard', () => {
   });
 });
 
-describe('AcpChatController.cancel — holds the queue first (C10)', () => {
+describe('AcpChatController.cancel — queued messages (C10)', () => {
   const queuedRef = (messageId: string, second: number) => ({
     messageId,
     chatId: CHAT_ID,
@@ -65,8 +66,8 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
     timestamp: `2026-11-24T10:00:0${second}.000Z`,
   });
 
-  it('takes the queued messages back before interrupting, and keeps them held', async () => {
-    vi.mocked(getChat).mockResolvedValueOnce(makeChat());
+  it('takes adapter-owned queued messages back before interrupting', async () => {
+    vi.mocked(getChat).mockResolvedValueOnce(makeChat({ adapterId: 'mock' }));
     const order: string[] = [];
     vi.mocked(cancelQueuedMessage).mockImplementation(async (_port, _chat, id) => {
       order.push(`cancel-queued:${id}`);
@@ -93,6 +94,32 @@ describe('AcpChatController.cancel — holds the queue first (C10)', () => {
     const held = useHeldQueue.getState().byChat[CHAT_ID]!;
     expect(held.map((row) => row.messageId)).toEqual(['m1', 'm2']);
     expect(held.map((row) => row.projectId)).toEqual(['p1', 'p1']);
+  });
+
+  it.each(['claude', 'codex'])('keeps %s prompts in the daemon queue on Stop', async (adapterId) => {
+    vi.mocked(getChat).mockResolvedValueOnce(makeChat({ adapterId }));
+    const { ctrl, acpClient } = makeController();
+    await ctrl.load();
+    acpClient.emitUpdate(CHAT_ID, { sessionUpdate: 'state_update', state: 'running' });
+    acpClient.emitQueueState(CHAT_ID, [queuedRef('m1', 1)]);
+
+    await ctrl.cancel();
+
+    expect(acpClient.cancelCalls).toEqual([CHAT_ID]);
+    expect(cancelQueuedMessage).not.toHaveBeenCalled();
+    expect(useHeldQueue.getState().byChat).toEqual({});
+    expect(Object.values(ctrl.getState().interactions.queued)).toEqual([queuedRef('m1', 1)]);
+  });
+
+  it('sends Stop to the daemon when a managed queue is idle', async () => {
+    vi.mocked(getChat).mockResolvedValueOnce(makeChat());
+    const { ctrl } = makeController();
+    await ctrl.load();
+
+    await ctrl.cancel();
+
+    expect(interruptChat).toHaveBeenCalledOnce();
+    expect(ctrl.getState().runState).toEqual({ type: 'idle' });
   });
 
   it('does not touch the queue when the chat is idle', async () => {

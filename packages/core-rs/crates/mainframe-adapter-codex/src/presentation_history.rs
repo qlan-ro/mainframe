@@ -3,7 +3,7 @@ use crate::transcript_presentation::{context, item_phase};
 use crate::types::{ThreadItem, ThreadReadTurn};
 use mainframe_types::chat::{ChatMessage, ChatMessageType};
 use mainframe_types::transcript_presentation::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) fn convert_turns(
     turns: &[ThreadReadTurn],
@@ -15,7 +15,25 @@ pub(crate) fn convert_turns(
     let mut messages =
         crate::history_convert::convert_thread_items(&items, thread, children, agents);
     let membership = membership(turns, thread);
+    let steered: HashSet<_> = turns
+        .iter()
+        .flat_map(|turn| {
+            turn.items
+                .iter()
+                .filter_map(|item| match item {
+                    ThreadItem::UserMessage(user) => Some(user.id.as_str()),
+                    _ => None,
+                })
+                .skip(1)
+        })
+        .collect();
     for message in &mut messages {
+        if message.r#type == ChatMessageType::User && steered.contains(message.id.as_str()) {
+            message
+                .metadata
+                .get_or_insert_default()
+                .insert("steered".into(), serde_json::Value::Bool(true));
+        }
         if message.r#type != ChatMessageType::Assistant {
             continue;
         }

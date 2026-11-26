@@ -88,14 +88,6 @@ pub(super) async fn rollout_scan_records(
     let thread_ids = [thread_id.to_string()];
     let meta = lookup_agent_metadata_with(&thread_ids, deps.map(|d| &d.registry));
     let rollout_path = meta.get(thread_id)?.rollout_path.clone()?;
-    let items = read_rollout_items(&rollout_path, Some(thread_id), deps.map(|d| &d.rollout)).await;
-    if items.is_empty() {
-        return None;
-    }
-    Some(convert_thread_items(
-        &items,
-        thread_id,
-        &HashMap::new(),
-        &HashMap::new(),
-    ))
+    crate::rollout_turns::read_rollout_history(&rollout_path, thread_id, deps.map(|d| &d.rollout))
+        .await
 }

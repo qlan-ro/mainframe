@@ -113,6 +113,25 @@ pub trait AdapterSession: Send + Sync {
         command: String,
         args: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>>;
+    fn acknowledges_queued_input_by_echo(&self) -> bool {
+        false
+    }
+    fn guard_queued_write(
+        &self,
+        _uuid: String,
+        _should_write: Box<dyn FnOnce() -> bool + Send>,
+    ) -> bool {
+        false
+    }
+    fn clear_queued_write_guard(&self, _uuid: &str) {}
+    fn send_queued_command(
+        &self,
+        command: String,
+        args: Option<String>,
+        _uuid: String,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.send_command(command, args)
+    }
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;

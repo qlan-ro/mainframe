@@ -182,6 +182,11 @@ async fn queue_edit(
     let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
+        Err(mainframe_chat::chat_manager::SendError::QueuedMessageGone) => (
+            StatusCode::CONFLICT,
+            axum::Json(serde_json::json!({ "code": "queued_message_gone" })),
+        )
+            .into_response(),
         Err(err) => crate::respond::fail_internal(
             format!("queue.edit failed chat_id={}", id),
             &err,
@@ -210,11 +215,51 @@ async fn queue_cancel(
     }
 }
 
+async fn queue_resume(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Response {
+    match chat_exists(&ctx, &id).await {
+        Ok(false) => return crate::respond::ApiError::chat_not_found().into_response(),
+        Ok(true) => {}
+        Err(resp) => return resp.into_response(),
+    }
+    match ctx.chat.chat_manager.resume_maintenance_queue(&id).await {
+        Ok(()) => ok_empty(),
+        Err(err) => crate::respond::fail_internal(
+            format!("queue.resume failed chat_id={id}"),
+            &err,
+            err.to_string(),
+        ),
+    }
+}
+
+async fn queue_recovery(
+    State(ctx): State<Arc<AppCtx>>,
+    Path((id, message_id, action)): Path<(String, String, String)>,
+) -> Response {
+    let manager = &ctx.chat.chat_manager;
+    let result = match action.as_str() {
+        "confirm" => manager.confirm_uncertain_input(&id, &message_id).await,
+        _ => return axum::http::StatusCode::NOT_FOUND.into_response(),
+    };
+    match result {
+        Ok(()) => ok_empty(),
+        Err(err) => crate::respond::fail_internal(
+            format!("queue recovery failed chat_id={id}"),
+            &err,
+            err.to_string(),
+        ),
+    }
+}
+
 pub fn router() -> Router<Arc<AppCtx>> {
     Router::new()
+        .route(
+            "/api/chats/{id}/queue/{message_id}/{action}",
+            post(queue_recovery),
+        )
         .route("/api/chats/{id}/config", patch(update_config))
         .route("/api/chats/{id}/interrupt", post(interrupt))
         .route("/api/chats/{id}/resume", post(resume))
+        .route("/api/chats/{id}/queue/resume", post(queue_resume))
         .route("/api/chats/{id}/trust-workspace", post(trust_workspace))
         .route(
             "/api/chats/{id}/queue/{messageId}",

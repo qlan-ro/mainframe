@@ -8,6 +8,8 @@ use mainframe_types::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
+type WriteGuard = Box<dyn FnOnce() -> bool + Send>;
+
 pub(super) struct IdleTestSession {
     pub inner: crate::test_support::FakeSession,
     pub supported: bool,
@@ -15,12 +17,18 @@ pub(super) struct IdleTestSession {
     pub ready: AtomicBool,
     pub requests: Mutex<Vec<NativeCompactionRequest>>,
     pub sent: Mutex<Vec<(String, Option<String>)>>,
+    pub steered: Mutex<Vec<String>>,
     pub sink: Mutex<Option<Arc<dyn SessionSink>>>,
     pub started: tokio::sync::Notify,
     pub finish: tokio::sync::Notify,
     pub fail: bool,
     pub legacy: bool,
     pub send_failure: Mutex<Option<AdapterError>>,
+    pub acknowledge_by_echo: bool,
+    pub capture_guard: bool,
+    pub write_guard: Mutex<Option<WriteGuard>>,
+    pub history: Mutex<Option<Result<Vec<ChatMessage>, AdapterError>>>,
+    pub send_timeout: Option<std::time::Duration>,
     pub hold_send: AtomicBool,
     pub send_started: tokio::sync::Notify,
 }
@@ -37,12 +45,18 @@ impl IdleTestSession {
             ready: AtomicBool::new(true),
             requests: Mutex::new(Vec::new()),
             sent: Mutex::new(Vec::new()),
+            steered: Mutex::new(Vec::new()),
             sink: Mutex::new(None),
             started: tokio::sync::Notify::new(),
             finish: tokio::sync::Notify::new(),
             fail: false,
             legacy: false,
             send_failure: Mutex::new(None),
+            acknowledge_by_echo: false,
+            capture_guard: false,
+            write_guard: Default::default(),
+            history: Default::default(),
+            send_timeout: None,
             hold_send: AtomicBool::new(false),
             send_started: tokio::sync::Notify::new(),
         }
@@ -131,8 +145,29 @@ impl AdapterSession for IdleTestSession {
             if self.hold_send.load(Ordering::SeqCst) {
                 std::future::pending::<()>().await;
             }
+            if let Some(timeout) = self.send_timeout {
+                return tokio::time::timeout(timeout, std::future::pending())
+                    .await
+                    .map_err(|_| AdapterError::Message("turn/start timed out".into()));
+            }
             failure.map_or(Ok(()), Err)
         })
+    }
+    fn guard_queued_write(&self, _uuid: String, guard: WriteGuard) -> bool {
+        if self.capture_guard {
+            *self.write_guard.lock_recover() = Some(guard);
+        }
+        self.capture_guard
+    }
+    fn acknowledges_queued_input_by_echo(&self) -> bool {
+        self.acknowledge_by_echo
+    }
+    fn supports_steer(&self) -> bool {
+        self.adapter_id() == "codex"
+    }
+    fn steer(&self, message: String, _: Option<String>) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.steered.lock_recover().push(message);
+        Box::pin(async { Ok(()) })
     }
     fn respond_to_permission(
         &self,
@@ -170,7 +205,13 @@ impl AdapterSession for IdleTestSession {
         self.inner.get_context_files()
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        self.inner.load_history()
+        let history = self.history.lock_recover().take();
+        Box::pin(async {
+            match history {
+                Some(history) => history,
+                None => self.inner.load_history().await,
+            }
+        })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         self.inner.extract_plan_files()

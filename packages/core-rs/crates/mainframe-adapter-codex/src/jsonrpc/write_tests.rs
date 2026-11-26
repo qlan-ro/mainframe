@@ -18,6 +18,7 @@ fn client_with_full_queue() -> (JsonRpcClient, mpsc::Receiver<Vec<u8>>) {
         close_notify: Arc::new(Notify::new()),
         kill_notify: Arc::new(Notify::new()),
         write_tx,
+        write_guards: None,
         request_timeout_ms: 60_000,
     };
     (client, queue)

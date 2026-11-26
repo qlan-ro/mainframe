@@ -13,12 +13,27 @@ pub trait ChatStore: Send + Sync {
         Ok(Vec::new())
     }
 
+    fn idle_queue_pause_reason(&self, _chat_id: &str) -> Result<Option<String>, SeamError> {
+        Ok(None)
+    }
+    fn idle_queue_set_pause(&self, _chat_id: &str, _reason: Option<&str>) -> Result<(), SeamError> {
+        Ok(())
+    }
+
     fn idle_queue_put(
         &self,
         _chat_id: &str,
         _input: &mainframe_db::idle_compaction_queue::QueuedInput,
     ) -> Result<(), SeamError> {
         Err(SeamError::msg("maintenance queue unavailable"))
+    }
+    fn idle_queue_replace(
+        &self,
+        _chat_id: &str,
+        _previous: &str,
+        _input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<bool, SeamError> {
+        Ok(false)
     }
     fn idle_queue_list(
         &self,

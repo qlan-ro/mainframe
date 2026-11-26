@@ -65,6 +65,7 @@ fn prompt_turn(id: &str, status: &str, message_id: &str) -> ThreadReadTurn {
     t.items = vec![ThreadItem::UserMessage(
         crate::item_types::UserMessageItem {
             id: message_id.to_string(),
+            client_id: None,
             content: None,
             text: Some("hi".to_string()),
         },

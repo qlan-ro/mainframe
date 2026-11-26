@@ -222,6 +222,12 @@ const MIGRATIONS: &[Migration] = &[
         "base_branch",
         "ALTER TABLE chats ADD COLUMN base_branch TEXT"
     ),
+    column!(
+        37,
+        "chats",
+        "queue_pause_reason",
+        "ALTER TABLE chats ADD COLUMN queue_pause_reason TEXT"
+    ),
 ];
 
 pub fn migrations() -> &'static [Migration] {

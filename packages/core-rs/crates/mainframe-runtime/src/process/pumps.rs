@@ -61,10 +61,20 @@ impl StdinWriter {
 /// The writer task stops at the first failed write or flush, closing the
 /// queue so later writes report [`StdinWriteError::Closed`].
 pub fn spawn_stdin_writer(stdin: Option<ChildStdin>) -> StdinWriter {
+    spawn_filtered_stdin_writer(stdin, |_| true)
+}
+
+pub fn spawn_filtered_stdin_writer(
+    stdin: Option<ChildStdin>,
+    should_write: impl Fn(&[u8]) -> bool + Send + 'static,
+) -> StdinWriter {
     let (writer, mut receiver) = StdinWriter::channel(STDIN_QUEUE_CAPACITY);
     if let Some(mut stdin) = stdin {
         tokio::spawn(async move {
             while let Some(bytes) = receiver.recv().await {
+                if !should_write(&bytes) {
+                    continue;
+                }
                 if let Err(error) = stdin.write_all(&bytes).await {
                     tracing::debug!(%error, "child stdin closed");
                     break;

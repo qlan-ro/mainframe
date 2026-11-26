@@ -23,6 +23,15 @@ impl SessionSinkImpl {
         let session_id = session_id.unwrap_or_default();
         debug!(session_id, chat_id = self.chat_id, "session exited");
 
+        self.shared.active_queue_echoes.remove(&self.chat_id);
+        let uncertain = self.shared.expose_uncertain_delivery(&self.chat_id, None);
+        self.pause_held_queue("Session ended");
+        if uncertain {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.shared.queued_for_chat(&self.chat_id),
+            });
+        }
         self.clear_exit_queue();
 
         self.shared.deps.tracker_end_all_running(&self.chat_id);
@@ -35,6 +44,7 @@ impl SessionSinkImpl {
     }
 
     pub(super) fn handle_error(&self, error: mainframe_adapter_api::AdapterError) {
+        self.pause_held_queue("Error: Provider error");
         if self.shared.maintenance.active(&self.chat_id) {
             warn!(chat_id = self.chat_id, "idle compaction session error");
             return;
@@ -45,12 +55,24 @@ impl SessionSinkImpl {
         });
     }
     fn clear_exit_queue(&self) {
-        let had_queued = self.messages.lock_recover().strip_all_queued(&self.chat_id);
+        let persisted = self
+            .shared
+            .best_effort(
+                &self.chat_id,
+                self.shared.deps.idle_queue_list(&self.chat_id),
+                Vec::new(),
+            )
+            .into_iter()
+            .map(|input| input.message.id)
+            .collect::<HashSet<_>>();
+        let had_queued = self
+            .messages
+            .lock_recover()
+            .strip_queued_except(&self.chat_id, &persisted);
+        self.shared
+            .clear_exited_queue_refs(&self.chat_id, &persisted);
         if had_queued {
             self.emit_display();
-        }
-        self.shared.clear_all_queued_for_chat(&self.chat_id);
-        if had_queued {
             self.notify_surface(ChatSurfaceEvent::QueueChanged {
                 chat_id: self.chat_id.clone(),
                 refs: self.shared.queued_for_chat(&self.chat_id),

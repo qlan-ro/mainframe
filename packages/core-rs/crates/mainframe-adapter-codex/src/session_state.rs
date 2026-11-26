@@ -51,6 +51,8 @@ pub struct CodexSessionState {
     /// configured model.
     pub reported_model: Option<String>,
     pub current_turn_id: Option<String>,
+    pub turn_start_pending: bool,
+    pub interrupt_on_start: bool,
     pub current_turn_plan: Option<CurrentTurnPlan>,
     pub last_usage: Option<LastUsage>,
     /// The id `turn_model::resolve_turn_model` settled on for the current/last
@@ -107,6 +109,8 @@ impl CodexSessionState {
     /// early would let a late delta from the same turn restart the text
     /// mid-message.
     pub fn clear_transient(&mut self) {
+        self.turn_start_pending = false;
+        self.interrupt_on_start = false;
         self.maintenance.finish(false);
         self.presentation.clear();
         self.command_state.clear();

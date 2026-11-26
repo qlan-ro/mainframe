@@ -70,3 +70,30 @@ async fn queue_edit_rejects_empty_content_400() {
     .await;
     assert_eq!(read(resp).await.unwrap().0, StatusCode::BAD_REQUEST);
 }
+
+#[tokio::test]
+async fn queue_edit_returns_conflict_for_missing_row() {
+    let ctx = AppCtx::test_ctx();
+    let chat = ctx
+        .core
+        .db
+        .call(|db| {
+            let project = db.projects.create("/tmp/queue-edit-conflict", None)?;
+            db.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project.id,
+                adapter_id: "claude".into(),
+                ..Default::default()
+            })
+        })
+        .await
+        .unwrap();
+    let response = queue_edit(
+        State(ctx),
+        Path((chat.id, "removed".into())),
+        Bytes::from_static(br#"{"content":"replacement"}"#),
+    )
+    .await;
+    let (status, body) = read(response).await.unwrap();
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body, serde_json::json!({"code":"queued_message_gone"}));
+}

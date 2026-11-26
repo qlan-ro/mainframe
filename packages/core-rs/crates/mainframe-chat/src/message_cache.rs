@@ -153,18 +153,18 @@ impl MessageCache {
         true
     }
 
-    /// Strip `queued`/`uuid` metadata from every queued message in `chat_id`
-    /// (session exit: the CLI owns every queued prompt, none can be replayed
-    /// after it dies). Returns whether any message was queued. Records one
-    /// `Structural` entry at the earliest touched index, same as a single
-    /// `strip_queued_and_move_to_end` call would.
-    pub fn strip_all_queued(&mut self, chat_id: &str) -> bool {
+    /// Clear CLI-owned queue flags after exit, preserving daemon-owned prompts.
+    pub fn strip_queued_except(
+        &mut self,
+        chat_id: &str,
+        retained: &std::collections::HashSet<String>,
+    ) -> bool {
         let Some(msgs) = self.cache.get_mut(chat_id) else {
             return false;
         };
         let mut first_touched: Option<usize> = None;
         for (idx, m) in msgs.iter_mut().enumerate() {
-            if !is_queued(m) {
+            if !is_queued(m) || retained.contains(&m.id) {
                 continue;
             }
             if let Some(md) = m.metadata.as_mut() {
@@ -182,7 +182,7 @@ impl MessageCache {
 
     /// Run `edit` over every message of `chat_id` in place; `edit` reports
     /// whether it changed that message. Records one `Structural` entry at the
-    /// earliest changed index (the same journal shape `strip_all_queued` uses
+    /// earliest changed index (the same journal shape `strip_queued_except` uses
     /// for its in-place metadata edits), so the display projector re-folds from
     /// there instead of dropping its slot. Returns whether any message changed.
     pub fn update_in_place(
@@ -247,7 +247,7 @@ impl MessageCache {
     }
 }
 
-/// `metadata.queued === true` (`strip_all_queued`'s per-message test).
+/// `metadata.queued === true` (`strip_queued_except`'s per-message test).
 fn is_queued(m: &ChatMessage) -> bool {
     m.metadata
         .as_ref()

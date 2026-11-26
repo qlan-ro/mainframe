@@ -228,7 +228,7 @@ async fn cancel_lost_race_emits_nothing_and_keeps_the_ref() {
 }
 
 #[tokio::test]
-async fn edit_lost_race_silently_discards_the_edit() {
+async fn edit_lost_race_reports_the_row_is_gone() {
     let deps = FakeDeps::arc();
     let mgr = ChatManager::new(deps.clone());
     let session = RecSession::new("c1", true, false);
@@ -246,9 +246,10 @@ async fn edit_lost_race_silently_discards_the_edit() {
     session.send_message_calls.lock().unwrap().clear();
     deps.emitter.events.lock().unwrap().clear();
 
-    mgr.edit_queued_message("c1", &r.message_id, "edited")
-        .await
-        .unwrap();
+    assert!(matches!(
+        mgr.edit_queued_message("c1", &r.message_id, "edited").await,
+        Err(SendError::QueuedMessageGone)
+    ));
 
     assert!(session.send_message_calls.lock().unwrap().is_empty());
     assert_eq!(deps.events().len(), 0);

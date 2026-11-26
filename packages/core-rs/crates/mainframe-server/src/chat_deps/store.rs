@@ -30,6 +30,27 @@ impl ChatStore for DaemonChatDeps {
             .map_err(SeamError::new)
     }
 
+    fn idle_queue_pause_reason(&self, chat_id: &str) -> Result<Option<String>, SeamError> {
+        let chat_id = chat_id.to_owned();
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::pause_reason(d.connection(), &chat_id)
+            })
+            .map_err(SeamError::new)
+    }
+    fn idle_queue_set_pause(&self, chat_id: &str, reason: Option<&str>) -> Result<(), SeamError> {
+        let (chat_id, reason) = (chat_id.to_owned(), reason.map(str::to_owned));
+        self.db
+            .call_blocking(move |d| {
+                mainframe_db::idle_compaction_queue::set_pause(
+                    d.connection(),
+                    &chat_id,
+                    reason.as_deref(),
+                )
+            })
+            .map_err(SeamError::new)
+    }
+
     fn idle_queue_put(
         &self,
         chat_id: &str,
@@ -41,6 +62,24 @@ impl ChatStore for DaemonChatDeps {
                 mainframe_db::idle_compaction_queue::put(d.connection(), &chat_id, &input)
             })
             .map_err(SeamError::new)
+    }
+    fn idle_queue_replace(
+        &self,
+        chat_id: &str,
+        previous: &str,
+        input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<bool, SeamError> {
+        let db = &self.db;
+        let (chat_id, previous, input) = (chat_id.to_owned(), previous.to_owned(), input.clone());
+        db.call_blocking(move |d| {
+            mainframe_db::idle_compaction_queue::replace(
+                d.connection(),
+                &chat_id,
+                &previous,
+                &input,
+            )
+        })
+        .map_err(SeamError::new)
     }
     fn idle_queue_list(
         &self,

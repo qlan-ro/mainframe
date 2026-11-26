@@ -1,31 +1,85 @@
 use super::*;
 
 impl SessionSinkImpl {
-    pub(super) fn handle_queued_processed(&self, uuid: &str) {
-        debug!(
-            chat_id = self.chat_id,
-            uuid, "moving queued message to end + clearing flag"
-        );
-        let found_id = {
-            let msgs = self.messages.lock_recover();
-            msgs.get(&self.chat_id).and_then(|v| {
-                v.iter()
-                    .find(|m| {
-                        m.metadata
-                            .as_ref()
-                            .and_then(|md| md.get("uuid"))
-                            .and_then(|v| v.as_str())
-                            == Some(uuid)
-                    })
-                    .map(|m| m.id.clone())
-            })
-        };
-        if let Some(id) = &found_id {
-            self.messages
-                .lock_recover()
-                .strip_queued_and_move_to_end(&self.chat_id, id);
+    pub(super) fn pause_held_queue(&self, reason: &str) {
+        if self.holds_turn_queue()
+            && !self.shared.queued_for_chat(&self.chat_id).is_empty()
+            && self.shared.pause_maintenance_queue(&self.chat_id, reason)
+        {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.shared.queued_for_chat(&self.chat_id),
+            });
         }
-        if found_id.is_some() {
+    }
+
+    pub(super) fn handle_queued_processed(&self, uuid: &str) {
+        let steered = self
+            .shared
+            .queued_for_chat(&self.chat_id)
+            .iter()
+            .any(|r| r.uuid == uuid && r.steered == Some(true));
+        let held = !steered && self.holds_turn_queue();
+        if held {
+            match self.shared.deps.idle_queue_remove(&self.chat_id, uuid) {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(_) => {
+                    warn!(
+                        chat_id = self.chat_id,
+                        "queue acknowledgement persistence failed"
+                    );
+                    return;
+                }
+            }
+        }
+        let running = self
+            .shared
+            .active(&self.chat_id)
+            .is_some_and(|cell| crate::chat_manager::is_working(&cell.lock_recover().chat));
+        let active_echo = held
+            && self
+                .shared
+                .active_queue_echoes
+                .remove_if(&self.chat_id, |_, expected| expected == uuid)
+                .is_some();
+        self.confirm_queue_echo(uuid, held, !steered && (!held || (active_echo && running)));
+        self.finish_queue_echo(uuid, held && !running);
+    }
+
+    fn finish_queue_echo(&self, uuid: &str, drain: bool) {
+        self.shared.handle_queued_processed(&self.chat_id, uuid);
+        self.notify_surface(ChatSurfaceEvent::QueueChanged {
+            chat_id: self.chat_id.clone(),
+            refs: self.shared.queued_for_chat(&self.chat_id),
+        });
+        if drain {
+            self.shared.schedule_maintenance_drain(&self.chat_id);
+        }
+    }
+
+    fn confirm_queue_echo(&self, uuid: &str, held: bool, starts_turn: bool) {
+        let Some(id) = self.find_queued_message_id(uuid) else {
+            return;
+        };
+        {
+            let mut messages = self.messages.lock_recover();
+            if held {
+                messages.update_in_place(&self.chat_id, |message| {
+                    if message.id != id {
+                        return false;
+                    }
+                    let metadata = message.metadata.get_or_insert_default();
+                    metadata.remove("uuid");
+                    metadata.remove("queueDelivery");
+                    metadata.remove("queued").is_some()
+                });
+            } else {
+                messages.strip_queued_and_move_to_end(&self.chat_id, &id);
+            }
+        }
+        self.emit_display();
+        if starts_turn {
             if self.shared.deps.idle_run_begin(&self.chat_id, uuid).is_ok() {
                 if let Some(cell) = self.shared.active(&self.chat_id) {
                     cell.lock_recover().real_run_generation = Some(uuid.to_owned());
@@ -33,22 +87,22 @@ impl SessionSinkImpl {
             } else {
                 warn!(chat_id = self.chat_id, "queued run persistence failed");
             }
-            self.emit_display();
-            // A queued prompt's `TurnAccepted` (send_entry.rs) is not
-            // `TurnStarted` until the CLI actually dequeues it — this is that
-            // signal ( queued-turn start point).
             self.notify_surface(self.shared.turn_started_event(&self.chat_id));
-        } else {
-            warn!(
-                chat_id = self.chat_id,
-                uuid, "message not found in cache or already processed"
-            );
         }
-        self.shared.handle_queued_processed(&self.chat_id, uuid);
-        self.notify_surface(ChatSurfaceEvent::QueueChanged {
-            chat_id: self.chat_id.clone(),
-            refs: self.shared.queued_for_chat(&self.chat_id),
-        });
+    }
+    fn find_queued_message_id(&self, uuid: &str) -> Option<String> {
+        let msgs = self.messages.lock_recover();
+        msgs.get(&self.chat_id).and_then(|v| {
+            v.iter()
+                .find(|m| {
+                    m.metadata
+                        .as_ref()
+                        .and_then(|md| md.get("uuid"))
+                        .and_then(|v| v.as_str())
+                        == Some(uuid)
+                })
+                .map(|m| m.id.clone())
+        })
     }
     pub(super) fn reconcile_result_queue(&self) -> Vec<QueuedMessageRef> {
         let refs_before = self.shared.queued_for_chat(&self.chat_id);

@@ -1,6 +1,5 @@
 mod idle_intake;
 use mainframe_types::sync::LockExt as _;
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -28,10 +27,9 @@ use serde_json::{Map, Value, json};
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
 use crate::fork::ThreadTarget;
-use crate::history_convert::convert_thread_items;
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
-use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
+use crate::rollout_reader::RolloutReaderDeps;
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
 use crate::thread_request::{thread_request_error, thread_request_for};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};
@@ -81,6 +79,8 @@ pub struct CodexScanDeps {
     pub rollout: RolloutReaderDeps,
 }
 
+type QueuedWriteGuards = std::collections::HashMap<String, Box<dyn FnOnce() -> bool + Send>>;
+
 pub struct CodexSession {
     span: tracing::Span,
     id: String,
@@ -92,6 +92,7 @@ pub struct CodexSession {
     approval_handler: Arc<Mutex<Option<Arc<ApprovalHandler>>>>,
     sink: Arc<Mutex<Arc<dyn SessionSink>>>,
     state: Arc<Mutex<CodexSessionState>>,
+    queued_write_guards: Mutex<QueuedWriteGuards>,
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
     last_activity_ms: Arc<AtomicI64>,
@@ -129,6 +130,7 @@ impl CodexSession {
             approval_handler: Arc::new(Mutex::new(None)),
             sink: Arc::new(Mutex::new(null_sink())),
             state: Arc::new(Mutex::new(state)),
+            queued_write_guards: Default::default(),
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             last_activity_ms: Arc::new(AtomicI64::new(mainframe_types::time::now_ms())),
@@ -234,3 +236,6 @@ mod request_resolved_tests;
 
 #[cfg(test)]
 mod idle_activity_tests;
+
+#[cfg(test)]
+mod queued_start_tests;

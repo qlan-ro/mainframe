@@ -39,6 +39,8 @@ async fn rejection_survives_history_reload_and_retries_original_uuid() {
         .await
         .unwrap();
     manager.drain_maintenance_queue("c").await.unwrap();
+    super::maintenance_queue::wait_tests::finish_turn(&session, false);
+    manager.drain_maintenance_queue("c").await.unwrap();
     let sent = session.sent.lock_recover();
     assert_eq!(sent.len(), 3);
     assert_eq!(sent[1].1.as_deref(), Some(original.uuid.as_str()));
@@ -216,4 +218,49 @@ async fn reserved_send_returns_the_queued_ref_message_id() {
     let refs = manager.get_queued_for_chat("c");
     assert_eq!(refs.len(), 1);
     assert_eq!(queued_id.as_deref(), Some(refs[0].message_id.as_str()));
+}
+
+#[tokio::test]
+async fn echoed_delivery_is_retained_until_acknowledgement() {
+    let mut fake = IdleTestSession::new();
+    fake.acknowledge_by_echo = true;
+    let (manager, deps, session) = fixture(fake).await;
+    manager
+        .enqueue_maintenance_input("c", "wait for echo", None, None)
+        .await
+        .unwrap();
+    manager.drain_maintenance_queue("c").await.unwrap();
+    let input = deps.idle_queue_list("c").unwrap().remove(0);
+    assert_eq!(input.delivery, DeliveryState::Unconfirmed);
+    let sink = session.sink.lock_recover().as_ref().unwrap().clone();
+    sink.on_queued_processed(&input.uuid);
+    assert!(deps.idle_queue_list("c").unwrap().is_empty());
+    assert!(manager.get_queued_for_chat("c").is_empty());
+}
+
+#[tokio::test]
+async fn reload_drops_interrupted_delivery_already_in_provider_history() {
+    let mut fake = IdleTestSession::new();
+    fake.acknowledge_by_echo = true;
+    let (manager, deps, _) = fixture(fake).await;
+    manager
+        .enqueue_maintenance_input("c", "accepted before crash", None, None)
+        .await
+        .unwrap();
+    manager.drain_maintenance_queue("c").await.unwrap();
+    let input = deps.idle_queue_list("c").unwrap().remove(0);
+    let reloaded = reload(&manager, deps.clone());
+    let mut accepted = input.message;
+    accepted.id = "provider-assigned-item".into();
+    accepted.metadata = Some(HashMap::from([(
+        "providerInputUuid".into(),
+        serde_json::json!(input.uuid),
+    )]));
+    let history = reloaded
+        .shared
+        .merge_idle_history("c", vec![accepted])
+        .unwrap();
+    assert_eq!(history.len(), 1);
+    assert!(reloaded.get_queued_for_chat("c").is_empty());
+    assert!(deps.idle_queue_list("c").unwrap().is_empty());
 }

@@ -45,6 +45,7 @@ impl RpcFailure {
         }
     }
 }
+type WriteGuards = Arc<Mutex<HashMap<i64, Box<dyn FnOnce() -> bool + Send>>>>;
 type PendingTx = oneshot::Sender<Result<Value, RpcFailure>>;
 
 /// The four callbacks the client fans events out to (mirrors `JsonRpcHandlers`).
@@ -64,6 +65,7 @@ pub struct JsonRpcClient {
     kill_notify: Arc<Notify>,
     write_tx: mainframe_runtime::process::StdinWriter,
     request_timeout_ms: u64,
+    write_guards: Option<WriteGuards>,
 }
 
 impl JsonRpcClient {
@@ -81,6 +83,15 @@ impl JsonRpcClient {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, RpcFailure> {
+        self.request_guarded(method, params, None).await
+    }
+
+    pub(crate) async fn request_guarded(
+        &self,
+        method: &str,
+        params: Option<Value>,
+        guard: Option<Box<dyn FnOnce() -> bool + Send>>,
+    ) -> Result<Value, RpcFailure> {
         if self.closed.load(Ordering::SeqCst) {
             return Err(RpcFailure::NotWritten(JsonRpcError(
                 "Client closed".to_string(),
@@ -91,11 +102,9 @@ impl JsonRpcClient {
         let msg = serde_json::json!({ "id": id, "method": method, "params": params.unwrap_or(Value::Object(Map::new())) });
         let (tx, rx) = oneshot::channel();
         self.pending.lock_recover().insert(req_id.clone(), tx);
-        if let Err(error) = self.write(&msg) {
+        if let Err(error) = self.enqueue_request(method, id, &msg, guard) {
             self.pending.lock_recover().remove(&req_id);
-            return Err(RpcFailure::NotWritten(JsonRpcError(format!(
-                "Request {method} (id={id}) not written: {error}"
-            ))));
+            return Err(RpcFailure::NotWritten(error));
         }
 
         match tokio::time::timeout(Duration::from_millis(self.request_timeout_ms), rx).await {
@@ -111,6 +120,28 @@ impl JsonRpcClient {
                 ))))
             }
         }
+    }
+
+    fn enqueue_request(
+        &self,
+        method: &str,
+        id: i64,
+        message: &Value,
+        guard: Option<Box<dyn FnOnce() -> bool + Send>>,
+    ) -> Result<(), JsonRpcError> {
+        if let Some(guard) = guard {
+            if let Some(guards) = &self.write_guards {
+                guards.lock_recover().insert(id, guard);
+            } else if !guard() {
+                return Err(cancelled_write());
+            }
+        }
+        self.write(message).map_err(|error| {
+            if let Some(guards) = &self.write_guards {
+                guards.lock_recover().remove(&id);
+            }
+            JsonRpcError(format!("Request {method} (id={id}) not written: {error}"))
+        })
     }
 
     pub fn notify(&self, method: &str, params: Option<Value>) {
@@ -188,54 +219,18 @@ fn reject_all_pending(pending: &Arc<Mutex<HashMap<RequestId, PendingTx>>>, err: 
     }
 }
 
-/// `2026-07-13T13:10:39.248771Z` — a `^\d{4}-\d{2}-\d{2}T[\d:.]+Z` prefix.
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    // Pure framing tests. A full stdin queue is covered in `write_tests.rs`;
-    // the process-backed close/dispatch cases need a mock child process and
-    // are a known test gap.
-
-    #[test]
-    fn parses_a_single_json_object_line() {
-        let msgs =
-            parse_jsonrpc_messages(r#"{"method":"turn/started","params":{}}"#).expect("parse");
-        assert_eq!(msgs.len(), 1);
-        assert_eq!(msgs[0].get("method"), Some(&json!("turn/started")));
-    }
-
-    #[test]
-    fn dispatches_a_valid_object_before_trailing_stdout_noise_on_the_same_line() {
-        let notification = r#"{"method":"thread/tokenUsage/updated","params":{"tokenUsage":{"total":{"totalTokens":20805}}}}"#;
-        let line = format!("{notification}progress: still running");
-        let msgs = parse_jsonrpc_messages(&line).expect("parse");
-        assert_eq!(msgs.len(), 1);
-        assert_eq!(
-            msgs[0].get("method"),
-            Some(&json!("thread/tokenUsage/updated"))
-        );
-    }
-
-    #[test]
-    fn skips_malformed_json_lines() {
-        assert!(parse_jsonrpc_messages("not valid json").is_err());
-    }
-
-    #[test]
-    fn find_json_object_end_returns_index_past_first_object() {
-        assert_eq!(find_json_object_end(r#"{"a":1}{"b":2}"#), Some(7));
-        // A `}` inside a string must NOT close the object (depth tracking + string skip).
-        assert_eq!(find_json_object_end(r#"{"a":"}"}"#), Some(9));
-        assert_eq!(find_json_object_end(r#"{"a":1"#), None);
-    }
+fn cancelled_write() -> JsonRpcError {
+    JsonRpcError("Queued start cancelled before write".into())
 }
+
+#[cfg(test)]
+mod framing_tests;
 
 mod dispatch;
 mod parsing;
 mod process;
 mod stderr;
+mod write_guard;
 #[cfg(test)]
 mod write_tests;
 use dispatch::dispatch;
@@ -264,11 +259,20 @@ impl JsonRpcClient {
                 close_notify: Arc::new(Notify::new()),
                 kill_notify: Arc::new(Notify::new()),
                 write_tx,
+                write_guards: None,
                 request_timeout_ms: 100,
             },
             receiver,
         )
     }
+    pub(crate) fn test_enable_write_filter(&mut self) {
+        self.write_guards = Some(WriteGuards::default());
+    }
+
+    pub(crate) fn test_allow_write(&self, line: &[u8]) -> bool {
+        write_guard::allow_write(line, &self.pending, self.write_guards.as_ref().unwrap())
+    }
+
     pub(crate) fn test_reject(&self, id: i64) {
         if let Some(sender) = self.pending.lock_recover().remove(&RequestId::Number(id)) {
             let _ = sender.send(Err(RpcFailure::Rejected(JsonRpcError("rejected".into()))));

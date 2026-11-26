@@ -87,15 +87,15 @@ export const resumeChat = (
 export const trustWorkspace = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/trust-workspace`);
 
+export const resumeQueuedMessages = (port: number, chatId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/resume`);
+
+export const confirmQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/${encodeURIComponent(messageId)}/confirm`);
+
 export const interruptChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/interrupt`);
 
-/**
- * Edit a queued message's text. The message was already forwarded to the CLI,
- * which holds it in its own FIFO queue and may consume it mid-turn or fold it
- * into the next turn — this races that consumption and can no-op if the CLI
- * grabs the message first.
- */
 export const editQueuedMessage = (port: number, chatId: string, messageId: string, content: string): Promise<void> =>
   requestEmpty('PATCH', `${apiBase(port)}/api/chats/${chatId}/queue/${messageId}`, { content });
 

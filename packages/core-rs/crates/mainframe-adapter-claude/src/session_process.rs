@@ -86,7 +86,19 @@ impl ClaudeSession {
         handle
     }
     pub(super) fn start_stdin(&self, stdin: Option<tokio::process::ChildStdin>) {
-        let stdin_tx = mainframe_runtime::process::spawn_stdin_writer(stdin);
+        let guards = Arc::clone(&self.queued_write_guards);
+        let stdin_tx =
+            mainframe_runtime::process::spawn_filtered_stdin_writer(stdin, move |line| {
+                let mut guards = guards.lock_recover();
+                if guards.is_empty() {
+                    return true;
+                }
+                let guard = serde_json::from_slice::<serde_json::Value>(line)
+                    .ok()
+                    .and_then(|payload| guards.remove(payload.get("uuid")?.as_str()?));
+                drop(guards);
+                guard.is_none_or(|check| check())
+            });
         *self.stdin_tx.lock_recover() = Some(stdin_tx);
     }
     pub(super) fn start_output<R: tokio::io::AsyncRead + Unpin + Send + 'static>(

@@ -25,7 +25,8 @@ export function partState({ needsYou, live, ended }: PartEvidence, liveChild: bo
   return live || liveChild ? 'going' : (ended ?? 'neutral');
 }
 
-const isOnItsWay = (meta: MainframeMessageMeta | undefined) => meta?.pending === true && meta.error === undefined;
+const isOnItsWay = (meta: MainframeMessageMeta | undefined) =>
+  meta?.pending === true && meta.steered !== true && meta.error === undefined;
 
 interface Standing {
   readonly needsYou: boolean;

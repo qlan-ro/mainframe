@@ -123,15 +123,22 @@ pub fn convert_thread_items(
             }
             ThreadItem::UserMessage(u) => {
                 let text = user_message_text(u);
-                if text.is_empty() {
+                if text.is_empty() && u.client_id.is_none() {
                     continue;
                 }
-                messages.push(make_message(
+                let mut message = make_message(
                     &u.id,
                     chat_id,
                     ChatMessageType::User,
                     vec![text_block(&text)],
-                ));
+                );
+                if let Some(uuid) = &u.client_id {
+                    message.metadata.get_or_insert_default().insert(
+                        "providerInputUuid".into(),
+                        serde_json::Value::String(uuid.clone()),
+                    );
+                }
+                messages.push(message);
             }
             ThreadItem::CollabAgentToolCall(item) => {
                 handle_collab_tool_call(item, &mut messages, &mut spawn_prompts, &mut cards, &ctx);

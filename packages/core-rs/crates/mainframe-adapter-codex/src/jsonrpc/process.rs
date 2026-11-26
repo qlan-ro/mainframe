@@ -1,5 +1,6 @@
+use super::write_guard::guarded_writer;
 use super::*;
-use mainframe_runtime::process::{TailBuffer, finish_pumps, spawn_line_pump, spawn_stdin_writer};
+use mainframe_runtime::process::{TailBuffer, finish_pumps, spawn_line_pump};
 use tokio::task::JoinHandle;
 
 struct ProcessWatch {
@@ -23,14 +24,18 @@ impl JsonRpcClient {
         handlers: JsonRpcHandlers,
         request_timeout_ms: u64,
     ) -> Self {
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let write_guards = WriteGuards::default();
+        let write_tx = guarded_writer(child.stdin.take(), pending.clone(), write_guards.clone());
         let client = Self {
             next_id: AtomicI64::new(1),
-            pending: Arc::new(Mutex::new(HashMap::new())),
+            pending,
             closed: Arc::new(AtomicBool::new(false)),
             exited: Arc::new(AtomicBool::new(false)),
             close_notify: Arc::new(Notify::new()),
             kill_notify: Arc::new(Notify::new()),
-            write_tx: spawn_stdin_writer(child.stdin.take()),
+            write_tx,
+            write_guards: Some(write_guards),
             request_timeout_ms,
         };
         let watch = Arc::new(ProcessWatch {

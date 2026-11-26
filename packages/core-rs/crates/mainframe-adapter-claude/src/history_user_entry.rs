@@ -96,6 +96,14 @@ pub(super) fn convert_queued_command_entry(entry: &Value, chat_id: &str) -> Opti
         r#type: ChatMessageType::User,
         content: content_blocks,
         timestamp,
-        metadata: meta_or_none(history_meta()),
+        metadata: Some(queued_command_metadata(attachment)),
     })
+}
+
+fn queued_command_metadata(attachment: &Value) -> HashMap<String, Value> {
+    let mut metadata = HashMap::from([("steered".into(), Value::Bool(true))]);
+    if let Some(uuid) = attachment.get("source_uuid").and_then(Value::as_str) {
+        metadata.insert("providerInputUuid".into(), Value::String(uuid.to_owned()));
+    }
+    metadata
 }

@@ -10,6 +10,8 @@ pub(crate) struct ChatShared {
     pub(crate) messages: Arc<Mutex<MessageCache>>,
     pub(crate) permissions: Arc<Mutex<PermissionManager>>,
     pub(crate) queued_refs: QueuedRefs,
+    pub(crate) active_queue_echoes: DashMap<String, String>,
+    pub(crate) queue_pauses: DashMap<String, String>,
     pub(crate) orchestration: OrchestrationSlot,
     pub(crate) history_cache: Arc<HistorySnapshotCache>,
     storage_errors: Mutex<HashMap<String, std::time::Instant>>,
@@ -35,6 +37,8 @@ impl ChatShared {
             messages,
             permissions: Arc::new(Mutex::new(PermissionManager::new())),
             queued_refs: Arc::new(Mutex::new(Vec::new())),
+            active_queue_echoes: DashMap::new(),
+            queue_pauses: DashMap::new(),
             orchestration: OrchestrationSlot::default(),
             storage_errors: Mutex::new(HashMap::new()),
         })
@@ -45,11 +49,19 @@ impl ChatShared {
     /// The chat's queued refs, oldest-first (enqueue order): `queue_state`
     /// snapshots render in this order, so it is part of the wire contract.
     pub(crate) fn queued_for_chat(&self, chat_id: &str) -> Vec<QueuedMessageRef> {
+        let pause = self
+            .queue_pauses
+            .get(chat_id)
+            .map(|reason| reason.value().clone());
         self.queued_refs
             .lock_recover()
             .iter()
             .filter(|r| r.chat_id == chat_id)
             .cloned()
+            .map(|mut row| {
+                row.pause_reason = pause.clone();
+                row
+            })
             .collect()
     }
 
@@ -71,10 +83,14 @@ impl ChatShared {
         }
     }
 
-    pub(crate) fn clear_all_queued_for_chat(&self, chat_id: &str) {
+    pub(crate) fn clear_exited_queue_refs(
+        &self,
+        chat_id: &str,
+        retained: &std::collections::HashSet<String>,
+    ) {
         let mut guard = self.queued_refs.lock_recover();
         let before = guard.len();
-        guard.retain(|r| r.chat_id != chat_id);
+        guard.retain(|r| r.chat_id != chat_id || retained.contains(&r.message_id));
         let removed = before - guard.len();
         drop(guard);
         if removed > 0 {

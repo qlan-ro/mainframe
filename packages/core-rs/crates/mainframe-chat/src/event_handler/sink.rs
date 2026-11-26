@@ -1,6 +1,14 @@
 use super::*;
 
 impl SessionSinkImpl {
+    pub(super) fn holds_turn_queue(&self) -> bool {
+        self.shared.active(&self.chat_id).is_some_and(|cell| {
+            cell.lock_recover().session.as_ref().is_some_and(|session| {
+                crate::chat_manager::shared::holds_turn_queue(session.adapter_id())
+            })
+        })
+    }
+
     pub(super) fn emit_display(&self) {
         let categories = self.shared.deps.get_tool_categories(&self.chat_id);
         emit_display_for(

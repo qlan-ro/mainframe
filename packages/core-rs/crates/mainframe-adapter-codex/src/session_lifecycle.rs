@@ -28,19 +28,15 @@ impl CodexSession {
         let (thread_id, turn_id) = {
             let mut st = self.state.lock_recover();
             st.command_state.clear();
+            if st.current_turn_id.is_none() && st.turn_start_pending {
+                st.interrupt_on_start = true;
+            }
             (st.thread_id.clone(), st.current_turn_id.clone())
         };
         let (Some(client), Some(thread_id), Some(turn_id)) = (client, thread_id, turn_id) else {
             return Ok(());
         };
-        client
-            .request(
-                "turn/interrupt",
-                Some(json!({ "threadId": thread_id, "turnId": turn_id })),
-            )
-            .await
-            .map_err(AdapterError::from)?;
-        Ok(())
+        interrupt_turn(&client, thread_id, turn_id).await
     }
     pub(super) fn build_handlers(&self, approval: Arc<ApprovalHandler>) -> JsonRpcHandlers {
         let state_x = self.state.clone();
@@ -86,6 +82,7 @@ impl CodexSession {
     ) -> Box<dyn Fn(String, Value) + Send + Sync> {
         let sink = self.sink.clone();
         let state = self.state.clone();
+        let client = self.client.clone();
         let activity = self.last_activity_ms.clone();
         let span = self.span.clone();
         Box::new(move |method, params| {
@@ -101,7 +98,20 @@ impl CodexSession {
                 return;
             }
             let sink = sink.lock_recover().clone();
-            handle_notification(&method, &params, &sink, &mut state.lock_recover());
+            let interrupt = {
+                let mut state = state.lock_recover();
+                handle_notification(&method, &params, &sink, &mut state);
+                take_start_interrupt(&mut state, &method, &params)
+            };
+            if let Some((thread_id, turn_id)) = interrupt
+                && let Some(client) = client.lock_recover().clone()
+            {
+                tokio::spawn(async move {
+                    if let Err(error) = interrupt_turn(&client, thread_id, turn_id).await {
+                        sink.on_error(error);
+                    }
+                });
+            }
         })
     }
 
@@ -144,6 +154,40 @@ impl CodexSession {
             );
         })
     }
+}
+
+fn take_start_interrupt(
+    state: &mut CodexSessionState,
+    method: &str,
+    params: &Value,
+) -> Option<(String, String)> {
+    if method != "turn/started" || !state.turn_start_pending {
+        return None;
+    }
+    let turn_id = state.current_turn_id.as_ref()?;
+    if params.pointer("/turn/id").and_then(Value::as_str) != Some(turn_id) {
+        return None;
+    }
+    state.turn_start_pending = false;
+    if !std::mem::take(&mut state.interrupt_on_start) {
+        return None;
+    }
+    Some((state.thread_id.clone()?, turn_id.clone()))
+}
+
+async fn interrupt_turn(
+    client: &JsonRpcClient,
+    thread_id: String,
+    turn_id: String,
+) -> Result<(), AdapterError> {
+    client
+        .request(
+            "turn/interrupt",
+            Some(json!({ "threadId": thread_id, "turnId": turn_id })),
+        )
+        .await
+        .map_err(AdapterError::from)?;
+    Ok(())
 }
 
 fn is_activity_notification(method: &str) -> bool {

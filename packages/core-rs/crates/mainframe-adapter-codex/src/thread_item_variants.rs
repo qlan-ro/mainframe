@@ -169,6 +169,8 @@ pub struct UserContentBlock {
 #[serde(rename_all = "camelCase")]
 pub struct UserMessageItem {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
     /// Codex 0.125 stores the prompt under `content[].text`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Vec<UserContentBlock>>,

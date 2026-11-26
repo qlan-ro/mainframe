@@ -1,23 +1,20 @@
 'use client';
 
-/**
- * The queue, as rows at the top of the card (C10). Rows the agent still holds
- * send when it finishes; rows a Stop took back wait for the user, the first
- * one saying so. Only a stop turns a row failed, never a normal drain.
- */
 import { useEffect, useState, type ReactNode } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import { useAui, useAuiState } from '@assistant-ui/react';
 import { CircleAlert, Loader2, RotateCcwIcon, XIcon } from 'lucide-react';
 import { PencilIcon } from '@/components/ui/glyphs';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
+import { confirmQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
+import { appendQueuedDraft, copyQueuedToComposer } from './copy-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
@@ -27,13 +24,11 @@ interface QueueRow {
   messageId: string;
   content: string;
   attachments: number;
-  /** Why the row did not go out, or undefined while it is simply waiting. */
   failure?: string;
   action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
+  onMarkSent?: () => void;
   note?: string;
-  /** Claimed by a "Send now": it goes out behind what the agent already has. */
   leaving?: boolean;
-  /** On its way to the agent. */
   sending?: boolean;
   onEdit?: () => void;
   onRemove?: () => void;
@@ -41,7 +36,11 @@ interface QueueRow {
 
 const DELIVERY_FAILURE: Record<string, string> = {
   rejected: 'Not sent: the agent refused it. The queue is paused.',
-  unconfirmed: 'Delivery uncertain. Check the agent’s history; removing it only clears it here.',
+  unconfirmed: 'Not confirmed by the agent. It may have been received.',
+};
+
+const DELIVERY_NOTE: Partial<Record<string, string>> = {
+  unconfirmed: 'Uncertain',
 };
 
 const report = (what: string) => (error: unknown) => {
@@ -100,7 +99,7 @@ function Row({ row }: { row: QueueRow }) {
       {row.failure && <CircleAlert className="size-4 shrink-0 text-fail" aria-hidden />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 gap-2">
-          {!row.failure && (
+          {(!row.failure || row.note) && (
             <span
               role={row.sending ? 'status' : undefined}
               className="shrink-0 self-center text-caption/[1.45] font-semibold text-muted-foreground"
@@ -114,6 +113,11 @@ function Row({ row }: { row: QueueRow }) {
         </span>
         {row.failure && <span className="text-meta/[1.3] text-fail">{row.failure}</span>}
       </span>
+      {row.onMarkSent && (
+        <Button type="button" variant="ghost" size="xs" onClick={row.onMarkSent} className="shrink-0">
+          Mark as sent
+        </Button>
+      )}
       {row.action && (
         <Button
           type="button"
@@ -144,32 +148,68 @@ function Row({ row }: { row: QueueRow }) {
 function useQueuedRows(): QueueRow[] {
   const extras = useChatExtras();
   const { startEdit } = useComposerEdit();
+  const { composer } = useAui();
   const queued = Object.values(extras?.queued ?? {})
     .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  return queued.map(({ messageId, content, attachmentIds, delivery }) => ({
+  const blockedHead = queued[0]?.delivery === 'unconfirmed';
+  const resumeIndex = queued.findIndex((row) => row.pauseReason != null);
+  return queued.map(({ messageId, content, attachmentIds, delivery, pauseReason, chatId }, index) => ({
     messageId,
     content,
     attachments: attachmentIds?.length ?? 0,
+    note:
+      DELIVERY_NOTE[delivery ?? ''] ??
+      (blockedHead ? 'Waiting on the message above' : pauseReason && `Paused · ${pauseReason}`),
     failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
-    action:
-      delivery === 'rejected'
-        ? {
-            label: 'Retry',
-            testId: 'chat-queued-retry',
-            icon: <RotateCcwIcon data-icon="inline-start" />,
-            onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
-          }
+    onMarkSent:
+      delivery === 'unconfirmed' && extras
+        ? () => void confirmQueuedMessage(extras.port, chatId, messageId).catch(report('mark as sent'))
         : undefined,
-    onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
+    action:
+      delivery === 'unconfirmed' && extras
+        ? {
+            label: 'Copy to composer',
+            testId: 'chat-queued-copy',
+            onClick: () => {
+              void copyQueuedToComposer(composer, extras.port, chatId, content, attachmentIds).catch(
+                report('copy to composer'),
+              );
+            },
+          }
+        : !blockedHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
+          ? {
+              label: 'Resume',
+              testId: 'chat-queue-resume',
+              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+            }
+          : delivery === 'rejected'
+            ? {
+                label: 'Retry',
+                testId: 'chat-queued-retry',
+                icon: <RotateCcwIcon data-icon="inline-start" />,
+                onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+              }
+            : undefined,
+    onEdit: delivery
+      ? undefined
+      : () =>
+          startEdit({
+            messageId,
+            content,
+            recover: extras
+              ? async (replacement) => {
+                  const failed = await appendQueuedDraft(composer, extras.port, chatId, replacement, attachmentIds);
+                  mfToast.info('This message was already sent. Your edit is still in the composer.', {
+                    description: failed.length ? `Could not copy: ${failed.join(', ')}` : undefined,
+                  });
+                }
+              : undefined,
+          }),
     onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));
 }
 
-/**
- * Rows a Stop took back. One the agent had already picked up is still in its
- * queue or in the transcript, so it is not held after all.
- */
 function useHeldRows(): QueueRow[] {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? '';
@@ -205,7 +245,7 @@ function useHeldRows(): QueueRow[] {
       action:
         index === 0 && !busy
           ? {
-              label: row.unconfirmed ? 'Send again' : 'Send now',
+              label: row.unconfirmed ? 'Send again (may duplicate)' : 'Send now',
               testId: 'chat-queued-send-now',
               onClick: () => {
                 void extras?.sendHeld(row.messageId).catch(report('send'));

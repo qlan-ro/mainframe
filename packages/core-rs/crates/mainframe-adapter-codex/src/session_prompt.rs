@@ -4,7 +4,7 @@ impl CodexSession {
         &self,
         message: String,
         images: Vec<ImageInput>,
-        _uuid: Option<String>,
+        uuid: Option<String>,
     ) -> Result<(), AdapterError> {
         let client = self.client.lock_recover().clone();
         let Some(client) = client else {
@@ -28,21 +28,54 @@ impl CodexSession {
         .await?;
 
         let (thread_id, resolved_model) = self.resolve_prompt_model(model.as_deref())?;
-        let p = self.prompt_params(input, model.as_deref(), &cfg, &thread_id, &resolved_model)?;
-        let _: TurnStartResult = de(client
-            .request_with_disposition("turn/start", Some(Value::Object(p)))
-            .await
-            .map_err(|failure| match failure {
-                crate::jsonrpc::RpcFailure::Rejected(error)
-                | crate::jsonrpc::RpcFailure::NotWritten(error) => {
-                    AdapterError::DeliveryRejected(error.0)
-                }
-                crate::jsonrpc::RpcFailure::Unconfirmed(error) => AdapterError::Message(error.0),
-            })?)?;
+        let mut p =
+            self.prompt_params(input, model.as_deref(), &cfg, &thread_id, &resolved_model)?;
+        if let Some(uuid) = &uuid {
+            p.insert("clientUserMessageId".into(), Value::String(uuid.clone()));
+        }
+        self.start_turn(&client, p, uuid.as_deref()).await?;
 
         self.touch_activity();
         self.report_undeliverable(&undeliverable);
         *self.status.lock_recover() = AdapterProcessStatus::Running;
+        Ok(())
+    }
+
+    async fn start_turn(
+        &self,
+        client: &JsonRpcClient,
+        params: Map<String, Value>,
+        uuid: Option<&str>,
+    ) -> Result<(), AdapterError> {
+        let state = self.state.clone();
+        let guard = uuid.and_then(|id| self.queued_write_guards.lock_recover().remove(id));
+        let before_write = Box::new(move || {
+            let mut state = state.lock_recover();
+            if guard.is_some_and(|check| !check()) {
+                return false;
+            }
+            state.turn_start_pending = true;
+            true
+        });
+        let result = client
+            .request_guarded(
+                "turn/start",
+                Some(Value::Object(params)),
+                Some(before_write),
+            )
+            .await;
+        let _: TurnStartResult = de(result.map_err(|failure| match failure {
+            crate::jsonrpc::RpcFailure::Rejected(error) => {
+                let mut state = self.state.lock_recover();
+                state.turn_start_pending = false;
+                state.interrupt_on_start = false;
+                AdapterError::DeliveryRejected(error.0)
+            }
+            crate::jsonrpc::RpcFailure::NotWritten(error) => {
+                AdapterError::DeliveryRejected(error.0)
+            }
+            crate::jsonrpc::RpcFailure::Unconfirmed(error) => AdapterError::Message(error.0),
+        })?)?;
         Ok(())
     }
 

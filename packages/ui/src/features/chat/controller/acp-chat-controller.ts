@@ -4,7 +4,7 @@ import type { Chat, ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-typ
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getAcpFacadeClient } from '../../../lib/daemon/acp-clients';
 import type { AcpSessionClientPort } from './acp-session-plane';
-import { cancelQueuedMessage, editQueuedMessage, getChat } from '../../../lib/api/chats';
+import { cancelQueuedMessage, editQueuedMessage, getChat, interruptChat } from '../../../lib/api/chats';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -262,11 +262,14 @@ export class AcpChatController {
   public async cancel(): Promise<void> {
     // Before the guard: "Send now" can be under way before its turn shows.
     useHeldQueue.getState().releaseUnsent(this.daemonId);
-    // Idle guard (#324 QA): cancelling an already-idle chat is a daemon no-op —
-    // nothing would ever clear 'cancelling', stranding the "Working…" indicator.
-    if (this.state.runState.type !== 'running') return;
+    const adapter = this.state.chatConfig?.adapterId;
+    const daemonQueue = adapter === 'claude' || adapter === 'codex';
+    if (this.state.runState.type !== 'running') {
+      if (daemonQueue) await interruptChat(this.port, this.daemonId);
+      return;
+    }
     this.dispatch({ type: 'run.cancelling' });
-    await holdQueuedMessages(this.actionHost);
+    if (!daemonQueue) await holdQueuedMessages(this.actionHost);
     try {
       this.plane.cancel();
     } catch (error) {

@@ -2,6 +2,10 @@
 use super::*;
 use mainframe_types::sync::LockExt as _;
 
+pub(crate) fn holds_turn_queue(adapter_id: &str) -> bool {
+    matches!(adapter_id, "claude" | "codex")
+}
+
 pub(crate) fn is_working(chat: &Chat) -> bool {
     chat.process_state == Some(Some(ProcessState::Working))
 }

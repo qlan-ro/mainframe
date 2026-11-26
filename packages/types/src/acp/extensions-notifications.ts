@@ -18,6 +18,7 @@ export const QueuedRefSchema = z
     attachmentIds: z.array(z.string()).optional(),
     timestamp: z.string(),
     steered: z.boolean().optional(),
+    pauseReason: z.string().optional(),
   })
   .loose();
 

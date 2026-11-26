@@ -105,18 +105,24 @@ impl AdapterSession for CodexSession {
         &self,
         message: String,
         images: Vec<ImageInput>,
-        _uuid: Option<String>,
+        uuid: Option<String>,
     ) -> BoxFuture<'_, Result<(), AdapterError>> {
         Box::pin(
-            self.send_message_inner(message, images, _uuid)
+            self.send_message_inner(message, images, uuid)
                 .instrument(self.span.clone()),
         )
     }
 
+    fn guard_queued_write(&self, uuid: String, check: Box<dyn FnOnce() -> bool + Send>) -> bool {
+        self.queued_write_guards.lock_recover().insert(uuid, check);
+        true
+    }
+    fn clear_queued_write_guard(&self, uuid: &str) {
+        self.queued_write_guards.lock_recover().remove(uuid);
+    }
     fn supports_steer(&self) -> bool {
         true
     }
-
     fn steer(
         &self,
         message: String,
@@ -216,6 +222,19 @@ impl AdapterSession for CodexSession {
             })
             .instrument(self.span.clone()),
         )
+    }
+
+    fn send_queued_command(
+        &self,
+        _command: String,
+        _args: Option<String>,
+        _uuid: String,
+    ) -> BoxFuture<'_, Result<(), AdapterError>> {
+        Box::pin(async {
+            Err(AdapterError::DeliveryRejected(
+                "Codex does not support this command".into(),
+            ))
+        })
     }
 
     fn get_context_files(&self) -> ContextFiles {

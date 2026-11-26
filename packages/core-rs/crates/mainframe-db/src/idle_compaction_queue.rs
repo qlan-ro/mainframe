@@ -22,10 +22,15 @@ pub struct QueuedInput {
 pub enum DeliveryState {
     #[default]
     Pending,
+    #[serde(alias = "resend_scheduled")]
     Unconfirmed,
     Rejected,
 }
 impl DeliveryState {
+    pub fn ready_to_dispatch(self) -> bool {
+        self == Self::Pending
+    }
+
     pub fn recovery_label(self) -> Option<String> {
         match self {
             Self::Pending => None,
@@ -35,9 +40,24 @@ impl DeliveryState {
     }
 }
 impl QueuedInput {
+    pub fn matches_provider_uuid(&self, uuid: &str) -> bool {
+        self.uuid == uuid
+    }
+
+    pub fn matches_provider_message(&self, message: &ChatMessage) -> bool {
+        self.matches_provider_uuid(&message.id)
+            || message
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("providerInputUuid"))
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|uuid| self.matches_provider_uuid(uuid))
+    }
+
     pub fn queued_ref(&self, chat_id: &str) -> mainframe_types::chat::QueuedMessageRef {
         mainframe_types::chat::QueuedMessageRef {
             delivery: self.delivery.recovery_label(),
+            pause_reason: None,
             message_id: self.message.id.clone(),
             chat_id: chat_id.to_owned(),
             uuid: self.uuid.clone(),
@@ -69,6 +89,26 @@ pub struct QueuedCommand {
     pub args: Option<String>,
 }
 
+pub fn pause_reason(db: &Connection, chat_id: &str) -> Result<Option<String>, DbError> {
+    use rusqlite::OptionalExtension;
+    Ok(db
+        .query_row(
+            "SELECT queue_pause_reason FROM chats WHERE id = ?1",
+            [chat_id],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+pub fn set_pause(db: &Connection, chat_id: &str, reason: Option<&str>) -> Result<(), DbError> {
+    db.execute(
+        "UPDATE chats SET queue_pause_reason = ?2 WHERE id = ?1",
+        params![chat_id, reason],
+    )?;
+    Ok(())
+}
+
 pub fn put(db: &Connection, chat_id: &str, input: &QueuedInput) -> Result<(), DbError> {
     let json = serde_json::to_string(input)?;
     db.execute(
@@ -77,6 +117,18 @@ pub fn put(db: &Connection, chat_id: &str, input: &QueuedInput) -> Result<(), Db
         params![input.uuid, chat_id, json],
     )?;
     Ok(())
+}
+
+pub fn replace(
+    db: &Connection,
+    chat_id: &str,
+    previous: &str,
+    input: &QueuedInput,
+) -> Result<bool, DbError> {
+    Ok(db.execute(
+        "UPDATE idle_compaction_queue SET uuid=?3,payload=?4 WHERE chat_id=?1 AND uuid=?2",
+        params![chat_id, previous, input.uuid, serde_json::to_string(input)?],
+    )? == 1)
 }
 
 pub fn list(db: &Connection, chat_id: &str) -> Result<Vec<QueuedInput>, DbError> {
@@ -133,6 +185,7 @@ mod tests {
         let db = DatabaseManager::open(&path).unwrap();
         db.connection().execute("INSERT INTO projects(id,name,path,created_at,last_opened_at) VALUES ('p','p','/p','','')",[]).unwrap();
         db.connection().execute("INSERT INTO chats(id,project_id,adapter_id,status,created_at,updated_at) VALUES ('c','p','claude','active','','')",[]).unwrap();
+        set_pause(db.connection(), "c", Some("Stopped")).unwrap();
         put(db.connection(), "c", &input("one")).unwrap();
         put(db.connection(), "c", &input("two")).unwrap();
         let mut unresolved = input("one");
@@ -165,6 +218,12 @@ mod tests {
             items[0].command.as_ref().unwrap().args.as_deref(),
             Some("args")
         );
+        assert_eq!(
+            pause_reason(db.connection(), "c").unwrap().as_deref(),
+            Some("Stopped")
+        );
+        set_pause(db.connection(), "c", None).unwrap();
+        assert_eq!(pause_reason(db.connection(), "c").unwrap(), None);
         assert!(remove(db.connection(), "c", "one").unwrap());
         assert!(!remove(db.connection(), "c", "one").unwrap());
         assert_eq!(list(db.connection(), "c").unwrap()[0].uuid, "two");

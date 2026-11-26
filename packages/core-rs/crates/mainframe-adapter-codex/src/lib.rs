@@ -56,6 +56,7 @@ pub(crate) mod rollout_apply_patch;
 pub(crate) mod rollout_fork;
 pub mod rollout_reader;
 pub(crate) mod rollout_reconstruct;
+mod rollout_turns;
 pub(crate) mod rollout_unified_exec;
 pub mod session;
 pub(crate) mod session_state;

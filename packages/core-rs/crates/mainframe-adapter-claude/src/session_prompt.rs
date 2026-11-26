@@ -1,24 +1,20 @@
 use super::*;
 use crate::session_control::StdinWriteError;
 impl ClaudeSession {
-    /// Queue one line for the CLI's stdin. A closed stdin is the exit path's
-    /// business and is only logged; a full queue is reported to the caller.
     pub(super) fn write_stdin(&self, line: String) -> Result<(), AdapterError> {
-        if let Some(tx) = self.stdin_clone() {
-            let mut bytes = line.into_bytes();
-            bytes.push(b'\n');
-            self.queue_stdin(&tx, bytes)?;
-        }
+        let tx = self
+            .stdin_clone()
+            .ok_or_else(|| AdapterError::NotSpawned(self.id.clone()))?;
+        let mut bytes = line.into_bytes();
+        bytes.push(b'\n');
+        self.queue_stdin(&tx, bytes)?;
         self.bump_last_activity();
         Ok(())
     }
     fn queue_stdin(&self, tx: &StdinTx, bytes: Vec<u8>) -> Result<(), AdapterError> {
         match tx.try_write(bytes) {
             Ok(()) => Ok(()),
-            Err(StdinWriteError::Closed) => {
-                tracing::debug!(session_id = %self.id, "stdin write skipped: child stdin closed");
-                Ok(())
-            }
+            Err(StdinWriteError::Closed) => Err(AdapterError::NotSpawned(self.id.clone())),
             Err(error @ StdinWriteError::Full) => {
                 tracing::warn!(session_id = %self.id, %error, "stdin write rejected");
                 Err(AdapterError::StdinFull(self.id.clone()))

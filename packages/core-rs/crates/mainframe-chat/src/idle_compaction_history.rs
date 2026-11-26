@@ -33,18 +33,47 @@ impl ChatShared {
                 history.insert(index, marker);
             }
         }
+        self.restore_queue_pause(chat_id)?;
+        self.reconcile_idle_queue(chat_id, &mut history)?;
+        Ok(history)
+    }
+
+    fn reconcile_idle_queue(
+        &self,
+        chat_id: &str,
+        history: &mut Vec<ChatMessage>,
+    ) -> Result<(), mainframe_adapter_api::AdapterError> {
+        let mut restored_head = self.queued_for_chat(chat_id).is_empty();
         for input in self.deps.idle_queue_list(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message("Queued history unavailable".into())
         })? {
+            if history
+                .iter()
+                .any(|m| m.id == input.message.id || input.matches_provider_message(m))
+            {
+                self.deps
+                    .idle_queue_remove(chat_id, &input.uuid)
+                    .map_err(|_| {
+                        mainframe_adapter_api::AdapterError::Message(
+                            "Queue acknowledgement persistence failed".into(),
+                        )
+                    })?;
+                self.handle_queued_processed(chat_id, &input.uuid);
+                continue;
+            }
+            if restored_head
+                && input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Pending
+            {
+                self.pause_maintenance_queue(chat_id, "Session ended");
+            }
+            restored_head = false;
             let mut refs = self.queued_refs.lock_recover();
             if !refs.iter().any(|r| r.uuid == input.uuid) {
                 refs.push(input.queued_ref(chat_id));
             }
-            if !history.iter().any(|m| m.id == input.message.id) {
-                history.push(input.message);
-            }
+            history.push(input.message);
         }
-        Ok(history)
+        Ok(())
     }
 }
 

@@ -27,6 +27,10 @@ impl ChatManager {
         // Register before reading any registry/cache state; the guard drops on
         // every return path below, `?` included.
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
+        let _input = self
+            .handoff_locks
+            .acquire(&format!("maintenance:{chat_id}"))
+            .await;
         if let Some(message_id) = self
             .enqueue_when_reserved(chat_id, content, attachment_ids, command.as_ref())
             .await?

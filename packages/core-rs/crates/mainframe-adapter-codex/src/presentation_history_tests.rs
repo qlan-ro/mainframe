@@ -141,3 +141,29 @@ fn reloaded_turns_without_visible_user_items_stay_in_separate_containers() {
     let result = &json!(display[0].content)[1]["result"];
     assert_eq!(result["content"], "ok");
 }
+
+#[test]
+fn only_later_user_items_in_the_same_turn_are_steered() {
+    let turns: Vec<ThreadReadTurn> = serde_json::from_value(json!([
+        {"id":"one","status":"completed","items":[
+            {"type":"userMessage","id":"first","text":"start"},
+            {"type":"agentMessage","id":"comment","text":"working"},
+            {"type":"userMessage","id":"steer","text":"also check this"},
+            {"type":"agentMessage","id":"final","text":"done"}]},
+        {"id":"two","status":"completed","items":[
+            {"type":"userMessage","id":"queued","clientId":"queue-id","text":"next"}]}
+    ]))
+    .unwrap();
+    let messages = convert_turns(&turns, "thread", &HashMap::new(), &HashMap::new());
+    let steered: Vec<_> = messages
+        .iter()
+        .filter(|m| m.metadata.as_ref().and_then(|meta| meta.get("steered")) == Some(&json!(true)))
+        .map(|m| m.id.as_str())
+        .collect();
+    assert_eq!(steered, ["steer"]);
+    let queued = messages.iter().find(|m| m.id == "queued").unwrap();
+    assert_eq!(
+        queued.metadata.as_ref().unwrap()["providerInputUuid"],
+        "queue-id"
+    );
+}

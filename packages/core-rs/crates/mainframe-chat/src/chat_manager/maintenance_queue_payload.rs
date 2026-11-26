@@ -1,6 +1,6 @@
 use super::send_outgoing::Outgoing;
 use super::*;
-use mainframe_db::idle_compaction_queue::{QueuedCommand, QueuedImage, QueuedInput};
+use mainframe_db::idle_compaction_queue::{DeliveryState, QueuedCommand, QueuedImage, QueuedInput};
 use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
@@ -60,6 +60,84 @@ impl ChatManager {
     }
 }
 
+impl ChatManager {
+    pub(super) fn guard_queue_write(
+        &self,
+        chat_id: &str,
+        post: &Arc<Mutex<ActiveChat>>,
+        session: &dyn AdapterSession,
+        input: &QueuedInput,
+    ) -> bool {
+        let manager = self.shared.manager.get().cloned();
+        let chat_id = chat_id.to_owned();
+        let uuid = input.uuid.clone();
+        let post = Arc::downgrade(post);
+        session.guard_queued_write(
+            input.uuid.clone(),
+            Box::new(move || {
+                let Some(manager) = manager.and_then(|weak| weak.upgrade()) else {
+                    return false;
+                };
+                let Ok(inputs) = manager.shared.deps.idle_queue_list(&chat_id) else {
+                    return false;
+                };
+                let Some(input) = inputs.into_iter().find(|input| {
+                    input.uuid == uuid && input.delivery == DeliveryState::Unconfirmed
+                }) else {
+                    return false;
+                };
+                if manager.shared.queue_pauses.contains_key(&chat_id) {
+                    manager.retain_paused_write(&chat_id, input);
+                    return false;
+                }
+                let Some(post) = post.upgrade() else {
+                    return false;
+                };
+                manager.set_working(&post, &now_iso8601());
+                true
+            }),
+        )
+    }
+    pub(super) fn queued_write_was_paused(
+        &self,
+        chat_id: &str,
+        uuid: &str,
+    ) -> Result<bool, SendError> {
+        Ok(self.shared.queue_pauses.contains_key(chat_id)
+            && self
+                .shared
+                .deps
+                .idle_queue_list(chat_id)?
+                .iter()
+                .any(|row| row.uuid == uuid && row.delivery == DeliveryState::Pending))
+    }
+
+    fn retain_paused_write(&self, chat_id: &str, mut input: QueuedInput) {
+        let uuid = input.uuid.clone();
+        self.shared
+            .active_queue_echoes
+            .remove_if(chat_id, |_, expected| expected == &uuid);
+        input.set_delivery(DeliveryState::Pending);
+        if !self
+            .shared
+            .deps
+            .idle_queue_replace(chat_id, &uuid, &input)
+            .is_ok_and(|updated| updated)
+        {
+            self.shared.expose_uncertain_delivery(chat_id, Some(&uuid));
+        } else if let Some(row) = self
+            .shared
+            .queued_refs
+            .lock_recover()
+            .iter_mut()
+            .find(|row| row.uuid == uuid)
+        {
+            row.delivery = None;
+        }
+        self.notify_queue_changed(chat_id);
+    }
+}
+
 fn metadata(uuid: &str, previews: &[serde_json::Value]) -> HashMap<String, serde_json::Value> {
     let mut metadata = HashMap::from([
         ("queued".to_owned(), serde_json::json!(true)),
@@ -88,7 +166,7 @@ pub(super) async fn dispatch(
     match &input.command {
         Some(cmd) if cmd.source != "mainframe" => {
             session
-                .send_command(cmd.name.clone(), cmd.args.clone())
+                .send_queued_command(cmd.name.clone(), cmd.args.clone(), input.uuid.clone())
                 .await
         }
         Some(cmd) => {

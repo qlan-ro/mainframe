@@ -235,7 +235,7 @@ fn strip_all_queued_records_one_structural_entry_at_the_earliest_touched_index()
     cache.append("c1", queued("q2"));
     let recorder = seed(&mut cache, "c1");
 
-    assert!(cache.strip_all_queued("c1"));
+    assert!(cache.strip_queued_except("c1", &Default::default()));
     for m in cache.get("c1").unwrap() {
         assert!(
             m.metadata
@@ -254,5 +254,5 @@ fn strip_all_queued_records_one_structural_entry_at_the_earliest_touched_index()
 fn strip_all_queued_is_a_noop_when_nothing_is_queued() {
     let mut cache = MessageCache::new();
     cache.append("c1", msg("a"));
-    assert!(!cache.strip_all_queued("c1"));
+    assert!(!cache.strip_queued_except("c1", &Default::default()));
 }

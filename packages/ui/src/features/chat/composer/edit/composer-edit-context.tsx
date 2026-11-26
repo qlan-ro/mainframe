@@ -11,7 +11,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 export interface QueuedEdit {
   readonly messageId: string;
   readonly content: string;
-  /** Where the edit goes when it is not the daemon's queue (a held row, C10). */
+  readonly recover?: (content: string) => Promise<void>;
   readonly save?: (content: string) => Promise<void>;
 }
 

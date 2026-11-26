@@ -11,36 +11,52 @@ impl SessionSinkImpl {
         let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
+        self.shared.active_queue_echoes.remove(&self.chat_id);
         self.retire_fork();
         let cost = data.total_cost_usd.unwrap_or(0.0);
         let totals = self.result_totals(&cell, &data);
         let now = now_iso8601();
-        let refs_after = self.reconcile_result_queue();
-        let update = self.persist_result(&cell, &data, totals, refs_after.len(), now);
+        let held_queue = self.holds_turn_queue();
+        let remaining = if held_queue {
+            0
+        } else {
+            self.reconcile_result_queue().len()
+        };
+        let update = self.persist_result(&cell, &data, totals, remaining, now);
         self.record_segment_result(&data);
         let (reason, was_interrupted, is_error) = self.result_reason(&data);
-        if let Some(generation) = cell.lock_recover().real_run_generation.take() {
-            let completed = (!was_interrupted
-                && !is_error
-                && data.is_error != Some(true)
-                && data.subtype.as_deref() == Some("success"))
-            .then(now_ms);
-            if self
+        let completed = !was_interrupted
+            && !is_error
+            && data.is_error != Some(true)
+            && data.subtype.as_deref() == Some("success");
+        let generation = cell.lock_recover().real_run_generation.take();
+        if let Some(generation) = generation
+            && self
                 .shared
                 .deps
-                .idle_run_complete(&self.chat_id, &generation, completed)
+                .idle_run_complete(&self.chat_id, &generation, completed.then(now_ms))
                 .is_err()
-            {
-                warn!(
-                    chat_id = self.chat_id,
-                    "idle run completion persistence failed"
-                );
-            }
+        {
+            warn!(
+                chat_id = self.chat_id,
+                "idle run completion persistence failed"
+            );
         }
         self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
+        if held_queue {
+            self.release_held_queue_after_result(completed);
+        }
         self.shared.schedule_idle_evaluation(&self.chat_id);
+    }
+
+    fn release_held_queue_after_result(&self, completed: bool) {
+        if completed {
+            self.shared.schedule_maintenance_drain(&self.chat_id);
+        } else {
+            self.pause_held_queue("Error: Turn did not complete");
+        }
     }
 
     fn retire_fork(&self) {
@@ -144,13 +160,21 @@ impl SessionSinkImpl {
         let was_interrupted = self
             .permissions
             .lock_recover()
-            .clear_interrupted(&self.chat_id);
+            .clear_interrupted(&self.chat_id)
+            || data.subtype.as_deref() == Some("interrupted");
         self.permissions.lock_recover().clear(&self.chat_id);
 
         let is_error = data.subtype.as_deref() == Some("error_during_execution")
             && data.is_error != Some(false);
         if was_interrupted || is_error {
             self.finish_tool_timing();
+        }
+        if was_interrupted || is_error || data.is_error == Some(true) {
+            self.pause_held_queue(if was_interrupted {
+                "Interrupted"
+            } else {
+                "Error: Turn failed"
+            });
         }
         let reason = if was_interrupted {
             ChatUpdatedReason::Interrupted

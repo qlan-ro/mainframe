@@ -1,4 +1,5 @@
 use super::*;
+use mainframe_db::idle_compaction_queue::DeliveryState;
 use mainframe_types::sync::LockExt as _;
 
 impl ChatManager {
@@ -34,6 +35,7 @@ impl ChatManager {
         else {
             return Ok(false);
         };
+        let retry = input.delivery == DeliveryState::Rejected;
         if let Some(content) = content {
             edit_input(&mut input, content)?;
             self.shared.deps.idle_queue_put(chat_id, &input)?;
@@ -48,19 +50,65 @@ impl ChatManager {
                     true
                 });
             self.update_queued_ref_text(&input.uuid, content);
-        } else if self.shared.deps.idle_queue_remove(chat_id, &input.uuid)? {
-            self.shared
-                .messages
-                .lock_recover()
-                .remove_by_id(chat_id, message_id);
-            self.shared
-                .queued_refs
-                .lock_recover()
-                .retain(|r| r.uuid != input.uuid);
+        } else if !self.dismiss_maintenance_input(chat_id, message_id, &input.uuid)? {
+            return Ok(false);
         }
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
-        self.shared.schedule_maintenance_drain(chat_id);
+        if content.is_none()
+            || retry
+            || !self
+                .get_chat(chat_id)
+                .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))
+        {
+            self.shared.schedule_maintenance_drain(chat_id);
+        }
+        Ok(true)
+    }
+    pub async fn confirm_uncertain_input(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+    ) -> Result<(), SendError> {
+        let _lock = self
+            .handoff_locks
+            .acquire(&format!("maintenance:{chat_id}"))
+            .await;
+        let Some(input) = self
+            .shared
+            .deps
+            .idle_queue_list(chat_id)?
+            .into_iter()
+            .find(|input| {
+                input.message.id == message_id && input.delivery == DeliveryState::Unconfirmed
+            })
+        else {
+            return Ok(());
+        };
+        if self.shared.deps.idle_queue_remove(chat_id, &input.uuid)? {
+            self.remove_queued_ref(chat_id, &input.uuid);
+            self.confirm_queued_message(chat_id, message_id, true);
+            self.notify_queue_changed(chat_id);
+            self.event_handler.emit_display(chat_id);
+            self.shared.schedule_maintenance_drain(chat_id);
+        }
+        Ok(())
+    }
+
+    fn dismiss_maintenance_input(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        uuid: &str,
+    ) -> Result<bool, SendError> {
+        if !self.shared.deps.idle_queue_remove(chat_id, uuid)? {
+            return Ok(false);
+        }
+        self.shared
+            .messages
+            .lock_recover()
+            .remove_by_id(chat_id, message_id);
+        self.remove_queued_ref(chat_id, uuid);
         Ok(true)
     }
 }
@@ -69,13 +117,13 @@ fn edit_input(
     input: &mut mainframe_db::idle_compaction_queue::QueuedInput,
     content: &str,
 ) -> Result<(), SendError> {
-    if input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Unconfirmed {
+    if matches!(input.delivery, DeliveryState::Unconfirmed) {
         return Err(AdapterError::Unavailable(
-            "Delivery is uncertain. Check provider history before dismissing this queued prompt.",
+            "Delivery is uncertain. Resolve this queued prompt before editing it.",
         )
         .into());
     }
-    input.set_delivery(mainframe_db::idle_compaction_queue::DeliveryState::Pending);
+    input.set_delivery(DeliveryState::Pending);
     if !input.content.is_empty()
         && input.message.content.last().is_some_and(|c| {
             matches!(c,

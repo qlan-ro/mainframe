@@ -1,16 +1,4 @@
-//! Parses a Codex rollout JSONL file into `ThreadItem`s. The rollout is the raw
-//! per-thread session log Codex writes to
-//! `~/.codex/sessions/YYYY/MM/DD/rollout-*-<threadId>.jsonl` — it contains every
-//! ResponseItem the agent processed (function_call, function_call_output, message,
-//! reasoning), unlike `thread/read` which filters child-thread `commandExecution`s
-//! out. We only use it for SUB-AGENT child threads on history reload.
-//!
-//! B5 extends this beyond `exec_command`: sub-agent file edits arrive as a
-//! `custom_tool_call`/`custom_tool_call_output` pair (`name: "apply_patch"`), and
-//! MCP calls arrive as `function_call`/`function_call_output` tagged with a
-//! `namespace` starting `mcp__`. The parsing/building logic for both (plus the
-//! pre-existing exec-output parsing) lives in `rollout_reconstruct` to keep this
-//! file under the 300-line ceiling.
+//! Reconstructs Codex rollout items, including child-thread tool calls omitted by thread/read.
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -102,7 +90,7 @@ struct RolloutLine {
     #[serde(rename = "type", default)]
     kind: Option<String>,
     #[serde(default)]
-    payload: Option<RolloutPayload>,
+    payload: Option<serde_json::Value>,
 }
 
 /// Read a rollout JSONL and return `ThreadItem`s in the same shape as
@@ -130,7 +118,7 @@ pub async fn read_rollout_items(
 /// (untrusted input from an externally-owned SQLite DB): it must live inside
 /// `~/.codex/sessions/` or `~/.codex/archived_sessions/`, and its filename must
 /// embed `expected_thread_id`.
-async fn resolve_rollout_path(
+pub(crate) async fn resolve_rollout_path(
     rollout_path: &str,
     expected_thread_id: Option<&str>,
     deps: Option<&RolloutReaderDeps>,
@@ -184,38 +172,51 @@ async fn resolve_rollout_path(
 /// parent's own history — `forked_child_start_line`
 /// skips that prefix so it doesn't leak into the child's nested card.
 pub(crate) fn parse_rollout_lines(raw: &str) -> Vec<ThreadItem> {
-    let mut items: Vec<ThreadItem> = Vec::new();
-    let mut pending_exec: HashMap<String, String> = HashMap::new();
-    let mut pending_mcp: HashMap<String, PendingMcp> = HashMap::new();
-    let mut pending_patch: HashMap<String, String> = HashMap::new();
-    let mut pending_unified_exec: HashMap<String, String> = HashMap::new();
-    let mut counter = 0usize;
-
-    let lines: Vec<&str> = raw.split('\n').collect();
+    let lines: Vec<&str> = raw.lines().collect();
     let start = forked_child_start_line(&lines).unwrap_or(0);
+    parse_response_items(&lines[start..], &mut 0, false)
+}
 
-    for line in lines[start..].iter().copied() {
-        if line.trim().is_empty() {
-            continue;
-        }
+pub(crate) fn parse_response_items(
+    lines: &[&str],
+    counter: &mut usize,
+    prefer_user_events: bool,
+) -> Vec<ThreadItem> {
+    let mut items = Vec::new();
+    let mut pending_exec = HashMap::new();
+    let mut pending_mcp = HashMap::new();
+    let mut pending_patch = HashMap::new();
+    let mut pending_unified_exec = HashMap::new();
+    for line in lines {
         let Ok(rec) = serde_json::from_str::<RolloutLine>(line) else {
             continue;
         };
-        if rec.kind.as_deref() != Some("response_item") {
-            continue;
+        let Some(payload) = rec.payload else { continue };
+        if prefer_user_events
+            && rec.kind.as_deref() == Some("event_msg")
+            && payload["type"] == "user_message"
+        {
+            items.push(ThreadItem::UserMessage(UserMessageItem {
+                id: next_id(counter),
+                client_id: payload["client_id"].as_str().map(str::to_owned),
+                content: None,
+                text: payload["message"].as_str().map(str::to_owned),
+            }));
+        } else if rec.kind.as_deref() == Some("response_item")
+            && !(prefer_user_events && payload["role"] == "user")
+            && let Ok(p) = serde_json::from_value::<RolloutPayload>(payload)
+        {
+            apply_rollout_payload(
+                &p,
+                counter,
+                &mut pending_exec,
+                &mut pending_mcp,
+                &mut pending_patch,
+                &mut pending_unified_exec,
+                &mut items,
+            );
         }
-        let Some(p) = rec.payload else { continue };
-        apply_rollout_payload(
-            &p,
-            &mut counter,
-            &mut pending_exec,
-            &mut pending_mcp,
-            &mut pending_patch,
-            &mut pending_unified_exec,
-            &mut items,
-        );
     }
-
     items
 }
 
@@ -263,6 +264,7 @@ fn handle_message(p: &RolloutPayload, counter: &mut usize, items: &mut Vec<Threa
         })),
         Some("user") => items.push(ThreadItem::UserMessage(UserMessageItem {
             id: next_id(counter),
+            client_id: None,
             content: None,
             text: Some(text),
         })),
