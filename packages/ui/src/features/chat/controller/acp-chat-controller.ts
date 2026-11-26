@@ -1,3 +1,4 @@
+import { SubagentHistoryClient } from './subagent-history-client';
 import type { AppendMessage } from '@assistant-ui/react';
 import type { Chat, ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-types';
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
@@ -131,15 +132,13 @@ export class AcpChatController {
     if (this.disposed || !this.activation.isActive || this.loader.getClient() !== client) return;
     await this.plane.reactivate(client);
   }
-  async loadSubagentPage(agentId: string, before?: string) {
-    await this.load();
-    const client = this.loader.getClient();
-    if (!client?.subagentHistoryPage) throw new Error('Sub-agent history is unavailable');
-    await client.ensureConnected();
-    return new Promise<import('@qlan-ro/mainframe-types').HistoryPageResult>((resolve, reject) => {
-      void client.subagentHistoryPage!({ sessionId: this.daemonId, agentId, before }, resolve).catch(reject);
-    });
-  }
+  readonly subagentHistory = new SubagentHistoryClient(
+    async () => {
+      await this.load();
+      return this.loader.getClient();
+    },
+    () => this.daemonId,
+  );
 
   searchHistory(query: string) {
     return this.plane.history.search(query);

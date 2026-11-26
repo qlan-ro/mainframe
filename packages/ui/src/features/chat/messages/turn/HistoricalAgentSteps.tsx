@@ -16,7 +16,7 @@ export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { c
     (older = false) => {
       if (port === null) return;
       const controller = chatControllerRegistry.getOrCreate(chatId, port);
-      void loadSubagentPage(key, (before) => controller.loadSubagentPage(toolCallId, before), older);
+      void loadSubagentPage(key, (before) => controller.subagentHistory.page(toolCallId, before), older);
     },
     [chatId, key, port, toolCallId],
   );

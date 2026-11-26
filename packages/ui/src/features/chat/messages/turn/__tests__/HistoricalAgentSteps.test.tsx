@@ -7,7 +7,7 @@ import { releaseSubagentHistory } from '../subagent-history-store';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
-  chatControllerRegistry: { getOrCreate: () => ({ loadSubagentPage: request }) },
+  chatControllerRegistry: { getOrCreate: () => ({ subagentHistory: { page: request } }) },
 }));
 vi.mock('../AgentSteps', () => ({
   AgentSteps: ({ messages }: { messages: Array<{ id: string }> }) => (

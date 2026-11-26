@@ -1,13 +1,7 @@
 import { z } from 'zod';
+import { SubagentRowFactsSchema } from '@qlan-ro/mainframe-types';
 
-const fact = z.object({
-  status: z.enum(['completed', 'failed', 'stopped', 'unknown']),
-  title: z.string().nullish(),
-  summary: z.string().nullish(),
-  durationMs: z.number().nonnegative().nullish(),
-  tokens: z.number().int().nonnegative().nullish(),
-  toolUseCount: z.number().int().nonnegative().nullish(),
-});
+const fact = z.object({ ...SubagentRowFactsSchema.shape, title: z.string().nullish() });
 
 export function parseSubagentFact(value: unknown) {
   const parsed = fact.safeParse(value);

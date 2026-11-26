@@ -35,3 +35,5 @@ An agent opened from the Activity panel arrives as a tab with its live steps. It
 None.
 
 The Agent tab loads saved Claude steps when opened. It reuses pages loaded inline, shows a loading status while a request is pending, and offers Retry if the request fails.
+
+Find in the saved Claude Agent tab searches the entire child transcript, including steps outside the loaded window. The Agent and Chat headers offer Markdown export, which includes saved child text.

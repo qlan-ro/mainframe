@@ -13,7 +13,7 @@ import { useEffect, useRef } from 'react';
 import type { ShortcutAction } from './shortcut-types';
 import type { ShortcutId } from './registry';
 
-type ActionRef = { current: ShortcutAction };
+type ActionRef = { current: ShortcutAction; accepts?: () => boolean };
 
 const registrations = new Map<string, ActionRef[]>();
 
@@ -21,7 +21,13 @@ const registrations = new Map<string, ActionRef[]>();
 export function shortcutAction(id: string): ShortcutAction | null {
   const stack = registrations.get(id);
   if (stack == null || stack.length === 0) return null;
-  return stack[stack.length - 1]!.current;
+  let fallback: ShortcutAction | null = null;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const entry = stack[i]!;
+    if (entry.accepts?.()) return entry.current;
+    if (!entry.accepts) fallback ??= entry.current;
+  }
+  return fallback;
 }
 
 /**
@@ -29,20 +35,26 @@ export function shortcutAction(id: string): ShortcutAction | null {
  * error rather than a permanently dead chord. The callback lives in a ref, so
  * a re-render swaps the behavior without re-registering.
  */
-export function useShortcutAction(id: ShortcutId, fn: ShortcutAction): void {
+export function useShortcutAction(id: ShortcutId, fn: ShortcutAction, accepts?: () => boolean): void {
   const ref = useRef(fn);
   ref.current = fn;
 
   useEffect(() => {
     const stack = registrations.get(id) ?? [];
-    stack.push(ref);
+    const entry = {
+      get current() {
+        return ref.current;
+      },
+      accepts,
+    };
+    stack.push(entry);
     registrations.set(id, stack);
     return () => {
       const current = registrations.get(id);
       if (current == null) return;
-      const at = current.lastIndexOf(ref);
+      const at = current.lastIndexOf(entry);
       if (at !== -1) current.splice(at, 1);
       if (current.length === 0) registrations.delete(id);
     };
-  }, [id]);
+  }, [id, accepts]);
 }

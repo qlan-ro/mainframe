@@ -66,7 +66,8 @@ export interface AcpSessionClientPort {
     window?: HistoryWindow,
   ): Promise<ResumeSessionResponse>;
   historyPage?(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown>;
-  historySearch?(sessionId: string, query: string): Promise<HistorySearchResult>;
+  subagentHistoryExport?(sessionId: string, agentId: string): Promise<string>;
+  historySearch?(sessionId: string, query: string, agentId?: string): Promise<HistorySearchResult>;
   respondPermission(id: JsonRpcRequestId, response: RequestPermissionResponse): void;
   /** Drop this session's live stream on the daemon (D2 dormancy) — `_mainframe.dev/session_detach`. */
   detach(sessionId: string): void;

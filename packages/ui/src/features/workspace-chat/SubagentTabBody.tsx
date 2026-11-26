@@ -1,3 +1,5 @@
+import { SubagentFind } from './SubagentFind';
+import { ConversationExportButton } from './ConversationExportButton';
 /**
  * SubagentTabBody — a sub-agent in a workspace tab (W8): its title, kind and
  * status, Stop while it is live, the brief it was given, its steps as
@@ -8,7 +10,7 @@
  * nested messages live. A call outside the loaded window loads the history that
  * holds it.
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -216,6 +218,7 @@ export interface SubagentTabBodyProps {
 }
 
 export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }: SubagentTabBodyProps) {
+  const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
   useKeepAttached(controller);
   useHoldConversation(chatId);
@@ -243,7 +246,11 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   );
 
   return (
-    <div data-testid={`workspace-agent-${toolCallId}`} className="flex h-full min-h-0 flex-col text-foreground">
+    <div
+      ref={root}
+      data-testid={`workspace-agent-${toolCallId}`}
+      className="flex h-full min-h-0 flex-col text-foreground"
+    >
       <ConversationHeader
         testId={`workspace-agent-header-${toolCallId}`}
         glyph={<Bot aria-hidden />}
@@ -251,6 +258,17 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         kind={kindLine(call)}
       >
         {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
+        {call && subagentFact(call.part) && shown?.status !== 'running' && (
+          <>
+            <SubagentFind controller={controller} agentId={toolCallId} chatId={chatId} root={root} active={active} />
+            <ConversationExportButton
+              label="Export sub-agent as Markdown"
+              testId="workspace-agent-export"
+              load={() => controller.subagentHistory.export(toolCallId)}
+              name="sub-agent"
+            />
+          </>
+        )}
         {onStop && (
           <StopButton
             title={shownTitle}

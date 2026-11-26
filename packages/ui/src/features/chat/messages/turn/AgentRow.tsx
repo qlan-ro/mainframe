@@ -19,6 +19,7 @@ import { receiptText, useToolFacts, type ToolRowProps } from './ToolRow';
 import { KIND_ICONS, STATUS_WORDS, type RowStatus } from './tool-icons';
 import { useTranscriptScope } from './transcript-scope';
 import { useFailedOpen } from './use-failed-open';
+import { historyKey, useSubagentHistoryStore } from './subagent-history-store';
 
 /** What the call's own receipt can't say: it may have returned before the work ended. */
 const WORDS: Partial<Record<RowStatus, string>> = {
@@ -48,7 +49,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
   const { text, truncated } = resolveResultText(part.result);
   const launched = agentLaunched(text);
   const { status, outcome, standing } = useAgentWork(part);
-  const historical = subagentFact(part);
+  const historical = outcome === 'going' ? undefined : subagentFact(part);
   const own = status === facts.status;
   const duration = useStepDuration({
     ...facts,
@@ -56,6 +57,11 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
     running: status === 'running' && own,
   });
   const { chatId } = useTranscriptScope();
+  const inspected = useSubagentHistoryStore((store) => {
+    if (!chatId || historical?.status !== 'unknown') return false;
+    const entry = store.entries.get(historyKey(chatId, part.toolCallId));
+    return !!entry && !entry.loading && !entry.error;
+  });
   const failed = useFailedOpen(turnKey, part.toolCallId, unit.key, unit.messageId);
   const title = historical?.title || facts.target || facts.verb;
   const model = argText(part, 'model');
@@ -63,9 +69,11 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
     standing?.label ??
     (historical && status !== 'running'
       ? (
-          { unknown: 'Open to see status', success: 'completed', failed: 'failed', stopped: 'stopped' } as Partial<
-            Record<RowStatus, string>
-          >
+          {
+            ...WORDS,
+            unknown: inspected ? 'Status unavailable' : 'Open to see status',
+            success: 'completed',
+          } as Partial<Record<RowStatus, string>>
         )[status]
       : own && status !== 'running'
         ? facts.receipt

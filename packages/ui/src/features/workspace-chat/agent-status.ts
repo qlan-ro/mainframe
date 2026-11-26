@@ -114,7 +114,7 @@ export function callFacts(call: SubagentCall, pending: ReadonlySet<string>): Age
   const settled = failed || ['completed', 'failed', 'cancelled'].includes(lifecycle);
   return {
     pending: isPending(call, pending),
-    open: call.part.result === undefined && !settled,
+    open: historical === undefined && call.part.result === undefined && !settled,
     failed,
     cancelled: historical ? historical.status === 'stopped' : lifecycle === 'cancelled',
     ...(historical && { historical }),
