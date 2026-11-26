@@ -1,11 +1,12 @@
 /**
  * The transcript's follow mechanism: while the reader is at the bottom, growth
  * keeps them there; scrolling up releases it; the End key, the scroll-to-bottom
- * button and the user's own send re-pin. assistant-ui's viewport scroll
- * controllers are switched off in `ChatThreadViewport.tsx`, so this is the only
- * writer that follows new output.
+ * button and the user's own send (`controller/user-sent.ts`) re-pin.
+ * assistant-ui's viewport scroll controllers are switched off in
+ * `ChatThreadViewport.tsx`, so this is the only writer that follows new output.
  */
 import { restoreReadingAnchor } from './reading-anchor';
+import { onUserSent } from '../controller/user-sent';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefCallback } from 'react';
 import {
   beginLock,
@@ -111,6 +112,8 @@ export function useThreadBottomPin(threadId: string | null) {
     };
   }, []);
   const repin = useCallback(() => pinToBottom(viewportElement.current, state.current), []);
+  // The user's own send in this chat re-pins; a prompt the daemon or another agent sends does not.
+  useEffect(() => (threadId == null ? undefined : onUserSent(threadId, repin)), [threadId, repin]);
   useLayoutEffect(() => {
     const viewport = viewportElement.current;
     if (viewport) viewport.scrollTop = viewport.scrollHeight;

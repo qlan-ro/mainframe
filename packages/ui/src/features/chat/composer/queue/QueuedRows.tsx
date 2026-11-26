@@ -8,7 +8,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import { confirmQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
+import { confirmQueuedMessage } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
@@ -16,7 +16,6 @@ import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
 import { appendQueuedDraft, copyQueuedToComposer } from './copy-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
-import { useTranscriptScroll } from '../../thread/transcript-scroll-context';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
 const NO_ROWS: readonly HeldMessage[] = [];
@@ -182,7 +181,7 @@ function useQueuedRows(): QueueRow[] {
           ? {
               label: 'Resume',
               testId: 'chat-queue-resume',
-              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+              onClick: () => void extras.resumeQueue().catch(report('resume')),
             }
           : delivery === 'rejected'
             ? {
@@ -215,7 +214,6 @@ function useHeldRows(): QueueRow[] {
   const extras = useChatExtras();
   const chatId = extras?.state.chatId ?? '';
   const { startEdit } = useComposerEdit();
-  const scroll = useTranscriptScroll();
   const held = useHeldQueue((s) => s.byChat[chatId] ?? NO_ROWS);
   const sentIds = useAuiState((s) =>
     s.thread.messages
@@ -251,7 +249,6 @@ function useHeldRows(): QueueRow[] {
               testId: 'chat-queued-send-now',
               onClick: () => {
                 void extras?.sendHeld(row.messageId).catch(report('send'));
-                scroll?.pinToBottom?.();
                 focusVisibleComposer();
               },
             }

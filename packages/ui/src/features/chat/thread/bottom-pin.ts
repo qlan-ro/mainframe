@@ -94,8 +94,11 @@ export function trackReadingPosition(element: HTMLDivElement, state: PinState, f
 
 /**
  * Pins to the bottom and jumps there: the End key, the scroll-to-bottom button
- * and the user's own send. While an interaction holds the lock, its release
- * jumps again, so a fold or prepend in flight cannot leave the reader above.
+ * and the user's own send. While an interaction holds the lock, the jump waits
+ * for its release: the holder (a fold keeping its row, a prepend restoring its
+ * anchor) still writes the offset, so jumping now would be undone, then redone.
+ * The user's own send also cancels a prepend in flight (`use-prepend-anchor.ts`),
+ * so it does not wait for the page to settle.
  */
 export function pinToBottom(element: HTMLDivElement | null, state: PinState) {
   cancelFollow(state);
@@ -103,7 +106,7 @@ export function pinToBottom(element: HTMLDivElement | null, state: PinState) {
   state.anchor = null;
   state.userScrollUntil = 0;
   if (state.locks) state.repinOnRelease = true;
-  if (element) {
+  else if (element) {
     element.scrollTop = element.scrollHeight;
     state.bottom = element.scrollHeight - element.clientHeight;
     state.top = element.scrollTop;

@@ -89,8 +89,8 @@ function flushFrames() {
   for (let i = 0; i < 5 && frames.length; i++) frames.splice(0).forEach((frame) => frame(0));
 }
 
-const tree = (isRunning: boolean) => (
-  <Harness messages={MESSAGES} isRunning={isRunning}>
+const tree = (isRunning: boolean, messages = MESSAGES) => (
+  <Harness messages={messages} isRunning={isRunning}>
     <ChatThreadViewport variant="main" />
   </Harness>
 );
@@ -110,7 +110,10 @@ function renderViewport() {
       },
     },
   });
-  return { viewport, setRunning: (isRunning: boolean) => rerender(tree(isRunning)) };
+  return {
+    viewport,
+    setRunning: (isRunning: boolean, messages = MESSAGES) => rerender(tree(isRunning, messages)),
+  };
 }
 
 /** A reader's scroll: wheel input, then the scroll it causes. */
@@ -130,6 +133,23 @@ describe('ChatThread — assistant-ui does not scroll the transcript', () => {
 
     // assistant-ui delivers `thread.runStart` after the store update settles.
     await act(async () => setRunning(true));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    act(flushFrames);
+
+    expect(viewport.scrollTop).toBe(300);
+  });
+
+  it('leaves a reader who scrolled up in place when the daemon dispatches a held prompt at turn end', async () => {
+    const { viewport, setRunning } = renderViewport();
+    act(flushFrames);
+    await act(async () => setRunning(true));
+    readerScrollsTo(viewport, 300);
+
+    // The turn ends and the daemon sends the queued prompt as the next turn:
+    // a new user message and a run start, with no send from this window.
+    await act(async () => setRunning(false));
+    const dispatched: ThreadMessageLike = { id: 'q1', role: 'user', content: 'queued while running' };
+    await act(async () => setRunning(true, [...MESSAGES, dispatched]));
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     act(flushFrames);
 

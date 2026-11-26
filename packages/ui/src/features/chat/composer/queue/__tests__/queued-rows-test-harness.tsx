@@ -14,13 +14,12 @@ vi.mock('@assistant-ui/react', () => ({
 export const cancelQueued = vi.fn().mockResolvedValue(undefined);
 export const editQueued = vi.fn().mockResolvedValue(undefined);
 export const sendHeld = vi.fn().mockResolvedValue(undefined);
-const resumeQueuedMessages = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+export const resumeQueue = vi.fn().mockResolvedValue(undefined);
 const confirmQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const cancelQueuedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock('@/lib/api/chats', () => ({
   cancelQueuedMessage,
   confirmQueuedMessage,
-  resumeQueuedMessages,
 }));
 vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
@@ -30,6 +29,7 @@ vi.mock('../../../runtime/chat-extras', () => ({
     cancelQueued,
     editQueued,
     sendHeld,
+    resumeQueue,
   }),
 }));
 
@@ -42,8 +42,6 @@ const toastError = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/toast', () => ({ mfToast: { error: toastError, info: vi.fn() } }));
 const focusVisibleComposer = vi.hoisted(() => vi.fn());
 vi.mock('../../focus-composer', () => ({ focusVisibleComposer }));
-const pinToBottom = vi.hoisted(() => vi.fn());
-vi.mock('../../../thread/transcript-scroll-context', () => ({ useTranscriptScroll: () => ({ pinToBottom }) }));
 
 import { useHeldQueue } from '../held-queue-store';
 import { QueuedRows } from '../QueuedRows';
@@ -74,11 +72,4 @@ beforeEach(() => {
   mockChat.transcriptIds = [];
 });
 
-export {
-  cancelQueuedMessage,
-  confirmQueuedMessage,
-  focusVisibleComposer,
-  pinToBottom,
-  resumeQueuedMessages,
-  toastError,
-};
+export { cancelQueuedMessage, confirmQueuedMessage, focusVisibleComposer, toastError };

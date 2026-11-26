@@ -81,10 +81,10 @@ function ThreadFooter({
 }
 function useViewportScroll(threadId: string | null) {
   const pin = useThreadBottomPin(threadId);
-  const { viewportElement, viewport, beginInteraction, isFollowing, isInteracting, pinToBottom } = pin;
+  const { viewportElement, viewport, beginInteraction, isFollowing, isInteracting } = pin;
   const scroll = useMemo(
-    () => ({ viewportElement, viewport, beginInteraction, isFollowing, isInteracting, pinToBottom }),
-    [viewportElement, viewport, beginInteraction, isFollowing, isInteracting, pinToBottom],
+    () => ({ viewportElement, viewport, beginInteraction, isFollowing, isInteracting }),
+    [viewportElement, viewport, beginInteraction, isFollowing, isInteracting],
   );
   return { pin, scroll };
 }

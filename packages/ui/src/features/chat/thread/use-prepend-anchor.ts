@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranscriptScroll } from './transcript-scroll-context';
 import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
+import { onUserSent } from '../controller/user-sent';
 
 export const HISTORY_PREPEND_EVENT = 'mainframe:history-prepend';
 
@@ -147,9 +148,13 @@ export function usePrependAnchor(firstId: string | undefined, chatId: string | u
     };
     window.addEventListener(HISTORY_PREPEND_EVENT, beforePrepend);
     window.addEventListener(ACTIVITY_JUMP_EVENT, cancel);
+    // The user's own send re-pins to the bottom: stop holding the old anchor
+    // so the restore cannot pull the view back up meanwhile.
+    const stopUserSent = chatId == null ? undefined : onUserSent(chatId, () => cancel());
     return () => {
       window.removeEventListener(HISTORY_PREPEND_EVENT, beforePrepend);
       window.removeEventListener(ACTIVITY_JUMP_EVENT, cancel);
+      stopUserSent?.();
       cancel();
     };
   }, [chatId, scroll]);

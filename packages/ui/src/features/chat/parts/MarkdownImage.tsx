@@ -12,6 +12,9 @@
  * scrolled up stays put and the bottom pin has nothing to catch up on. Markdown
  * carries no image dimensions, so the frame is fixed rather than sized to the
  * image; a larger image scales down into it, a smaller one keeps its size.
+ *
+ * A load that has not finished after `IMAGE_LOAD_TIMEOUT_MS` (a request that
+ * hangs) gives up and shows the same fallback as a failed load.
  */
 import { useEffect, useState, type ComponentProps } from 'react';
 import { parseFileHref } from '@/lib/files/file-href';
@@ -27,6 +30,9 @@ const FRAME = 'inline-flex h-60 max-w-full items-center align-top';
 const LOADING = 'w-64 animate-pulse rounded-md bg-muted ring-1 ring-border';
 const IMAGE = 'max-h-60 max-w-full rounded-md border border-border object-contain';
 
+/** How long the skeleton may show before the image counts as unavailable. */
+export const IMAGE_LOAD_TIMEOUT_MS = 15_000;
+
 function baseName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
@@ -41,14 +47,22 @@ function LocalMarkdownImage({ src, alt, path }: { src: string; alt?: string; pat
       setState({ status: 'error' });
       return;
     }
-    let cancelled = false;
+    let settled = false;
+    const settle = (next: State) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      setState(next);
+    };
     setState({ status: 'loading' });
+    const timeout = setTimeout(() => settle({ status: 'error' }), IMAGE_LOAD_TIMEOUT_MS);
     loadLocalImage(path).then(
-      (dataUri) => !cancelled && setState({ status: 'loaded', dataUri }),
-      () => !cancelled && setState({ status: 'error' }),
+      (dataUri) => settle({ status: 'loaded', dataUri }),
+      () => settle({ status: 'error' }),
     );
     return () => {
-      cancelled = true;
+      settled = true;
+      clearTimeout(timeout);
     };
   }, [path]);
 
@@ -80,6 +94,11 @@ function LocalMarkdownImage({ src, alt, path }: { src: string; alt?: string; pat
 function RemoteMarkdownImage({ className, ...props }: ComponentProps<'img'>) {
   const [status, setStatus] = useState<State['status']>('loading');
   const src = typeof props.src === 'string' ? props.src : '';
+  useEffect(() => {
+    if (status !== 'loading') return;
+    const timeout = setTimeout(() => setStatus('error'), IMAGE_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [status]);
   if (status === 'error') {
     return (
       <span data-testid="chat-markdown-image-unavailable">

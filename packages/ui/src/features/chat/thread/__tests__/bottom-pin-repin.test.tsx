@@ -7,6 +7,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { emitUserSent } from '../../controller/user-sent';
 import { isAtBottom } from '../bottom-pin';
 import { useThreadBottomPin } from '../use-thread-bottom-pin';
 import { createViewport, installPinDoubles, notifyResize } from './pin-viewport-fixture';
@@ -69,12 +70,30 @@ describe('pinToBottom (the user’s own send)', () => {
     act(() => viewport.scrollTo(250));
     const release = pin().beginInteraction();
     act(() => pin().pinToBottom());
+    // The holder still owns the offset: the jump waits for its release.
+    expect(viewport.element.scrollTop).toBe(250);
+    expect(pin().isPinned()).toBe(true);
     // The lock holder moves the offset and the content grows meanwhile.
     viewport.element.scrollTop = 400;
     viewport.resize(1_500);
     act(() => release());
     expect(viewport.element.scrollTop).toBe(1_400);
     expect(pin().isFollowing()).toBe(true);
+  });
+});
+
+describe('the user-sent event', () => {
+  it('re-pins on a send in its own chat and ignores other chats', () => {
+    const { viewport, pin } = mountPin();
+    act(() => viewport.scrollTo(250));
+
+    act(() => emitUserSent(['chat-2']));
+    expect(viewport.element.scrollTop).toBe(250);
+    expect(pin().isPinned()).toBe(false);
+
+    act(() => emitUserSent(['chat-1']));
+    expect(viewport.element.scrollTop).toBe(900);
+    expect(pin().isPinned()).toBe(true);
   });
 });
 

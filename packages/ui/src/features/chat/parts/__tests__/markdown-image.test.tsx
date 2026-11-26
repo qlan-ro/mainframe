@@ -1,19 +1,22 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const getExternalFile = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api/files', () => ({ getExternalFile }));
 vi.mock('@/lib/api/http', () => ({ apiBase: () => 'http://daemon' }));
 
-import { MarkdownImage } from '../MarkdownImage';
+import { IMAGE_LOAD_TIMEOUT_MS, MarkdownImage } from '../MarkdownImage';
 import { resetLocalImageCache } from '@/lib/files/local-image';
 
 beforeEach(() => {
   resetLocalImageCache();
   getExternalFile.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 describe('MarkdownImage', () => {
   it('shows the skeleton while loading', () => {
@@ -99,6 +102,39 @@ describe('MarkdownImage', () => {
       expect(frame).toHaveClass('h-60');
       expect(frame).not.toHaveClass('animate-pulse');
       expect(img).toHaveClass('max-h-60', 'max-w-full', 'object-contain');
+    });
+
+    it('gives up on a remote image whose request hangs', () => {
+      vi.useFakeTimers();
+      const { container } = render(<MarkdownImage src="https://x.com/slow.png" alt="Slow" />);
+      act(() => vi.advanceTimersByTime(IMAGE_LOAD_TIMEOUT_MS - 1));
+      expect(container.querySelector('img')).not.toBeNull();
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.getByTestId('chat-markdown-image-unavailable')).toHaveTextContent('Slow (image unavailable)');
+      expect(container.querySelector('img')).toBeNull();
+    });
+
+    it('keeps a remote image that loaded in time', () => {
+      vi.useFakeTimers();
+      const { container } = render(<MarkdownImage src="https://x.com/a.png" alt="a" />);
+      fireEvent.load(container.querySelector('img')!);
+      act(() => vi.advanceTimersByTime(IMAGE_LOAD_TIMEOUT_MS * 2));
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+
+    it('gives up on a local image whose daemon request hangs, and ignores a late answer', async () => {
+      vi.useFakeTimers();
+      let resolve: (value: string) => void = () => {};
+      getExternalFile.mockReturnValue(new Promise<string>((r) => (resolve = r)));
+      render(<MarkdownImage src="/tmp/slow.png" alt="Slow" />);
+      expect(screen.getByTestId('chat-markdown-image-skeleton')).toBeTruthy();
+
+      act(() => vi.advanceTimersByTime(IMAGE_LOAD_TIMEOUT_MS));
+      expect(screen.getByTestId('chat-markdown-image-unavailable')).toHaveTextContent('Slow (image unavailable)');
+
+      await act(async () => resolve('AAAA'));
+      expect(screen.queryByTestId('chat-image-zoom-trigger')).toBeNull();
     });
 
     it('falls back to the alt text when a remote image fails', () => {

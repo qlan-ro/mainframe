@@ -5,8 +5,6 @@ export interface TranscriptScrollController {
   isFollowing: () => boolean;
   isInteracting?: () => boolean;
   beginInteraction: () => () => void;
-  /** Re-pins to the bottom and jumps there; the user's own send calls it. */
-  pinToBottom?: () => void;
 }
 const Context = createContext<TranscriptScrollController | null>(null);
 export const TranscriptScrollProvider = Context.Provider;
