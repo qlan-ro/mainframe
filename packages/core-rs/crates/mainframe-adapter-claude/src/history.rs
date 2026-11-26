@@ -141,11 +141,12 @@ struct HistoryLoad {
     seen_api_message_ids: HashSet<String>,
     agent_id_to_parent_tool_use_id: HashMap<String, String>,
     prompt_groups: PromptGroups,
+    turn_running: bool,
 }
 impl HistoryLoad {
     fn entry(&mut self, entry: &Value, session_id: &str, is_subagent_file: bool) {
         if !is_subagent_file {
-            self.prompt_groups.observe(entry, session_id);
+            self.observe_turn_boundary(entry, session_id);
         }
         if self.filtered(entry, session_id, is_subagent_file) {
             return;
@@ -182,7 +183,8 @@ impl HistoryLoad {
             return;
         }
 
-        let msg = match convert_history_entry(entry, session_id, &mut self.seen_api_message_ids) {
+        let mut msg = match convert_history_entry(entry, session_id, &mut self.seen_api_message_ids)
+        {
             Some(m) => m,
             None => return,
         };
@@ -190,11 +192,42 @@ impl HistoryLoad {
             return;
         }
         self.seen_uuids.insert(msg.id.clone());
-        if msg.r#type == ChatMessageType::Assistant {
-            self.prompt_groups.track(self.messages.len(), entry);
-        }
+        self.classify_turn_entry(entry, &mut msg);
         self.messages.push(msg);
     }
+    fn observe_turn_boundary(&mut self, entry: &Value, session_id: &str) {
+        self.prompt_groups.observe(entry, session_id);
+        if entry.get("type").and_then(Value::as_str) == Some("result") {
+            self.turn_running = false;
+        }
+    }
+
+    fn classify_turn_entry(&mut self, entry: &Value, message: &mut ChatMessage) {
+        match entry.get("type").and_then(Value::as_str) {
+            Some("attachment") if message.r#type == ChatMessageType::User => {
+                if !self.turn_running
+                    && let Some(meta) = &mut message.metadata
+                {
+                    meta.remove("steered");
+                }
+                self.turn_running = true;
+            }
+            Some("user") if message.r#type == ChatMessageType::User => {
+                self.turn_running = true;
+            }
+            Some("assistant") => {
+                self.prompt_groups.track(self.messages.len(), entry);
+                let reason = entry
+                    .get("message")
+                    .and_then(|m| m.get("stop_reason"))
+                    .and_then(Value::as_str);
+                self.turn_running =
+                    !matches!(reason, Some("end_turn" | "stop_sequence" | "max_tokens"));
+            }
+            _ => {}
+        }
+    }
+
     fn finish(mut self) -> Vec<ChatMessage> {
         std::mem::take(&mut self.prompt_groups).apply(&mut self.messages);
         if !self.agent_tools.is_empty() {
@@ -245,3 +278,7 @@ impl HistoryLoad {
         false
     }
 }
+
+#[cfg(test)]
+#[path = "history_queue_tests.rs"]
+mod history_queue_tests;
