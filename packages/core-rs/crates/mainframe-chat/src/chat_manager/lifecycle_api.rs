@@ -69,6 +69,10 @@ impl ChatManager {
 
     /// The user's Stop: delegated work is cancelled before the turn stops.
     pub async fn interrupt_chat(&self, chat_id: &str) {
+        let _queue_control = self
+            .handoff_locks
+            .acquire(&format!("queue-control:{chat_id}"))
+            .await;
         if self
             .get_chat(chat_id)
             .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))

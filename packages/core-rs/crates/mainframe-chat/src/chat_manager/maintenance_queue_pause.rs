@@ -43,6 +43,12 @@ impl ChatShared {
 
 impl ChatManager {
     pub async fn resume_maintenance_queue(&self, chat_id: &str) -> Result<(), SendError> {
+        let _queue_control = self
+            .handoff_locks
+            .acquire(&format!("queue-control:{chat_id}"))
+            .await;
+        self.lifecycle.wait_for_interrupt(chat_id).await;
+        self.lifecycle.finish_closing_session(chat_id).await?;
         let _lock = self
             .handoff_locks
             .acquire(&format!("maintenance:{chat_id}"))
