@@ -24,6 +24,8 @@ A failed first message can show Retry or Unarchive in the transcript beside its 
 
 Compaction and provider-switch dividers use 12 px arrows-in and repeat glyphs. Each divider reserves a 22 px line and surrounding space between the transcript blocks.
 
+A reply to a hidden prompt starts its own turn. A background task notification adds a marker naming the event. Resume prompts without an event open a turn without a marker.
+
 ## Direction contract
 THESIS: one work row per turn, folded once the answer starts. Events are pills on the spine. This replaces a stack of tool cards.
 OWN-WORLD: rows of glyph, verb, target and receipt. Pills for skills, plans, schedules, monitors, worktrees and notifications. Failures in muted rose. Answered questions are small cards outside the fold.

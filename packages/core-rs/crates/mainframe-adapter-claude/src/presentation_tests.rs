@@ -162,3 +162,34 @@ fn assert_final_update(sink: &RecordingSink) {
         Some(123)
     );
 }
+
+#[test]
+fn explicit_live_task_prompt_labels_only_the_next_epoch() {
+    let session = session();
+    let sink = RecordingSink::default();
+    feed(&session, &sink, assistant("first", "a1", json!("end_turn")));
+    feed(&session, &sink, result());
+    feed(
+        &session,
+        &sink,
+        json!({
+            "type": "user",
+            "session_id": "provider-session",
+            "origin": {"kind":"task-notification"},
+            "message": {"content": "<task-notification><status>completed</status><summary>Tests finished</summary></task-notification>"}
+        }),
+    );
+    feed(
+        &session,
+        &sink,
+        assistant("second", "a2", json!("end_turn")),
+    );
+    feed(&session, &sink, result());
+    feed(&session, &sink, assistant("third", "a3", json!("end_turn")));
+    let messages = sink.messages.lock().unwrap();
+    assert_ne!(messages[0].2.turn_id, messages[1].2.turn_id);
+    assert_eq!(
+        *sink.prompt_events.lock().unwrap(),
+        vec![None, Some("Tests finished".into()), None]
+    );
+}

@@ -4,6 +4,9 @@ pub(super) fn convert_user_entry(
     message: &Value,
     chat_id: &str,
 ) -> Option<ChatMessage> {
+    if crate::history::history_prompt_groups::notification_summary(entry).is_some() {
+        return None;
+    }
     let raw_content = message.get("content");
     let mut content_blocks: Vec<MessageContent> = Vec::new();
     let tool_use_result = entry.get("toolUseResult");

@@ -35,6 +35,9 @@ fn is_interrupt_marker(trimmed: &str) -> bool {
 
 pub(crate) fn handle_user_event(session: &ClaudeSession, event: &Value, sink: &dyn SessionSink) {
     crate::transcript_presentation::observe_user(session, event, sink);
+    if crate::history::history_prompt_groups::notification_summary(event).is_some() {
+        return;
+    }
     if event.get("isCompactSummary").and_then(Value::as_bool) == Some(true) {
         return;
     }

@@ -113,11 +113,14 @@ pub(crate) fn handle_assistant_event(
         .and_then(|m| m.get("id"))
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty());
-    let metadata = message_metadata(st, event, message, usage, content);
+    let mut metadata = message_metadata(st, event, message, usage, content);
     if metadata.vendor_id.is_none() {
         st.presentation.invalidate(sink);
     }
     let context = presentation_context(st, event, api_message_id, &metadata, message, sink);
+    metadata.hidden_prompt_event = context
+        .as_ref()
+        .and_then(|_| st.presentation.prompt_event());
     let blocks = blocks_to_message_content(content);
     drop(guard);
     emit_message(blocks, metadata, context, sink);
@@ -151,6 +154,7 @@ fn message_metadata(
             .map(str::to_string),
     };
     MessageMetadata {
+        hidden_prompt_event: None,
         model: message
             .and_then(|m| m.get("model"))
             .and_then(Value::as_str)
