@@ -49,19 +49,13 @@ impl ChatManager {
                     true
                 });
             self.update_queued_ref_text(&input.uuid, content);
-        } else if self.shared.deps.idle_queue_remove(chat_id, &input.uuid)? {
-            self.shared
-                .messages
-                .lock_recover()
-                .remove_by_id(chat_id, message_id);
-            self.shared
-                .queued_refs
-                .lock_recover()
-                .retain(|r| r.uuid != input.uuid);
+        } else {
+            self.dismiss_maintenance_input(chat_id, message_id, &input.uuid)?;
         }
         self.notify_queue_changed(chat_id);
         self.event_handler.emit_display(chat_id);
-        if retry
+        if content.is_none()
+            || retry
             || !self
                 .get_chat(chat_id)
                 .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))
@@ -69,6 +63,21 @@ impl ChatManager {
             self.shared.schedule_maintenance_drain(chat_id);
         }
         Ok(true)
+    }
+    fn dismiss_maintenance_input(
+        &self,
+        chat_id: &str,
+        message_id: &str,
+        uuid: &str,
+    ) -> Result<(), SendError> {
+        if self.shared.deps.idle_queue_remove(chat_id, uuid)? {
+            self.shared
+                .messages
+                .lock_recover()
+                .remove_by_id(chat_id, message_id);
+            self.remove_queued_ref(chat_id, uuid);
+        }
+        Ok(())
     }
 }
 

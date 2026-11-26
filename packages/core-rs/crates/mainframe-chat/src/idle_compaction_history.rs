@@ -43,6 +43,7 @@ impl ChatShared {
         chat_id: &str,
         history: &mut Vec<ChatMessage>,
     ) -> Result<(), mainframe_adapter_api::AdapterError> {
+        let mut restored_head = self.queued_for_chat(chat_id).is_empty();
         for input in self.deps.idle_queue_list(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message("Queued history unavailable".into())
         })? {
@@ -65,6 +66,12 @@ impl ChatShared {
                 self.handle_queued_processed(chat_id, &input.uuid);
                 continue;
             }
+            if restored_head
+                && input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Pending
+            {
+                self.pause_maintenance_queue(chat_id, "Session ended");
+            }
+            restored_head = false;
             let mut refs = self.queued_refs.lock_recover();
             if !refs.iter().any(|r| r.uuid == input.uuid) {
                 refs.push(input.queued_ref(chat_id));

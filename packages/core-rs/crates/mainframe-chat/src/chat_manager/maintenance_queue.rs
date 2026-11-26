@@ -2,24 +2,6 @@ use super::*;
 use mainframe_db::idle_compaction_queue::{DeliveryState, QueuedInput};
 use mainframe_types::sync::LockExt as _;
 
-impl ChatShared {
-    pub(crate) fn schedule_maintenance_drain(&self, chat_id: &str) {
-        let Some(manager) = self.manager.get().and_then(|m| m.upgrade()) else {
-            return;
-        };
-        let chat_id = chat_id.to_owned();
-        tokio::spawn(async move {
-            if let Err(error) = manager.drain_scheduled_queue(&chat_id).await {
-                tracing::warn!(chat_id, "maintenance queue delivery failed");
-                manager.emit(DaemonEvent::Error {
-                    chat_id: Some(chat_id),
-                    error: error.to_string(),
-                });
-            }
-        });
-    }
-}
-
 impl ChatManager {
     pub(super) fn held_queue_turn_running(&self, chat_id: &str) -> bool {
         self.get_active(chat_id).is_some_and(|cell| {
@@ -135,7 +117,7 @@ impl ChatManager {
         result
     }
 
-    async fn drain_scheduled_queue(&self, chat_id: &str) -> Result<(), SendError> {
+    pub(super) async fn drain_scheduled_queue(&self, chat_id: &str) -> Result<(), SendError> {
         let wait = std::time::Duration::from_secs(120);
         if !self
             .get_chat(chat_id)
@@ -157,14 +139,12 @@ impl ChatManager {
     ) -> Result<(), SendError> {
         let deadline = tokio::time::Instant::now() + wait;
         loop {
-            tokio::time::timeout_at(deadline, self.lifecycle.wait_for_interrupt(chat_id))
-                .await
-                .map_err(|_| queue_wait_expired())?;
+            self.wait_for_queue_interrupt(chat_id, deadline).await?;
             let lock = self
                 .handoff_locks
                 .acquire(&format!("maintenance:{chat_id}"))
                 .await;
-            let Some(input) = self
+            let Some(mut input) = self
                 .shared
                 .deps
                 .idle_queue_list(chat_id)?
@@ -179,16 +159,12 @@ impl ChatManager {
             {
                 return Ok(());
             }
-            let (post, session) = self.require_live_session(chat_id)?;
-            if self.held_queue_turn_running(chat_id) {
+            let Some((post, session)) = self.queue_session(chat_id)? else {
                 return Ok(());
-            }
+            };
             if !session.ready_for_input() {
                 drop(lock);
-                if tokio::time::Instant::now() >= deadline {
-                    return Err(queue_wait_expired());
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                self.wait_for_queue_readiness(chat_id, deadline).await?;
                 continue;
             }
             let _send = self.lifecycle.begin_send(chat_id).await;
@@ -197,12 +173,29 @@ impl ChatManager {
             {
                 return Ok(());
             }
+            if !self.prepare_queue_replay(chat_id, &mut input)? {
+                continue;
+            }
             self.deliver_maintenance_input(chat_id, &post, &session, input)
                 .await?;
             if holds_turn_queue(session.adapter_id()) {
                 return Ok(());
             }
         }
+    }
+
+    fn queue_session(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<super::send_entry::LiveSession>, SendError> {
+        if self.held_queue_turn_running(chat_id) {
+            return Ok(None);
+        }
+        self.require_live_session(chat_id)
+            .map(Some)
+            .inspect_err(|_| {
+                self.pause_failed_drain(chat_id);
+            })
     }
 
     async fn deliver_maintenance_input(
@@ -225,14 +218,33 @@ impl ChatManager {
                 .lock_recover()
                 .move_to_end(chat_id, &input.message.id);
         }
+        let waits_for_echo = session.acknowledges_queued_input_by_echo();
+        if waits_for_echo {
+            self.shared
+                .active_queue_echoes
+                .insert(chat_id.to_owned(), input.uuid.clone());
+        }
         let result = super::maintenance_queue_payload::dispatch(session, &input).await;
         if let Err(error) = result {
+            self.shared
+                .active_queue_echoes
+                .remove_if(chat_id, |_, uuid| uuid == &input.uuid);
             self.retain_failed_delivery(chat_id, post, &mut input, prior, &error)?;
             return Err(error.into());
         }
-        if session.acknowledges_queued_input_by_echo() {
+        if waits_for_echo {
+            self.shared.schedule_queue_echo_timeout(chat_id, input.uuid);
             return Ok(());
         }
+        self.finish_queue_dispatch(chat_id, &input, held_queue)
+    }
+
+    fn finish_queue_dispatch(
+        &self,
+        chat_id: &str,
+        input: &QueuedInput,
+        held_queue: bool,
+    ) -> Result<(), SendError> {
         self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
         self.remove_queued_ref(chat_id, &input.uuid);
         self.confirm_queued_message(chat_id, &input.message.id, held_queue);
@@ -258,13 +270,6 @@ impl ChatManager {
             meta.remove("queued").is_some()
         });
     }
-}
-
-fn queue_wait_expired() -> SendError {
-    AdapterError::Unavailable(
-        "Provider readiness timed out. Prompts remain queued; retry after checking provider state.",
-    )
-    .into()
 }
 
 #[cfg(test)]

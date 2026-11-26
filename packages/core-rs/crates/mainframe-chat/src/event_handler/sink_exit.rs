@@ -23,7 +23,15 @@ impl SessionSinkImpl {
         let session_id = session_id.unwrap_or_default();
         debug!(session_id, chat_id = self.chat_id, "session exited");
 
+        self.shared.active_queue_echoes.remove(&self.chat_id);
+        let uncertain = self.shared.expose_uncertain_delivery(&self.chat_id, None);
         self.pause_held_queue("Session ended");
+        if uncertain {
+            self.notify_surface(ChatSurfaceEvent::QueueChanged {
+                chat_id: self.chat_id.clone(),
+                refs: self.shared.queued_for_chat(&self.chat_id),
+            });
+        }
         self.clear_exit_queue();
 
         self.shared.deps.tracker_end_all_running(&self.chat_id);

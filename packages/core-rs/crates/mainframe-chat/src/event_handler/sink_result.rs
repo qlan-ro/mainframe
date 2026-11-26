@@ -11,6 +11,7 @@ impl SessionSinkImpl {
         let Some(cell) = self.shared.active(&self.chat_id) else {
             return;
         };
+        self.shared.active_queue_echoes.remove(&self.chat_id);
         self.retire_fork();
         let cost = data.total_cost_usd.unwrap_or(0.0);
         let totals = self.result_totals(&cell, &data);
@@ -44,10 +45,18 @@ impl SessionSinkImpl {
         self.emit_result_state(update, &cell, reason, was_interrupted, is_error);
         self.emit_turn_duration(&cell);
         self.result_notifications(&data, cost, was_interrupted, is_error);
-        if held_queue && completed {
-            self.shared.schedule_maintenance_drain(&self.chat_id);
+        if held_queue {
+            self.release_held_queue_after_result(completed);
         }
         self.shared.schedule_idle_evaluation(&self.chat_id);
+    }
+
+    fn release_held_queue_after_result(&self, completed: bool) {
+        if completed {
+            self.shared.schedule_maintenance_drain(&self.chat_id);
+        } else {
+            self.pause_held_queue("Error: Turn did not complete");
+        }
     }
 
     fn retire_fork(&self) {

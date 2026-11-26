@@ -27,6 +27,14 @@ pub trait ChatStore: Send + Sync {
     ) -> Result<(), SeamError> {
         Err(SeamError::msg("maintenance queue unavailable"))
     }
+    fn idle_queue_replace(
+        &self,
+        _chat_id: &str,
+        _previous: &str,
+        _input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<bool, SeamError> {
+        Ok(false)
+    }
     fn idle_queue_list(
         &self,
         _chat_id: &str,

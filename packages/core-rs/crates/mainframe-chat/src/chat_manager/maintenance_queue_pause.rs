@@ -59,6 +59,17 @@ impl ChatManager {
         else {
             return Ok(());
         };
+        if self
+            .shared
+            .deps
+            .idle_queue_list(chat_id)?
+            .first()
+            .is_some_and(|input| {
+                input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Unconfirmed
+            })
+        {
+            return Ok(());
+        }
         self.shared.deps.idle_queue_set_pause(chat_id, None)?;
         pause.remove();
         self.notify_queue_changed(chat_id);

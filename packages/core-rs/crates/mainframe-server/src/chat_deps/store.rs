@@ -63,6 +63,24 @@ impl ChatStore for DaemonChatDeps {
             })
             .map_err(SeamError::new)
     }
+    fn idle_queue_replace(
+        &self,
+        chat_id: &str,
+        previous: &str,
+        input: &mainframe_db::idle_compaction_queue::QueuedInput,
+    ) -> Result<bool, SeamError> {
+        let db = &self.db;
+        let (chat_id, previous, input) = (chat_id.to_owned(), previous.to_owned(), input.clone());
+        db.call_blocking(move |d| {
+            mainframe_db::idle_compaction_queue::replace(
+                d.connection(),
+                &chat_id,
+                &previous,
+                &input,
+            )
+        })
+        .map_err(SeamError::new)
+    }
     fn idle_queue_list(
         &self,
         chat_id: &str,

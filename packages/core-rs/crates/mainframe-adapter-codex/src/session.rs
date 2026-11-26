@@ -1,6 +1,5 @@
 mod idle_intake;
 use mainframe_types::sync::LockExt as _;
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -28,10 +27,9 @@ use serde_json::{Map, Value, json};
 use crate::approval_handler::{ApprovalHandler, PlanContext};
 use crate::event_mapper::{CodexSessionState, handle_notification};
 use crate::fork::ThreadTarget;
-use crate::history_convert::convert_thread_items;
 use crate::history_load::load_history_inner;
 use crate::jsonrpc::{JsonRpcClient, JsonRpcHandlers};
-use crate::rollout_reader::{RolloutReaderDeps, read_rollout_items};
+use crate::rollout_reader::RolloutReaderDeps;
 use crate::thread_registry::{ThreadRegistryDeps, lookup_agent_metadata_with};
 use crate::thread_request::{thread_request_error, thread_request_for};
 use crate::turn_config::{CodexProviderTuning, build_turn_config};

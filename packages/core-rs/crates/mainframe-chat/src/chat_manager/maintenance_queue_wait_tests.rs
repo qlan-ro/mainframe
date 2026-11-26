@@ -26,6 +26,7 @@ async fn ambiguous_provider_timeout_stops_polling_and_preserves_fifo() {
     );
     assert!(session.sent.lock_recover().is_empty());
     session.ready.store(true, Ordering::SeqCst);
+    manager.resume_maintenance_queue("c").await.unwrap();
     manager.drain_maintenance_queue("c").await.unwrap();
     finish_turn(&session, false);
     manager.drain_maintenance_queue("c").await.unwrap();

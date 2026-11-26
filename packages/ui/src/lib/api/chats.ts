@@ -90,6 +90,9 @@ export const trustWorkspace = (port: number, chatId: string): Promise<void> =>
 export const resumeQueuedMessages = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/resume`);
 
+export const replayQueuedMessage = (port: number, chatId: string, messageId: string): Promise<void> =>
+  requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/queue/${encodeURIComponent(messageId)}`);
+
 export const interruptChat = (port: number, chatId: string): Promise<void> =>
   requestEmpty('POST', `${apiBase(port)}/api/chats/${chatId}/interrupt`);
 

@@ -8,7 +8,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import { resumeQueuedMessages } from '@/lib/api/chats';
+import { replayQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
@@ -26,6 +26,7 @@ interface QueueRow {
   /** Why the row did not go out, or undefined while it is simply waiting. */
   failure?: string;
   action?: { label: string; testId: string; onClick: () => void; icon?: ReactNode };
+  onMarkSent?: () => void;
   note?: string;
   /** Claimed by a "Send now": it goes out behind what the agent already has. */
   leaving?: boolean;
@@ -37,7 +38,7 @@ interface QueueRow {
 
 const DELIVERY_FAILURE: Record<string, string> = {
   rejected: 'Not sent: the agent refused it. The queue is paused.',
-  unconfirmed: 'Delivery uncertain. Check the agent’s history; removing it only clears it here.',
+  unconfirmed: 'Not confirmed by the agent. It may have been received.',
 };
 
 const report = (what: string) => (error: unknown) => {
@@ -110,6 +111,11 @@ function Row({ row }: { row: QueueRow }) {
         </span>
         {row.failure && <span className="text-meta/[1.3] text-fail">{row.failure}</span>}
       </span>
+      {row.onMarkSent && (
+        <Button type="button" variant="ghost" size="xs" onClick={row.onMarkSent} className="shrink-0">
+          Mark as sent
+        </Button>
+      )}
       {row.action && (
         <Button
           type="button"
@@ -143,28 +149,44 @@ function useQueuedRows(): QueueRow[] {
   const queued = Object.values(extras?.queued ?? {})
     .filter((ref): ref is QueuedMessageRef => ref != null && ref.steered !== true)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  const uncertainHead = queued[0]?.delivery === 'unconfirmed';
   const resumeIndex = queued.findIndex((row) => row.pauseReason != null);
   return queued.map(({ messageId, content, attachmentIds, delivery, pauseReason, chatId }, index) => ({
     messageId,
     content,
     attachments: attachmentIds?.length ?? 0,
-    note: pauseReason ? `Paused · ${pauseReason}` : undefined,
+    note:
+      delivery === 'unconfirmed'
+        ? 'Uncertain'
+        : uncertainHead
+          ? 'Waiting on the message above'
+          : pauseReason
+            ? `Paused · ${pauseReason}`
+            : undefined,
     failure: delivery ? DELIVERY_FAILURE[delivery] : undefined,
+    onMarkSent:
+      delivery === 'unconfirmed' ? () => void extras?.cancelQueued(messageId).catch(report('mark as sent')) : undefined,
     action:
-      pauseReason && extras && index === resumeIndex
+      delivery === 'unconfirmed' && extras
         ? {
-            label: 'Resume',
-            testId: 'chat-queue-resume',
-            onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+            label: 'Send again',
+            testId: 'chat-queued-replay',
+            onClick: () => void replayQueuedMessage(extras.port, chatId, messageId).catch(report('send')),
           }
-        : delivery === 'rejected'
+        : !uncertainHead && pauseReason && extras && index === resumeIndex
           ? {
-              label: 'Retry',
-              testId: 'chat-queued-retry',
-              icon: <RotateCcwIcon data-icon="inline-start" />,
-              onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+              label: 'Resume',
+              testId: 'chat-queue-resume',
+              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
             }
-          : undefined,
+          : delivery === 'rejected'
+            ? {
+                label: 'Retry',
+                testId: 'chat-queued-retry',
+                icon: <RotateCcwIcon data-icon="inline-start" />,
+                onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
+              }
+            : undefined,
     onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
     onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));

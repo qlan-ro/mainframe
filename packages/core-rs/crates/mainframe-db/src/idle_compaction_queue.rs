@@ -100,6 +100,18 @@ pub fn put(db: &Connection, chat_id: &str, input: &QueuedInput) -> Result<(), Db
     Ok(())
 }
 
+pub fn replace(
+    db: &Connection,
+    chat_id: &str,
+    previous: &str,
+    input: &QueuedInput,
+) -> Result<bool, DbError> {
+    Ok(db.execute(
+        "UPDATE idle_compaction_queue SET uuid=?3,payload=?4 WHERE chat_id=?1 AND uuid=?2",
+        params![chat_id, previous, input.uuid, serde_json::to_string(input)?],
+    )? == 1)
+}
+
 pub fn list(db: &Connection, chat_id: &str) -> Result<Vec<QueuedInput>, DbError> {
     let mut stmt =
         db.prepare("SELECT payload FROM idle_compaction_queue WHERE chat_id=?1 ORDER BY rowid")?;
