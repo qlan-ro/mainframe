@@ -451,7 +451,7 @@ const area: CaptureArea = {
         {
           id: 'rename',
           caption: '**Rename.** The title turns into a field on the same row; focus is the solid 2 px line (C3).',
-          crop: [0, 0, 560, 560],
+          crop: [0, 0, 600, 560],
           setup: async ({ page, vars }) => {
             await page
               .locator(`[data-testid="sessions-row"][data-chat-id="${vars['last']}"]`)

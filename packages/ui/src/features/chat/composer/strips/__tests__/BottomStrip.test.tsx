@@ -262,11 +262,26 @@ describe('ChangesButton', () => {
     expect(button).toHaveAttribute('aria-label', 'Changes: 2 changed files');
 
     fireEvent.click(button);
-    expect(screen.getByText('src/b.ts').closest('[title]')).toHaveAttribute('title', 'src/b.ts');
+    expect(screen.getByText('src/b.ts', { selector: 'bdi' }).closest('[title]')).toHaveAttribute('title', 'src/b.ts');
     expect(screen.getByText('Changes · 2 files')).toBeInTheDocument();
     expect(screen.getByText('+22 −1 across 2 files')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('composer-changes-open-diff'));
     expect(emit).toHaveBeenCalledExactlyOnceWith({ type: 'open-review' });
+  });
+
+  it('shortens paths and shows full names when two suffixes collide', () => {
+    const files = ['first/src/a.ts', 'second/src/a.ts', String.raw`first\src\b.ts`].map((path) => ({ path }));
+    mockChanges = { ...some, files, loading: false, error: false };
+    renderStrip();
+    fireEvent.click(screen.getByTestId('composer-changes'));
+    expect(screen.getByText('first/src/a.ts', { selector: 'bdi' })).toBeVisible();
+    expect(screen.getByText('second/src/a.ts', { selector: 'bdi' })).toBeVisible();
+    const shortened = screen.getByText('src/b.ts', { selector: 'bdi' });
+    expect(shortened).toHaveAttribute('aria-hidden', 'true');
+    const original = String.raw`first\src\b.ts`;
+    expect(shortened.parentElement).toHaveAttribute('title', original);
+    expect(screen.getByText(original)).toHaveClass('sr-only');
+    expect(screen.queryByRole('img', { name: original })).not.toBeInTheDocument();
   });
 
   it('counts files where the daemon reports no lines, instead of a false zero', () => {

@@ -537,6 +537,8 @@ button.tile:hover{background:var(--hover)}
 .cbtn.pri:hover{filter:brightness(1.1)}
 .cbtn.warn{background:var(--warn-bg);color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn-bd)}
 .cbtn.warn:hover{filter:brightness(.97)}
+.tip::after{content:"";position:absolute;width:8px;height:8px;background:var(--tipbg);left:var(--tip-arrow-x,50%);transform:translateX(-50%) rotate(45deg);bottom:-4px}
+.tip[data-side=below]::after{top:-4px;bottom:auto}
 .tip{position:fixed;z-index:60;max-width:280px;background:var(--tipbg);color:var(--tipink);font-size:12px;line-height:1.4;padding:5px 9px;border-radius:7px;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.2)}
 .toast{position:absolute;left:50%;top:56px;transform:translateX(-50%);z-index:40;background:var(--tipbg);color:var(--tipink);padding:7px 14px;border-radius:9px;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.2);animation:pop .18s cubic-bezier(.16,1,.3,1);max-width:80%}
 
@@ -1330,7 +1332,10 @@ function showTip(el){
   if(el.dataset.tipalign==='end') left=cardR.right-w;
   if(inCard) left=Math.min(Math.max(left,cardR.left),cardR.right-w);
   left=Math.min(Math.max(8,left),innerWidth-w-8);
-  let top=r.top-h-8;if(top<8) top=r.bottom+8;
+  let top=r.top-h-8;
+  tip.dataset.side=top<8?'below':'above';
+  if(top<8) top=r.bottom+8;
+  tip.style.setProperty('--tip-arrow-x',Math.min(w-8,Math.max(8,r.left+r.width/2-left))+'px');
   tip.style.left=left+'px';tip.style.top=top+'px';
 }
 function refreshTip(){if(tipEl&&(!tipEl.isConnected||tipEl.dataset.tip!==tip.textContent||tipEl.disabled)) hideTip()}
@@ -1464,15 +1469,25 @@ function renderSide(){
   if(UI.sq) h+=`<div class="sq"><input id="sqin" type="search" aria-label="Search sessions" placeholder="Search sessions" value="${esc(UI.q)}"></div>`;
   h+=`<button type="button" class="newrow" data-id="newsess" aria-label="New session">${ic('newchat')}<span>New session</span>${ic('plus')}</button>`;
   h+=`<div class="scope"><button type="button" class="scopeb" data-id="scope" aria-haspopup="menu" aria-expanded="false" aria-label="Project scope: ${sc||'All projects'}"><span class="avs" aria-hidden="true">${sc?`<span class="av" style="background:${PCOL[sc]}">${sc[0].toUpperCase()}</span>`:avs}</span><span class="tx"><span>${sc||'All projects'}</span><span>${sc?'1 project':'3 projects'}</span></span></button><button type="button" class="ib32" data-id="addproj" aria-label="Add project" data-tip="Add project">${ic('folderplus')}</button></div><div class="slist">`;
-  SIDEGROUPS.forEach((g,gi)=>{
-    let ids=g.ids.slice();
-    if(UI.filter==='running') ids=ids.filter(id=>['run','sub'].includes(statusOf(id)));
-    if(UI.filter==='need') ids=ids.filter(id=>statusOf(id)==='need');
-    if(sc) ids=ids.filter(id=>sessOf(id).project===sc);
-    if(UI.q) ids=ids.filter(id=>sessOf(id).title.toLowerCase().includes(UI.q.toLowerCase()));
-    if(UI.sort==='name') ids.sort((a,b)=>TPL[a].title.localeCompare(TPL[b].title));
-    if(!ids.length&&(sc||UI.q)&&g.g==='No project') return;
-    h+=`<div class="gh"><span>${g.g}</span>${gi===0?`<button type="button" class="iconbtn${UI.filter!=='all'?' on':''}" data-id="gfilter" aria-haspopup="menu" aria-expanded="false" aria-label="Filter sessions" data-tip="Filter">${ic('filter','sm')}</button><button type="button" class="iconbtn" data-id="gsort" aria-haspopup="menu" aria-expanded="false" aria-label="Sort sessions" data-tip="Sort">${ic('sort','sm')}</button><button type="button" class="iconbtn" data-id="gmore" aria-haspopup="menu" aria-expanded="false" aria-label="More session actions" data-tip="More">${ic('dots','sm')}</button>`:''}</div>`;
+  const matches=id=>(UI.filter!=='running'||['run','sub'].includes(statusOf(id)))
+    &&(UI.filter!=='need'||statusOf(id)==='need')
+    &&(!sc||sessOf(id).project===sc)
+    &&(!UI.q||sessOf(id).title.toLowerCase().includes(UI.q.toLowerCase()));
+  const groups=SIDEGROUPS.map(({g,ids})=>({g,ids:ids.filter(matches)}));
+  const all=groups.flatMap(({ids})=>ids);
+  let arranged=groups;
+  if(UI.sort==='project'){
+    const projects=[...new Set([...PROJECTS,...all.map(id=>sessOf(id).project).filter(Boolean),null])];
+    arranged=projects.map(project=>({g:project||'No project',ids:all.filter(id=>sessOf(id).project===project)}))
+      .filter(({ids})=>ids.length);
+  }else if(UI.sort==='status'){
+    const rank=id=>({need:0,run:1,sub:1}[statusOf(id)]??2);
+    arranged=[{g:'By status',ids:all.sort((a,b)=>rank(a)-rank(b))}];
+  }
+  if(!arranged.length) arranged=[{g:'By project',ids:[]}];
+  arranged.forEach(({g,ids},gi)=>{
+    if(!ids.length&&(sc||UI.q)&&g==='No project') return;
+    h+=`<div class="gh"><span>${esc(g)}</span>${gi===0?`<button type="button" class="iconbtn${UI.filter!=='all'?' on':''}" data-id="gfilter" aria-haspopup="menu" aria-expanded="false" aria-label="Filter sessions" data-tip="Filter">${ic('filter','sm')}</button><button type="button" class="iconbtn" data-id="gsort" aria-haspopup="menu" aria-expanded="false" aria-label="Sort sessions" data-tip="Sort">${ic('sort','sm')}</button><button type="button" class="iconbtn" data-id="gmore" aria-haspopup="menu" aria-expanded="false" aria-label="More session actions" data-tip="More">${ic('dots','sm')}</button>`:''}</div>`;
     if(!ids.length) h+='<div class="sempty">No sessions match</div>';
     for(const id of ids){
       const st=statusOf(id),m=sessOf(id);
@@ -1578,7 +1593,7 @@ test result: <span class="okk">ok</span>. 2 passed; 0 failed
 [11:31:14] quota: codex window reset, percent 100 → 0
 [11:31:15] session s1: turn started</div>`,
   code:t=>`<div class="fileh"><b>${esc(t.t)}</b><span>packages/ui/src/features/usage</span></div>${codeHtml(t.t==='UsageCapsule.tsx'?CODE_CAPSULE:[`// ${t.t}`,'',"export {};"])}`,
-  diff:t=>`<div class="fileh"><b>${esc(t.t)}</b><span>crates/quota/src</span><span class="add">+6</span><span class="del">−1</span></div><div class="code">${DIFF_QUOTA.map(([k,l])=>`<div class="dl${k==='+'?' a':k==='-'?' d':k==='h'?' h':''}"><span class="ln">${k==='h'?'':k}</span><span class="lc">${k==='h'?esc(l):hl(l)||' '}</span></div>`).join('')}</div>`
+  diff:t=>`<div class="fileh"><b>${esc(t.t)}</b><span>crates/quota/src</span><span>2 changes</span><button type="button" onclick="this.parentElement.nextElementSibling.querySelector('.dl')?.scrollIntoView()" aria-label="Previous change">Previous</button><button type="button" aria-label="Next change" onclick="this.parentElement.nextElementSibling.querySelector('.dl:last-child')?.scrollIntoView()">Next</button><button type="button" onclick="toast('Revealed file')">Reveal</button></div><div class="code">${DIFF_QUOTA.map(([k,l])=>`<div class="dl${k==='+'?' a':k==='-'?' d':k==='h'?' h':''}"><span class="ln">${k==='h'?'':k}</span><span class="lc">${k==='h'?esc(l):hl(l)||' '}</span></div>`).join('')}</div>`
 };
 const WS_NEW={file:{k:'code',t:'use-usage.ts'},term:{k:'term',t:'zsh'},url:{k:'url',t:'github.com/qlan-ro/mainframe'},dev:{k:'preview',t:'localhost:5173'},daemon:{k:'console',t:'daemon'}};
 function wsOpen(spec){
@@ -1938,9 +1953,9 @@ function toolTurnHtml(key,m,open){
   const OUT=m.rows.filter(r=>r.mk||r.askd);const mks=OUT.length?`<div class="mks">${OUT.map(mkHtml).join('')}</div>`:'';
   if(OUT.length===m.rows.length) return mks;
   m={...m,rows:m.rows.filter(r=>!r.mk&&!r.askd)};
-  const R=withRetries(m.rows);const cw=childWork(R);const f={open:R.filter(r=>r.st==='bad'&&!r.retried).length,retried:R.filter(r=>r.retried).length};const st=m.status||'ok';
-  const glyph=cw.going?spin():st==='stopped'?ic('stopc','stp'):st==='error'?ic('xc','bad'):ic('check');
-  const word=cw.going?'Still going':st==='stopped'?'Stopped':st==='error'?'Ended on an error':'Finished';
+  const R=withRetries(m.rows);const cw=childWork(R);const f={open:R.filter(r=>r.st==='bad'&&!r.retried).length,retried:R.filter(r=>r.retried).length};const st=m.status||(R.some(r=>r.st==='unk')?'unknown':'ok');
+  const glyph=cw.going?spin():st==='stopped'?ic('stopc','stp'):st==='error'?ic('xc','bad'):st==='unknown'?'':ic('check');
+  const word=cw.going?'Still going':st==='stopped'?'Stopped':st==='error'?'Ended on an error':st==='unknown'?'Ending unknown':'Finished';
   const pl=(k,w)=>`${k} ${w}${k===1?'':'s'}`;
   const who=[cw.agents?pl(cw.agents,'agent'):'',cw.flows?pl(cw.flows,'workflow'):''].filter(Boolean).join(', ');
   const lv=[cw.live.need?`<span class="nd">${cw.live.need} need${cw.live.need===1?'s':''} you</span>`:'',cw.live.run?`${cw.live.run} running`:'',cw.live.queued?`${cw.live.queued} queued`:''].filter(Boolean);
@@ -2525,7 +2540,7 @@ function projItems(){
 function branchItems(){
   const e=S.env,temp=e.kind==='temp';
   const q=MQ.trim().toLowerCase(),hit=x=>!q||x.toLowerCase().includes(q);
-  const out=[{t:'search',ph:'Search branches...'},{t:'label',icon:'folder',l:S.project||'Project'}];
+  const out=[{t:'search',ph:'Search branches...'}];
   const bs=BRANCHES.filter(hit),ws=WORKTREES.filter(w=>hit(w.b));
   if(q&&!bs.length&&!ws.length) out.push({t:'text',h:'No branches match'});
   bs.forEach(b=>out.push({role:'radio',icon:'branch',label:b,checked:(e.kind==='local'||e.kind==='new')&&S.base===b,disabled:temp,onSelect:()=>{S.base=b;if(e.kind==='existing'||e.kind==='local') S.env={kind:'local',branch:b};renderTop()}}));
@@ -2748,8 +2763,8 @@ $('#side').addEventListener('click',e=>{
   if(g.dataset.id==='scope') openMenu(g,()=>[{t:'label',l:'Show sessions from'},{role:'radio',label:'All projects',checked:!UI.scope,onSelect:()=>{UI.scope=null;renderSide()}}].concat(PROJECTS.map(p=>({role:'radio',label:p,checked:UI.scope===p,onSelect:()=>{UI.scope=p;renderSide()}}))),{label:'Project scope',minWidth:220,below:true});
   if(g.dataset.id==='newsess'){lastPreset='new-session';load('new');renderPresets();return}
   if(g.dataset.id==='gfilter') openMenu(g,()=>[{t:'label',l:'Show'}].concat([['all','All sessions'],['running','Running'],['need','Needs you']].map(([k,l])=>({role:'radio',label:l,checked:UI.filter===k,onSelect:()=>{UI.filter=k;renderSide()}}))),{label:'Filter',minWidth:200,below:true});
-  if(g.dataset.id==='gsort') openMenu(g,()=>[{t:'label',l:'Sort by'}].concat([['recent','Last activity'],['name','Name']].map(([k,l])=>({role:'radio',label:l,checked:UI.sort===k,onSelect:()=>{UI.sort=k;renderSide()}}))),{label:'Sort',minWidth:200,below:true});
-  if(g.dataset.id==='gmore') openMenu(g,()=>[{label:'Mark all as read',onSelect:()=>toast('All sessions marked as read')},{label:'Archive finished sessions',onSelect:()=>toast('Nothing to archive in this prototype')}],{label:'More',minWidth:220,below:true});
+  if(g.dataset.id==='gsort') openMenu(g,()=>[{t:'label',l:'Sort by'}].concat([['status','Status'],['project','Project']].map(([k,l])=>({role:'radio',label:l,checked:UI.sort===k,onSelect:()=>{UI.sort=k;renderSide()}}))),{label:'Sort',minWidth:200,below:true});
+  if(g.dataset.id==='gmore') openMenu(g,()=>[{label:'Archived sessions',onSelect:()=>toast('Archived sessions')},{label:'Import external sessions',onSelect:()=>toast('Import external sessions')}],{label:'More',minWidth:220,below:true});
 });
 $('#rail').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b) return;

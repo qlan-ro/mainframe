@@ -10,7 +10,7 @@
  * the checkout has uncommitted changes.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Folder, FolderGit2, FolderPlus, Loader2, Settings2, Timer } from 'lucide-react';
+import { ChevronDown, FolderGit2, FolderPlus, Loader2, Settings2, Timer } from 'lucide-react';
 import type { BranchListResult } from '@qlan-ro/mainframe-types';
 import {
   Command,
@@ -23,12 +23,11 @@ import {
 import { BranchIcon } from '@/components/ui/glyphs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MENU_DETAIL, MENU_ITEM, MENU_LABEL, MENU_SEPARATOR } from '@/components/ui/menu-item';
+import { MENU_DETAIL, MENU_ITEM, MENU_SEPARATOR } from '@/components/ui/menu-item';
 import { MenuSearch } from '@/components/ui/menu-search';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { getGitBranches, getProjectWorktrees, type WorktreeEntry } from '@/lib/api/git';
-import { useProjectsStore } from '@/store/projects';
 import { BranchPopover } from '@/features/git/BranchPopover';
 import { useBranchActions } from '@/features/git/use-branch-actions';
 import { useDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
@@ -162,7 +161,6 @@ export function DraftBranchPicker({
   draft: DraftCfg;
 }) {
   const port = useDaemonPort();
-  const projectName = useProjectsStore((state) => state.projects.find((project) => project.id === projectId)?.name);
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
   const data = useBranchData(port, projectId, open);
@@ -244,12 +242,6 @@ export function DraftBranchPicker({
         >
           <Command className="rounded-none bg-transparent p-0">
             <MenuSearch data-testid="composer-branch-search" placeholder="Search branches..." autoFocus />
-            <div className={cn(MENU_LABEL, 'flex items-center gap-[7px]')}>
-              <Folder className="size-3.5 shrink-0" aria-hidden />
-              <span className="truncate" title={projectName}>
-                {projectName ?? 'Project'}
-              </span>
-            </div>
             <CommandList className="max-h-[calc(100vh-8rem)]">
               {data.branches == null && !data.error && (
                 <div className="flex justify-center py-4">

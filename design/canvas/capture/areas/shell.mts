@@ -152,6 +152,7 @@ const area: CaptureArea = {
             await page.getByTestId('surface-rail-chat').click();
             await page.getByTestId('surface-rail-workspace').click();
             await page.keyboard.press('ControlOrMeta+b');
+            await parkPointer(page);
           },
           wait: 800,
         },
@@ -217,6 +218,7 @@ const area: CaptureArea = {
           setup: async ({ page }) => {
             await page.getByTestId('usage-capsule').click();
             await page.getByTestId('usage-capsule-popover').waitFor();
+            await page.mouse.move(1, 1);
           },
         },
         {

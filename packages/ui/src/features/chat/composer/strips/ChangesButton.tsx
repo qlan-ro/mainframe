@@ -37,6 +37,11 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
   ]
     .filter((count) => count != null)
     .join(' ');
+  const shown = changes.files.slice(0, SHOWN_FILES);
+  const shortPaths = shown.map(({ path }) => path.split(/[\\/]/).slice(-2).join('/'));
+  const labels = shortPaths.map((path, index) =>
+    shortPaths.filter((other) => path === other).length > 1 ? (shown[index]?.path ?? path) : path,
+  );
   const rest = changes.files.length - SHOWN_FILES;
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,11 +68,12 @@ export function ChangesButton({ port, projectId, chatId }: { port: number; proje
           Changes · {summary.fileCount} file{suffix}
         </span>
         <div className="flex max-h-60 flex-col overflow-y-auto">
-          {changes.files.slice(0, SHOWN_FILES).map((file) => (
+          {shown.map((file, index) => (
             <div key={file.path} className="flex min-h-7 min-w-0 items-center gap-2.5 px-2.5 py-[7px]">
               <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate font-mono text-small/[20px]" dir="rtl" title={file.path}>
-                <bdi>{file.path}</bdi>
+              <span className="min-w-0 flex-1 truncate font-mono text-small/[20px]" title={file.path}>
+                {labels[index] !== file.path && <span className="sr-only">{file.path}</span>}
+                <bdi aria-hidden={labels[index] !== file.path || undefined}>{labels[index]}</bdi>
               </span>
               <Count
                 additions={file.additions}

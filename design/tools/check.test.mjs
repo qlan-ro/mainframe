@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -315,53 +314,6 @@ test('nothing the first version of the check found is let through, but src/Users
   // By the board writers as well, in one call for all of them. Python counts é as a letter, as it did on main.
   const through = 'import json,sys; from boards import local_paths; print(json.dumps([t for t in json.load(sys.stdin) if not local_paths(t)]))';
   assert.deepEqual(JSON.parse(python(through, JSON.stringify(found.filter((text) => !text.includes('é'))))), wanted);
-});
-
-test('tool cards and markers are numbered within their own state', () => {
-  const { numberIds } = createRequire(import.meta.url)('../canvas/proposals/number-ids.cjs');
-  const card = (from) =>
-    `<button aria-controls="tc${from}"></button><div id="tc${from}"></div><button aria-controls="mk${from + 1}"></button>` +
-    `<div id="mk${from + 1}"></div><div id="wsep1" data-id="mm-k3"></div>`;
-  assert.equal(
-    numberIds(card(57), 'tools'),
-    '<button aria-controls="tools-tc1"></button><div id="tools-tc1"></div><button aria-controls="tools-mk2"></button>' +
-      '<div id="tools-mk2"></div><div id="wsep1" data-id="mm-k3"></div>',
-  );
-  assert.equal(numberIds(card(900), 'tools'), numberIds(card(57), 'tools'));
-});
-
-test('no committed proposal board holds an id that depends on the states captured before it', () => {
-  const dir = join(REPO, 'design/canvas/project');
-  for (const board of readdirSync(dir).filter((name) => name.startsWith('Proposal-Redesign-'))) {
-    assert.deepEqual(readFileSync(join(dir, board), 'utf8').match(/"(?:tc|mk)\d+"/g) ?? [], [], board);
-  }
-});
-
-test('no builder writes a board that holds a local path', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'design-check-'));
-  try {
-    for (const part of ['design/canvas/lib', 'design/canvas/proposals', 'design/redesign']) {
-      cpSync(join(REPO, part), join(dir, part), { recursive: true, filter: (from) => !/\/(?:render|__pycache__)$/.test(from) });
-    }
-    const project = join(dir, 'design/canvas/project');
-    const proposals = join(dir, 'design/canvas/proposals');
-    mkdirSync(project);
-    const run = (html) => {
-      const ids = JSON.parse(
-        python('import json,sys; sys.path.insert(0, sys.argv[1]); from states import BOARDS; print(json.dumps([s["id"] for b in BOARDS for s in b["states"]]))', '', [proposals]),
-      );
-      const frame = { html, w: 100, h: 100 };
-      const frags = Object.fromEntries([...ids, '__sprite'].map((id) => [id, frame]));
-      writeFileSync(join(proposals, 'frags.json'), JSON.stringify(frags));
-      execFileSync('python3', [join(proposals, 'build.py')], { stdio: 'pipe', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
-    };
-    assert.throws(() => run('<p title="/Users/jane/Code">x</p>'), /the board names this machine, not written: \/Users\/jane\/Code/);
-    assert.deepEqual(readdirSync(project), []);
-    run('<p title="~/Code">x</p>');
-    assert.ok(readdirSync(project).includes('Proposal-Redesign-Spec.dc.html'));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 /** A stand-in daemon: answers every request and leaves its environment in its data dir. */

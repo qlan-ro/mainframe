@@ -82,7 +82,7 @@ describe('ToolBody', () => {
 
   it('names an MCP call by its raw tool name', () => {
     show(part('mcp__claude_ai_github__get_issue', { id: 1 }, 'ok'));
-    expect(screen.getByTestId('chat-call-tool')).toHaveTextContent('mcp__claude_ai_github__get_issue');
+    expect(screen.queryByTestId('chat-call-tool')).not.toBeInTheDocument();
   });
 
   it('offers the whole of a structured result the daemon cut short', () => {

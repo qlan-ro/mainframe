@@ -101,7 +101,7 @@ export async function parkPointer(page: Page): Promise<void> {
 export async function openTab(page: Page, chatId: string): Promise<void> {
   await page.locator(`[data-testid="sessions-row"][data-chat-id="${chatId}"]`).click();
   await page.getByTestId(`session-tab-${chatId}`).dblclick();
-  await page.getByTestId('chat-composer-input').waitFor();
+  await page.getByTestId('chat-composer-input').first().waitFor();
 }
 
 /** Closes whatever menu, popover or dialog the previous state left open. */

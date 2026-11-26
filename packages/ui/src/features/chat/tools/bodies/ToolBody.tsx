@@ -112,11 +112,6 @@ function CallBody({ part, status }: ToolBodyProps) {
   const args = record(part.args) ?? {};
   return (
     <Surface testId="chat-call-body">
-      {toolKind(part.toolName) === 'mcp' && (
-        <KeyValue label="Tool" testId="chat-call-tool">
-          {part.toolName}
-        </KeyValue>
-      )}
       <KeyValue label="Arguments" testId="chat-call-args">
         {compactArguments(args)}
       </KeyValue>
