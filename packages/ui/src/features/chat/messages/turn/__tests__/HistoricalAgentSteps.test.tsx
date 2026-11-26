@@ -70,7 +70,10 @@ it('prepends an older page when the user scrolls up', async () => {
   request.mockResolvedValueOnce(page('latest-step', true)).mockResolvedValueOnce(page('older-step'));
   const view = show();
   await screen.findByText('latest-step');
-  fireEvent.wheel(view.container.querySelector('[data-conversation-scroller]')!, { deltaY: -10 });
+  const viewport = view.container.querySelector('[data-conversation-scroller]')!;
+  fireEvent.wheel(viewport, { deltaY: 10 });
+  expect(request).toHaveBeenCalledTimes(1);
+  fireEvent.wheel(viewport, { deltaY: -10 });
   await screen.findByText('older-step');
   expect(request).toHaveBeenLastCalledWith('agent', 'page-floor');
   expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['older-step', 'latest-step']);

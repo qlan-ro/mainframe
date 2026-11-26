@@ -1,4 +1,5 @@
 import { SubagentFind } from './SubagentFind';
+import { ProseBlock, TextBlock } from './SubagentTextBlocks';
 import { ConversationExportButton } from './ConversationExportButton';
 /**
  * SubagentTabBody — a sub-agent in a workspace tab (W8): its title, kind and
@@ -13,12 +14,7 @@ import { ConversationExportButton } from './ConversationExportButton';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
-import { markdownComponents } from '@/features/chat/parts/markdown-text';
-import { remarkAppLinks, urlTransform } from '@/features/chat/parts/markdown-url-transform';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
@@ -55,8 +51,6 @@ import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
 
-const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
-
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 /** Pages history back until the call is loaded. The text to show when it is not there, or null. */
@@ -92,36 +86,6 @@ function useLoadCall(
     };
   }, [controller, partial, ready, hasMore, call, messages, messageId, toolCallId]);
   return error;
-}
-
-function Block({ label, testId, children }: { label: string; testId: string; children: React.ReactNode }) {
-  return (
-    <section data-testid={testId} className="mt-0.5 mb-1.5 min-w-0">
-      <h3 className="text-control font-medium text-(--mf-tr-secondary)">{label}</h3>
-      <div className="aui-md text-control text-(--mf-tr-secondary) break-words">{children}</div>
-    </section>
-  );
-}
-
-function ProseBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
-  if (source.trim() === '') return null;
-  return (
-    <Block label={label} testId={testId}>
-      <Markdown remarkPlugins={REMARK_PLUGINS} urlTransform={urlTransform} components={markdownComponents}>
-        {source}
-      </Markdown>
-    </Block>
-  );
-}
-
-/** Verbatim: neither Markdown nor HTML. */
-function TextBlock({ label, testId, source }: { label: string; testId: string; source: string }) {
-  if (source.trim() === '') return null;
-  return (
-    <Block label={label} testId={testId}>
-      <p className="whitespace-pre-wrap">{source}</p>
-    </Block>
-  );
 }
 
 /** Where the call stands: what its own row says of it, from the same evidence (T1c). */

@@ -33,14 +33,20 @@ export function HistoricalAgentSteps({ chatId, ...props }: AgentStepsProps & { c
       const distance = node.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
       if (Math.abs(distance) <= viewport.clientHeight) load(true);
     };
+    let scrollTop = viewport.scrollTop;
+    const scroll = () => {
+      const up = viewport.scrollTop < scrollTop;
+      scrollTop = viewport.scrollTop;
+      if (up) check();
+    };
     const wheel = (event: WheelEvent) => {
       if (event.deltaY < 0) check();
     };
     viewport.addEventListener('wheel', wheel, { passive: true });
-    viewport.addEventListener('scroll', check, { passive: true });
+    viewport.addEventListener('scroll', scroll, { passive: true });
     return () => {
       viewport.removeEventListener('wheel', wheel);
-      viewport.removeEventListener('scroll', check);
+      viewport.removeEventListener('scroll', scroll);
     };
   }, [entry, load]);
 
