@@ -13,6 +13,7 @@ pub(super) async fn assemble(
             .with_history_tails(bound.input.paths.data_dir.join("cache/transcript-tails")),
     );
     let chats = chats(&bound, &resources, &quota, &facade);
+    facade.attach_history_refresh(&chats);
     chats.recover_stale_working_state();
     chats.sweep_unreferenced_fork_snapshots().await;
     let orchestration = build_orchestration(

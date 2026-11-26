@@ -51,6 +51,7 @@ impl FacadeHub {
 
     pub(super) fn handle_turn_finished(&self, chat_id: &str, reason: TurnStopReason) {
         self.apply_stream_op(chat_id, StreamOp::TurnFinished(stop_reason(reason)));
+        self.schedule_history_refresh(chat_id);
     }
 
     /// Encode only when someone is listening OR the chat has a revision log

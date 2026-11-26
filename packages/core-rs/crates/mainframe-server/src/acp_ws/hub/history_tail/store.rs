@@ -9,10 +9,10 @@ use serde_json::Value;
 use tokio::io::AsyncReadExt as _;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-pub(super) const FORMAT_VERSION: u32 = 2;
+pub(in crate::acp_ws::hub) const FORMAT_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
-pub(super) struct Manifest {
+pub(in crate::acp_ws::hub) struct Manifest {
     pub version: u32,
     pub generation: String,
     pub chat_id: String,
@@ -42,7 +42,7 @@ impl TailStore {
         }
     }
 
-    pub(super) async fn manifest(&self, chat_id: &str) -> Option<Manifest> {
+    pub(in crate::acp_ws::hub) async fn manifest(&self, chat_id: &str) -> Option<Manifest> {
         if !valid_id(chat_id) {
             return None;
         }
@@ -60,7 +60,12 @@ impl TailStore {
         self.writers.clone().try_acquire_owned().ok()
     }
 
-    pub(super) async fn write(
+    /// A write slot for a refresh, which waits for one instead of skipping.
+    pub(in crate::acp_ws::hub) async fn writer_wait(&self) -> Option<OwnedSemaphorePermit> {
+        self.writers.clone().acquire_owned().await.ok()
+    }
+
+    pub(in crate::acp_ws::hub) async fn write(
         &self,
         manifest: Manifest,
         tail: PreparedHistoryTail,

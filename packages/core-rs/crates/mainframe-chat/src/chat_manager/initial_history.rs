@@ -59,7 +59,7 @@ impl ChatManager {
         HistorySnapshotCache::validate(session.as_ref(), context.as_deref(), validation).await
     }
 
-    fn initial_history_eligible(&self, chat_id: &str) -> bool {
+    pub(super) fn initial_history_eligible(&self, chat_id: &str) -> bool {
         let Some(chat) = self.get_chat(chat_id) else {
             return false;
         };

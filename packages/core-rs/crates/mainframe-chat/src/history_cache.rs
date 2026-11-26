@@ -80,6 +80,9 @@ struct Snapshot {
     dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
     fingerprint: HistoryFingerprint,
     messages: Vec<ChatMessage>,
+    /// Older snapshots lack it; the scan then reads the transcript as before.
+    #[serde(default)]
+    history_files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
 }
 
 /// A directory of `<chat_id>.json` snapshots under `<data_dir>/cache/history`
@@ -171,35 +174,25 @@ impl HistorySnapshotCache {
     /// Fire-and-forget: spawns the write (+ prune) so a cold load's caller
     /// never waits on it. A failed write only warns — the next cold load
     /// just reparses, same as if this cache didn't exist.
-    pub(crate) fn write_in_background(
-        self: &Arc<Self>,
-        chat_id: String,
-        fingerprint: HistoryFingerprint,
-        messages: Vec<ChatMessage>,
-        dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
-        adapter_state: serde_json::Value,
-    ) {
+    fn write_in_background(self: &Arc<Self>, chat_id: String, snapshot: Snapshot) {
         let cache = Arc::clone(self);
         let handle = tokio::spawn(async move {
-            if let Err(err) = cache
-                .write_snapshot(
-                    &chat_id,
-                    Snapshot {
-                        fingerprint,
-                        messages,
-                        dependencies,
-                        adapter_state,
-                    },
-                )
-                .await
-            {
-                tracing::warn!(error = %err, chat_id, "write failed");
-            }
+            cache.write_logged(&chat_id, snapshot).await;
         });
         #[cfg(test)]
         self.writes.lock().unwrap().push(handle);
         #[cfg(not(test))]
         drop(handle);
+    }
+
+    async fn write_logged(&self, chat_id: &str, snapshot: Snapshot) -> bool {
+        match self.write_snapshot(chat_id, snapshot).await {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::warn!(error = %err, chat_id, "write failed");
+                false
+            }
+        }
     }
 
     #[cfg(test)]
@@ -224,6 +217,7 @@ impl HistorySnapshotCache {
                 messages,
                 dependencies: Vec::new(),
                 adapter_state: serde_json::Value::Null,
+                history_files: None,
             },
         )
         .await

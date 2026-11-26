@@ -1,5 +1,9 @@
 use super::*;
 
+/// How long shutdown waits for history caches still stale from a recent turn.
+/// The desktop shell allows the daemon 10 s to stop, most of it for LSP.
+const HISTORY_FLUSH_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
 pub struct ReadyDaemon {
     daemon: Daemon,
     liveness: mainframe_background_tasks::liveness::LivenessSchedulerHandle,
@@ -138,6 +142,10 @@ impl Daemon {
         }
         ctx.chat.orchestration.credentials().revoke_all();
         handles.orchestration_events.abort();
+        ctx.chat
+            .facade_hub
+            .flush_history_refreshes(HISTORY_FLUSH_BUDGET)
+            .await;
         ctx.chat.chat_manager.dispose();
         ctx.infra.plugin_manager.unload_all();
         ctx.core.adapter_registry.kill_all();

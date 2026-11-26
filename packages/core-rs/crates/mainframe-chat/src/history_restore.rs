@@ -17,6 +17,23 @@ impl ChatShared {
         self.merge_idle_history(chat_id, messages)
     }
 
+    /// Reparses `chat_id`'s transcript, persists the snapshot, and returns
+    /// the history exactly as a cold load would hand it to the message cache.
+    pub(crate) async fn refresh_cached_history(
+        &self,
+        chat_id: &str,
+        session: &dyn AdapterSession,
+    ) -> Option<(Vec<ChatMessage>, crate::HistoryValidation)> {
+        let context = self.history_context(chat_id);
+        let parsed = self
+            .history_cache
+            .refresh(chat_id, session, context.as_deref())
+            .await?;
+        let messages = remap_history_for(parsed.messages, chat_id);
+        let messages = self.merge_idle_history(chat_id, messages).ok()?;
+        Some((messages, parsed.validation))
+    }
+
     pub(crate) fn history_context(&self, chat_id: &str) -> Option<String> {
         let chat = storage_event!(self, Some(chat_id); self.deps.chats_get(chat_id), None)?;
         let fork = storage_event!(self, Some(chat_id); self.deps.get_pending_fork(chat_id), None);
