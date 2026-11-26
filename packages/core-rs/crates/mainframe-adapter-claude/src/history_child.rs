@@ -1,5 +1,6 @@
 use super::*;
 use std::collections::VecDeque;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::SystemTime;
 
@@ -7,7 +8,8 @@ use mainframe_adapter_api::AdapterError;
 use mainframe_types::sync::LockExt as _;
 
 type Messages = Arc<Vec<ChatMessage>>;
-static CACHE: LazyLock<Mutex<VecDeque<ChildEntry>>> = LazyLock::new(Default::default);
+static PARSE_LOCKS: [Mutex<()>; 16] = [const { Mutex::new(()) }; 16];
+static CACHE: LazyLock<Mutex<VecDeque<Arc<ChildEntry>>>> = LazyLock::new(Default::default);
 
 #[derive(PartialEq, Eq)]
 struct Stamp(u64, SystemTime);
@@ -26,35 +28,48 @@ struct ChildEntry {
     path: String,
     stamp: Stamp,
     messages: Messages,
+    facts: history_agent_facts::AgentFacts,
+    agents: HashMap<String, String>,
 }
 
 pub(crate) fn load(discovered: DiscoveredFiles, id: &str) -> Result<Messages, AdapterError> {
+    let path = resolve(&discovered, id)?;
+    read(path, &discovered.subagent_files)
+}
+
+fn resolve(discovered: &DiscoveredFiles, id: &str) -> Result<String, AdapterError> {
+    let children = &discovered.subagent_files;
+    if let Some(path) = children.iter().find(|file| agent_id(file) == Some(id)) {
+        return Ok(path.clone());
+    }
     let mut agents = HashMap::new();
-    if !discovered
-        .subagent_files
-        .iter()
-        .any(|file| agent_id(file) == Some(id))
-    {
-        visit_lines(&discovered.primary_path, |line| {
+    for source in discovered.parent_files().chain(
+        children
+            .iter()
+            .filter(|path| Stamp::read(Path::new(path)).is_ok()),
+    ) {
+        if visit_lines(source, |line| {
             if line.contains("\"agentId\"")
                 && let Ok(entry) = serde_json::from_str(line)
             {
                 capture_agent_id_mapping(&entry, &mut agents);
             }
-        })?;
-    }
-    let path = discovered
-        .subagent_files
-        .into_iter()
-        .find(|file| {
-            agent_id(file).is_some_and(|agent| {
-                agent == id || agents.get(agent).is_some_and(|tool| tool == id)
-            })
         })
-        .ok_or(AdapterError::Unavailable(
-            "Sub-agent transcript is unavailable",
-        ))?;
-    read(path)
+        .is_err()
+        {
+            continue;
+        }
+        if let Some(path) = children.iter().find(|file| {
+            agent_id(file)
+                .and_then(|agent| agents.get(agent))
+                .is_some_and(|tool| tool == id)
+        }) {
+            return Ok(path.clone());
+        }
+    }
+    Err(AdapterError::Unavailable(
+        "Sub-agent transcript is unavailable",
+    ))
 }
 
 fn agent_id(file: &str) -> Option<&str> {
@@ -64,41 +79,62 @@ fn agent_id(file: &str) -> Option<&str> {
         .strip_prefix("agent-")
 }
 
-fn read(path: String) -> Result<Messages, AdapterError> {
-    let stamp = Stamp::read(Path::new(&path))?;
-    {
-        let mut cache = CACHE.lock_recover();
-        if let Some(index) = cache.iter().position(|entry| entry.path == path)
-            && let Some(entry) = cache.remove(index)
-            && entry.stamp == stamp
-        {
-            let messages = Arc::clone(&entry.messages);
-            cache.push_front(entry);
-            return Ok(messages);
-        }
+fn read(path: String, children: &HashSet<String>) -> Result<Messages, AdapterError> {
+    let parsed = read_cached(path)?;
+    if parsed.agents.is_empty() && !parsed.messages.iter().any(|row| row.content.iter().any(|block| {
+        matches!(block, mainframe_types::chat::MessageContent::Node(mainframe_types::chat::MessageContentNode::ToolUse { name, .. }) if matches!(name.as_str(), "Agent" | "Task"))
+    })) {
+        return Ok(Arc::clone(&parsed.messages));
     }
-    let messages = parse(&path)?;
-    if stamp.0 <= 8 * 1024 * 1024 && Stamp::read(Path::new(&path)).is_ok_and(|after| after == stamp)
-    {
-        let mut cache = CACHE.lock_recover();
-        cache.retain(|entry| entry.path != path);
-        cache.push_front(ChildEntry {
-            path,
-            stamp,
-            messages: Arc::clone(&messages),
-        });
-        cache.truncate(8);
-    }
-    Ok(messages)
+    let mut rows = parsed.messages.as_ref().clone();
+    parsed.facts.apply(&mut rows, &parsed.agents, children);
+    Ok(Arc::new(rows))
 }
 
-fn parse(path: &str) -> Result<Messages, AdapterError> {
+fn read_cached(path: String) -> Result<Arc<ChildEntry>, AdapterError> {
+    let mut hash = DefaultHasher::new();
+    path.hash(&mut hash);
+    let _parse = PARSE_LOCKS[hash.finish() as usize % PARSE_LOCKS.len()].lock_recover();
+    let stamp = Stamp::read(Path::new(&path))?;
+    if let Some(entry) = cached(&path, &stamp) {
+        return Ok(entry);
+    }
+    let entry = Arc::new(parse(path, stamp)?);
+    if entry.stamp.0 <= 8 * 1024 * 1024
+        && Stamp::read(Path::new(&entry.path)).is_ok_and(|after| after == entry.stamp)
+    {
+        let mut cache = CACHE.lock_recover();
+        cache.push_front(Arc::clone(&entry));
+        cache.truncate(8);
+    }
+    Ok(entry)
+}
+
+fn cached(path: &str, stamp: &Stamp) -> Option<Arc<ChildEntry>> {
+    let mut cache = CACHE.lock_recover();
+    if let Some(index) = cache.iter().position(|entry| entry.path == path)
+        && let Some(entry) = cache.remove(index)
+        && &entry.stamp == stamp
+    {
+        cache.push_front(Arc::clone(&entry));
+        return Some(entry);
+    }
+    None
+}
+
+fn parse(path: String, stamp: Stamp) -> Result<ChildEntry, AdapterError> {
     let mut rows = Vec::new();
     let mut seen = HashSet::new();
     let mut seen_api = HashSet::new();
-    visit_lines(path, |line| {
-        if let Ok(entry) = serde_json::from_str::<Value>(line)
-            && !is_strict_true(entry.get("isMeta"))
+    let mut facts = history_agent_facts::AgentFacts::default();
+    let mut agents = HashMap::new();
+    visit_lines(&path, |line| {
+        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+            return;
+        };
+        facts.observe(&entry);
+        capture_agent_id_mapping(&entry, &mut agents);
+        if !is_strict_true(entry.get("isMeta"))
             && !is_strict_true(entry.get("isCompactSummary"))
             && matches!(entry["type"].as_str(), Some("assistant" | "user"))
             && let Some(message) = convert_history_entry(&entry, "", &mut seen_api)
@@ -107,13 +143,44 @@ fn parse(path: &str) -> Result<Messages, AdapterError> {
             rows.push(message);
         }
     })?;
-    Ok(Arc::new(rows))
+    Ok(ChildEntry {
+        path,
+        stamp,
+        messages: Arc::new(rows),
+        facts,
+        agents,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[tokio::test]
+    async fn saved_child_exposes_nested_call_facts_and_resolves_its_tool_id() {
+        let root = tempfile::tempdir().unwrap();
+        let children = root.path().join("session/subagents");
+        std::fs::create_dir_all(&children).unwrap();
+        std::fs::write(root.path().join("session.jsonl"), "{}").unwrap();
+        std::fs::write(children.join("agent-outer.jsonl"), concat!(
+            r#"{"type":"assistant","uuid":"outer-step","message":{"content":[{"type":"tool_use","id":"nested-call","name":"Agent","input":{}}]}}"#,
+            "\n",
+            r#"{"type":"user","uuid":"receipt","toolUseResult":{"agentId":"inner","status":"completed"},"message":{"content":[{"type":"tool_result","tool_use_id":"nested-call","content":"done"}]}}"#,
+        )).unwrap();
+        std::fs::write(children.join("agent-inner.jsonl"),
+            r#"{"type":"assistant","uuid":"inner-step","message":{"content":[{"type":"text","text":"Nested answer"}]}}"#,
+        ).unwrap();
+        let discover =
+            || discover_session_jsonl_files_in_dir("session", root.path().to_str().unwrap());
+        let outer = load(discover().await, "outer").unwrap();
+        assert_eq!(
+            outer[0].metadata.as_ref().unwrap()["subagentFacts"]["nested-call"]["status"],
+            "completed"
+        );
+        let nested = load(discover().await, "nested-call").unwrap();
+        assert_eq!(nested[0].id, "inner-step");
+    }
 
     #[test]
     fn child_cache_reuses_parsed_messages_and_invalidates_on_append() {
@@ -125,11 +192,14 @@ mod tests {
         let mut file = tempfile::NamedTempFile::new().unwrap();
         writeln!(file, "{}", line("one")).unwrap();
         let path = file.path().to_str().unwrap().to_owned();
-        let first = read(path.clone()).unwrap();
+        let first = read(path.clone(), &HashSet::new()).unwrap();
         assert_eq!(first.len(), 1);
-        assert!(Arc::ptr_eq(&first, &read(path.clone()).unwrap()));
+        assert!(Arc::ptr_eq(
+            &first,
+            &read(path.clone(), &HashSet::new()).unwrap()
+        ));
         writeln!(file, "{}", line("two")).unwrap();
-        let second = read(path).unwrap();
+        let second = read(path, &HashSet::new()).unwrap();
         assert_eq!(second.len(), 2);
         assert!(!Arc::ptr_eq(&first, &second));
     }

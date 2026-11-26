@@ -59,19 +59,17 @@ function useLoadCall(
   state: ChatThreadState,
   messages: readonly ThreadMessage[],
   call: SubagentCall | null,
-  target: { toolCallId: string; messageId?: string },
+  target: { toolCallId: string; messageId?: string; savedNestedAgent?: boolean },
 ): string | null {
   const [error, setError] = useState<string | null>(null);
-  const { toolCallId, messageId } = target;
+  const { toolCallId, messageId, savedNestedAgent } = target;
   const partial = controller.isHistoryContext(toolCallId);
   const ready = state.loadState?.type === 'ready';
   const hasMore = state.historyWindow?.hasMore ?? false;
+  const needed = !savedNestedAgent && ready && (call == null || partial);
+  const exhausted = !hasMore || (!partial && messages.some((message) => message.id === messageId));
   useEffect(() => {
-    if (!ready || (call != null && !partial)) return undefined;
-    if (!hasMore || (!partial && messages.some((message) => message.id === messageId))) {
-      setError('Not in this transcript');
-      return undefined;
-    }
+    if (!needed || exhausted) return undefined;
     let cancelled = false;
     void controller.loadEarlier(toolCallId).then(
       (found) => {
@@ -84,8 +82,8 @@ function useLoadCall(
     return () => {
       cancelled = true;
     };
-  }, [controller, partial, ready, hasMore, call, messages, messageId, toolCallId]);
-  return error;
+  }, [controller, needed, exhausted, messages, toolCallId]);
+  return needed && exhausted ? 'Not in this transcript' : error;
 }
 
 /** Where the call stands: what its own row says of it, from the same evidence (T1c). */
@@ -176,12 +174,20 @@ export interface SubagentTabBodyProps {
   chatId: string;
   toolCallId: string;
   messageId?: string;
+  savedNestedAgent?: boolean;
   title: string;
   /** In front in its pane. */
   active: boolean;
 }
 
-export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }: SubagentTabBodyProps) {
+export function SubagentTabBody({
+  chatId,
+  toolCallId,
+  messageId,
+  title,
+  active,
+  savedNestedAgent,
+}: SubagentTabBodyProps) {
   const root = useRef<HTMLDivElement>(null);
   const controller = useChatController(chatId, useDaemonPort());
   useKeepAttached(controller);
@@ -189,7 +195,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const call = useMemo(() => findSubagentCall(messages, toolCallId), [messages, toolCallId]);
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId });
+  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, savedNestedAgent });
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
@@ -222,7 +228,7 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         kind={kindLine(call)}
       >
         {shown != null && <AgentStatusLabel {...shown} testId={`workspace-agent-status-${toolCallId}`} />}
-        {call && subagentFact(call.part) && shown?.status !== 'running' && (
+        {(savedNestedAgent || (call && subagentFact(call.part) && place?.work.outcome !== 'going')) && (
           <>
             <SubagentFind controller={controller} agentId={toolCallId} chatId={chatId} root={root} active={active} />
             <ConversationExportButton
@@ -249,7 +255,17 @@ export function SubagentTabBody({ chatId, toolCallId, messageId, title, active }
         tabIndex={-1}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
       >
-        {call == null || place == null ? (
+        {savedNestedAgent ? (
+          <ParentScope chatId={chatId} state={state} world={world} pending={pendingCalls(state)}>
+            <HistoricalAgentSteps
+              chatId={chatId}
+              toolCallId={toolCallId}
+              messageId={messageId ?? toolCallId}
+              messages={[]}
+              outcome="done"
+            />
+          </ParentScope>
+        ) : call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">
             {error ?? 'Loading the sub-agent…'}
           </p>

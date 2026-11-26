@@ -281,3 +281,21 @@ fn attaches_turn_duration_ms_to_preceding_assistant() {
         Some(&json!(1234))
     );
 }
+
+#[test]
+fn merged_assistant_records_keep_facts_for_nested_calls() {
+    let mut counter = 0;
+    let first = raw_msg(&mut counter, "assistant", vec![txt("Starting")], json!({}));
+    let second = raw_msg(
+        &mut counter,
+        "assistant",
+        vec![tu("nested", "Agent", json!({}))],
+        json!({"metadata":{"subagentFacts":{"nested":{"status":"completed"}}}}),
+    );
+    let display = prepare_messages_for_client(&[first, second], None);
+    assert_eq!(display.len(), 1);
+    assert_eq!(
+        display[0].metadata.as_ref().unwrap()["subagentFacts"]["nested"]["status"],
+        "completed"
+    );
+}

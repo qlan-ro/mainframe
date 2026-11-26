@@ -38,6 +38,7 @@ export interface RunTab {
   role?: ChatTabRole;
   /** `agent` tabs only: the sub-agent's tool call, and the message it is in once that is known. */
   toolCallId?: string;
+  savedNestedAgent?: boolean;
   messageId?: string;
   /** Preview/permanent slot for file-backed tabs; absent on every other kind. */
   mode?: TabMode;

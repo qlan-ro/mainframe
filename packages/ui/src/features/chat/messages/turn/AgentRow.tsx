@@ -56,7 +56,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
     ...(historical?.durationMs == null ? {} : { timing: undefined, reportedDurationMs: historical.durationMs }),
     running: status === 'running' && own,
   });
-  const { chatId } = useTranscriptScope();
+  const { chatId, ancestors } = useTranscriptScope();
   const inspected = useSubagentHistoryStore((store) => {
     if (!chatId || historical?.status !== 'unknown') return false;
     const entry = store.entries.get(historyKey(chatId, part.toolCallId));
@@ -84,6 +84,7 @@ export function AgentRow({ unit, part, turnKey }: ToolRowProps) {
       chatId: chatId!,
       toolCallId: part.toolCallId,
       messageId: unit.messageId,
+      savedNestedAgent: Boolean(historical && ancestors.length),
       title: historical?.title || argText(part, 'description') || facts.verb,
     });
   const Steps = historical && chatId && status !== 'running' ? HistoricalAgentSteps : AgentSteps;

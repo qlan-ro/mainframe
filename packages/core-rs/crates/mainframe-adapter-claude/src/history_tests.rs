@@ -157,7 +157,6 @@ async fn discovers_sidechain_files_next_to_the_resolved_stored_path_not_the_deri
     )
     .await;
     assert_eq!(discovered.all_files.len(), 2);
-
     let history = load_history(
         &session_id,
         &project_path,
