@@ -64,7 +64,7 @@ impl ChatManager {
         if retry
             || !self
                 .get_chat(chat_id)
-                .is_some_and(|chat| chat.adapter_id == "claude")
+                .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))
         {
             self.shared.schedule_maintenance_drain(chat_id);
         }

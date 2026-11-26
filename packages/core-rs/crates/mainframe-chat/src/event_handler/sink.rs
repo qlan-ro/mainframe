@@ -1,12 +1,11 @@
 use super::*;
 
 impl SessionSinkImpl {
-    pub(super) fn is_claude_session(&self) -> bool {
+    pub(super) fn holds_turn_queue(&self) -> bool {
         self.shared.active(&self.chat_id).is_some_and(|cell| {
-            cell.lock_recover()
-                .session
-                .as_ref()
-                .is_some_and(|session| session.adapter_id() == "claude")
+            cell.lock_recover().session.as_ref().is_some_and(|session| {
+                crate::chat_manager::shared::holds_turn_queue(session.adapter_id())
+            })
         })
     }
 

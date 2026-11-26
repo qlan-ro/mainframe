@@ -21,13 +21,13 @@ impl ChatShared {
 }
 
 impl ChatManager {
-    pub(super) fn claude_turn_running(&self, chat_id: &str) -> bool {
+    pub(super) fn held_queue_turn_running(&self, chat_id: &str) -> bool {
         self.get_active(chat_id).is_some_and(|cell| {
             let active = cell.lock_recover();
             active
                 .session
                 .as_ref()
-                .is_some_and(|session| session.adapter_id() == "claude")
+                .is_some_and(|session| holds_turn_queue(session.adapter_id()))
                 && is_working(&active.chat)
         })
     }
@@ -50,7 +50,7 @@ impl ChatManager {
         attachment_ids: Option<&[String]>,
         command: Option<&CommandMeta>,
     ) -> Result<Option<String>, SendError> {
-        let running = self.claude_turn_running(chat_id);
+        let running = self.held_queue_turn_running(chat_id);
         if !running && !self.input_reserved(chat_id)? {
             return Ok(None);
         }
@@ -131,7 +131,7 @@ impl ChatManager {
         let wait = std::time::Duration::from_secs(120);
         if !self
             .get_chat(chat_id)
-            .is_some_and(|chat| chat.adapter_id == "claude")
+            .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))
         {
             return self.drain_maintenance_queue_with_wait(chat_id, wait).await;
         }
@@ -169,7 +169,7 @@ impl ChatManager {
                 return Ok(());
             }
             let (post, session) = self.require_live_session(chat_id)?;
-            if self.claude_turn_running(chat_id) {
+            if self.held_queue_turn_running(chat_id) {
                 return Ok(());
             }
             if !session.ready_for_input() {
@@ -186,7 +186,7 @@ impl ChatManager {
             }
             self.deliver_maintenance_input(chat_id, &post, &session, input)
                 .await?;
-            if session.adapter_id() == "claude" {
+            if holds_turn_queue(session.adapter_id()) {
                 return Ok(());
             }
         }
@@ -205,8 +205,8 @@ impl ChatManager {
         self.record_message_context(post, chat_id, &input.content);
         let prior = post.lock_recover().chat.process_state.flatten();
         self.set_working(post, &now_iso8601());
-        let claude = session.adapter_id() == "claude";
-        if claude {
+        let held_queue = holds_turn_queue(session.adapter_id());
+        if held_queue {
             self.shared
                 .messages
                 .lock_recover()
@@ -219,15 +219,15 @@ impl ChatManager {
         }
         self.shared.deps.idle_queue_remove(chat_id, &input.uuid)?;
         self.remove_queued_ref(chat_id, &input.uuid);
-        self.confirm_queued_message(chat_id, &input.message.id, claude);
+        self.confirm_queued_message(chat_id, &input.message.id, held_queue);
         self.event_handler.emit_display(chat_id);
         self.event_handler
             .notify_chat_surface(self.shared.turn_started_event(chat_id));
         Ok(())
     }
-    fn confirm_queued_message(&self, chat_id: &str, id: &str, claude: bool) {
+    fn confirm_queued_message(&self, chat_id: &str, id: &str, held_queue: bool) {
         let mut messages = self.shared.messages.lock_recover();
-        if !claude {
+        if !held_queue {
             messages.strip_queued_and_move_to_end(chat_id, id);
             return;
         }

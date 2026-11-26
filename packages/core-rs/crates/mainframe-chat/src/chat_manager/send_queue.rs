@@ -32,7 +32,8 @@ impl ChatManager {
         delivery: &Delivery<'_>,
     ) -> (HashMap<String, serde_json::Value>, String, bool) {
         let adapter_acks_replay = session.supports_replay_ack();
-        let is_queued = (session.adapter_id() != "claude" || matches!(delivery, Delivery::Steer))
+        let is_queued = (!holds_turn_queue(session.adapter_id())
+            || matches!(delivery, Delivery::Steer))
             && adapter_acks_replay
             && post.lock_recover().chat.process_state == Some(Some(ProcessState::Working));
         let mut transient_metadata: HashMap<String, serde_json::Value> = HashMap::new();

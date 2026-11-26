@@ -15,6 +15,7 @@ pub(super) struct IdleTestSession {
     pub ready: AtomicBool,
     pub requests: Mutex<Vec<NativeCompactionRequest>>,
     pub sent: Mutex<Vec<(String, Option<String>)>>,
+    pub steered: Mutex<Vec<String>>,
     pub sink: Mutex<Option<Arc<dyn SessionSink>>>,
     pub started: tokio::sync::Notify,
     pub finish: tokio::sync::Notify,
@@ -37,6 +38,7 @@ impl IdleTestSession {
             ready: AtomicBool::new(true),
             requests: Mutex::new(Vec::new()),
             sent: Mutex::new(Vec::new()),
+            steered: Mutex::new(Vec::new()),
             sink: Mutex::new(None),
             started: tokio::sync::Notify::new(),
             finish: tokio::sync::Notify::new(),
@@ -133,6 +135,13 @@ impl AdapterSession for IdleTestSession {
             }
             failure.map_or(Ok(()), Err)
         })
+    }
+    fn supports_steer(&self) -> bool {
+        self.adapter_id() == "codex"
+    }
+    fn steer(&self, message: String, _: Option<String>) -> BoxFuture<'_, Result<(), AdapterError>> {
+        self.steered.lock_recover().push(message);
+        Box::pin(async { Ok(()) })
     }
     fn respond_to_permission(
         &self,

@@ -14,7 +14,7 @@ impl ChatManager {
         let _send_guard = self.lifecycle.begin_send(chat_id).await;
         self.lifecycle.wait_for_interrupt(chat_id).await;
         if self.shared.maintenance.active(chat_id)
-            || (!self.claude_turn_running(chat_id) && self.input_reserved(chat_id)?)
+            || (!self.held_queue_turn_running(chat_id) && self.input_reserved(chat_id)?)
         {
             return Err(SendError::NoActiveTurn(chat_id.to_string()));
         }

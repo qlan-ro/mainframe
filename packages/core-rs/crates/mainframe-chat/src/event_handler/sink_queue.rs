@@ -7,7 +7,7 @@ impl SessionSinkImpl {
             .queued_for_chat(&self.chat_id)
             .iter()
             .any(|r| r.uuid == uuid && r.steered == Some(true));
-        if !steered && self.is_claude_session() {
+        if !steered && self.holds_turn_queue() {
             return;
         }
         debug!(

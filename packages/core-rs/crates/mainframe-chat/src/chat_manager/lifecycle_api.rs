@@ -71,7 +71,7 @@ impl ChatManager {
     pub async fn interrupt_chat(&self, chat_id: &str) {
         if !self
             .get_chat(chat_id)
-            .is_some_and(|chat| chat.adapter_id == "claude")
+            .is_some_and(|chat| holds_turn_queue(&chat.adapter_id))
         {
             storage_event!(self.shared, Some(chat_id); self.cancel_maintenance_queue(chat_id));
         }

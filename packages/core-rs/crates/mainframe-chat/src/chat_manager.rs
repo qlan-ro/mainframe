@@ -114,7 +114,7 @@ pub(crate) use state::{ChatShared, PendingChatUpdate};
 // `enrich_chat`/`is_working` have no direct caller left in this file — every
 // caller (enrich.rs, construct.rs) reaches them through this re-import via its
 // own `use super::*`, so removing this line would break the glob for them.
-use shared::{apply_tuning_impl, enrich_chat, is_working, now_ms, remap_history};
+use shared::{apply_tuning_impl, enrich_chat, holds_turn_queue, is_working, now_ms, remap_history};
 use side_chat::is_side_chat;
 
 pub type Registry = Arc<DashMap<String, Arc<Mutex<ActiveChat>>>>;
