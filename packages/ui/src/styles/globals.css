@@ -103,14 +103,14 @@
 
 :root {
   --accent-fill: #0063cc;
-  --code-surface: rgba(0, 0, 0, 0.06);
+  --code-surface: rgba(0,0,0,.06);
   --faint: #a1a1a6;
   --ink-secondary: #48484a;
   --queue-well: #f5f5f7;
-  --warning-border: rgba(138, 75, 0, 0.35);
-  --warning-surface: rgba(217, 119, 6, 0.13);
+  --warning-border: rgba(138,75,0,.35);
+  --warning-surface: rgba(217,119,6,.13);
   --warning-dot: #b45f06;
-  --card-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 10px rgba(0, 0, 0, 0.05);
+  --card-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.04), 0 3px 10px rgba(0,0,0,.05);
   --background: #ffffff;
   --foreground: #1f1f1f;
   --card: #ffffff;
@@ -153,7 +153,7 @@
   --chrome-chip: #ececef;
   --chrome-press: #e2e2e6;
   --chrome-selected: #ececef;
-  --text-selection: rgba(10, 132, 255, 0.26);
+  --text-selection: rgba(10,132,255,.26);
   --live: #0b6fdc;
   --accent-ink: #0063cc;
   --tooltip: #1f1f1f;
@@ -162,14 +162,14 @@
 
 .dark {
   --accent-fill: #0a6fd6;
-  --code-surface: rgba(255, 255, 255, 0.09);
+  --code-surface: rgba(255,255,255,.09);
   --faint: #5f5f64;
   --ink-secondary: #c7c7cc;
   --queue-well: #2d2d30;
-  --warning-border: rgba(240, 179, 90, 0.38);
-  --warning-surface: rgba(240, 179, 90, 0.12);
+  --warning-border: rgba(240,179,90,.38);
+  --warning-surface: rgba(240,179,90,.12);
   --warning-dot: #e08a1e;
-  --card-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.3), 0 3px 10px rgba(0, 0, 0, 0.25);
+  --card-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.3), 0 3px 10px rgba(0,0,0,.25);
   --background: #171717;
   --foreground: #ececec;
   --card: #262626;
@@ -211,7 +211,7 @@
   --chrome-chip: #363636;
   --chrome-press: #303033;
   --chrome-selected: #2f2f31;
-  --text-selection: rgba(10, 132, 255, 0.42);
+  --text-selection: rgba(10,132,255,.42);
   --live: #0a84ff;
   --accent-ink: #5aaeff;
   --tooltip: #ececec;
