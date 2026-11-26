@@ -54,32 +54,41 @@ impl ChatManager {
             .acquire(&format!("maintenance:{chat_id}"))
             .await;
         self.shared.restore_queue_pause(chat_id)?;
+        if !self.shared.queue_pauses.contains_key(chat_id) {
+            return Ok(());
+        }
+        let head = self
+            .shared
+            .deps
+            .idle_queue_list(chat_id)?
+            .into_iter()
+            .next();
+        if let Some(head) = &head {
+            if head.delivery != mainframe_db::idle_compaction_queue::DeliveryState::Pending {
+                return Ok(());
+            }
+            if !self.session_is_spawned(chat_id) {
+                self.lifecycle.start_chat(chat_id).await;
+            }
+            let (_, session) = self.require_live_session(chat_id)?;
+            if !session.ready_for_input() {
+                return Err(AdapterError::Unavailable(
+                    "The provider is not ready to resume the queue.",
+                )
+                .into());
+            }
+        }
         let dashmap::mapref::entry::Entry::Occupied(pause) =
             self.shared.queue_pauses.entry(chat_id.to_owned())
         else {
             return Ok(());
         };
-        if self
-            .shared
-            .deps
-            .idle_queue_list(chat_id)?
-            .first()
-            .is_some_and(|input| {
-                input.delivery == mainframe_db::idle_compaction_queue::DeliveryState::Unconfirmed
-            })
-        {
-            return Ok(());
-        }
         self.shared.deps.idle_queue_set_pause(chat_id, None)?;
         pause.remove();
         self.notify_queue_changed(chat_id);
-        if self.get_queued_for_chat(chat_id).is_empty() {
-            return Ok(());
+        if head.is_some() {
+            self.shared.schedule_maintenance_drain(chat_id);
         }
-        if !self.session_is_spawned(chat_id) {
-            self.lifecycle.start_chat(chat_id).await;
-        }
-        self.shared.schedule_maintenance_drain(chat_id);
         Ok(())
     }
 }

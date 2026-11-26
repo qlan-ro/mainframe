@@ -94,11 +94,12 @@ describe('QueuedRows — queued rows', () => {
   });
 
   it('shows a rejected message as failed with Retry, and no edit', () => {
-    mockChat.queued = queue(ref('m1', 1, { delivery: 'rejected' }));
+    mockChat.queued = queue(ref('m1', 1, { delivery: 'rejected', pauseReason: 'Stopped' }));
     renderRows();
 
     expect(rows()[0]).toHaveTextContent('Not sent: the agent refused it. The queue is paused.');
     expect(screen.queryByTestId('chat-queued-edit')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
     fireEvent.click(screen.getByTestId('chat-queued-retry'));
     expect(editQueued).toHaveBeenCalledExactlyOnceWith('m1', 'text m1');
   });

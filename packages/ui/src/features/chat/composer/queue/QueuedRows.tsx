@@ -173,7 +173,7 @@ function useQueuedRows(): QueueRow[] {
             testId: 'chat-queued-replay',
             onClick: () => void replayQueuedMessage(extras.port, chatId, messageId).catch(report('send')),
           }
-        : !uncertainHead && pauseReason && extras && index === resumeIndex
+        : !uncertainHead && delivery !== 'rejected' && pauseReason && extras && index === resumeIndex
           ? {
               label: 'Resume',
               testId: 'chat-queue-resume',

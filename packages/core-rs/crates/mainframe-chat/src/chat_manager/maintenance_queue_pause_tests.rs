@@ -53,3 +53,48 @@ async fn waiting_drain_observes_stop_before_dispatch() {
     assert!(session.sent.lock_recover().is_empty());
     assert_eq!(manager.get_queued_for_chat("c").len(), 1);
 }
+
+#[tokio::test]
+async fn resume_keeps_pause_for_a_rejected_head() {
+    let (manager, _, session) = fixture(IdleTestSession::new()).await;
+    let first = manager
+        .enqueue_maintenance_input("c", "first", None, None)
+        .await
+        .unwrap();
+    *session.send_failure.lock_recover() = Some(AdapterError::StdinFull("test".into()));
+    assert!(manager.drain_maintenance_queue("c").await.is_err());
+    manager.shared.pause_maintenance_queue("c", "Stopped");
+    manager.resume_maintenance_queue("c").await.unwrap();
+    assert_eq!(
+        manager.get_queued_for_chat("c")[0].pause_reason.as_deref(),
+        Some("Stopped")
+    );
+    manager
+        .edit_queued_message("c", &first, "first")
+        .await
+        .unwrap();
+    manager.resume_maintenance_queue("c").await.unwrap();
+    manager.drain_maintenance_queue("c").await.unwrap();
+    assert_eq!(session.sent.lock_recover().len(), 2);
+}
+
+#[tokio::test]
+async fn resume_keeps_its_control_until_the_provider_is_ready() {
+    use std::sync::atomic::Ordering;
+    let (manager, _, session) = fixture(IdleTestSession::new()).await;
+    manager
+        .enqueue_maintenance_input("c", "held", None, None)
+        .await
+        .unwrap();
+    manager.shared.pause_maintenance_queue("c", "Stopped");
+    session.ready.store(false, Ordering::SeqCst);
+    assert!(manager.resume_maintenance_queue("c").await.is_err());
+    assert_eq!(
+        manager.get_queued_for_chat("c")[0].pause_reason.as_deref(),
+        Some("Stopped")
+    );
+    session.ready.store(true, Ordering::SeqCst);
+    manager.resume_maintenance_queue("c").await.unwrap();
+    manager.drain_maintenance_queue("c").await.unwrap();
+    assert!(manager.get_queued_for_chat("c").is_empty());
+}
