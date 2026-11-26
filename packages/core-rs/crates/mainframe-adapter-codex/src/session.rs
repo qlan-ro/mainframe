@@ -79,6 +79,8 @@ pub struct CodexScanDeps {
     pub rollout: RolloutReaderDeps,
 }
 
+type QueuedWriteGuards = std::collections::HashMap<String, Box<dyn FnOnce() -> bool + Send>>;
+
 pub struct CodexSession {
     span: tracing::Span,
     id: String,
@@ -90,6 +92,7 @@ pub struct CodexSession {
     approval_handler: Arc<Mutex<Option<Arc<ApprovalHandler>>>>,
     sink: Arc<Mutex<Arc<dyn SessionSink>>>,
     state: Arc<Mutex<CodexSessionState>>,
+    queued_write_guards: Mutex<QueuedWriteGuards>,
     config: Arc<Mutex<PendingConfig>>,
     pid: AtomicI64,
     last_activity_ms: Arc<AtomicI64>,
@@ -127,6 +130,7 @@ impl CodexSession {
             approval_handler: Arc::new(Mutex::new(None)),
             sink: Arc::new(Mutex::new(null_sink())),
             state: Arc::new(Mutex::new(state)),
+            queued_write_guards: Default::default(),
             config: Arc::new(Mutex::new(PendingConfig::default())),
             pid: AtomicI64::new(0),
             last_activity_ms: Arc::new(AtomicI64::new(mainframe_types::time::now_ms())),
@@ -232,3 +236,6 @@ mod request_resolved_tests;
 
 #[cfg(test)]
 mod idle_activity_tests;
+
+#[cfg(test)]
+mod queued_start_tests;

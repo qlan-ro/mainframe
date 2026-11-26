@@ -113,10 +113,16 @@ impl AdapterSession for CodexSession {
         )
     }
 
+    fn guard_queued_write(&self, uuid: String, check: Box<dyn FnOnce() -> bool + Send>) -> bool {
+        self.queued_write_guards.lock_recover().insert(uuid, check);
+        true
+    }
+    fn clear_queued_write_guard(&self, uuid: &str) {
+        self.queued_write_guards.lock_recover().remove(uuid);
+    }
     fn supports_steer(&self) -> bool {
         true
     }
-
     fn steer(
         &self,
         message: String,
