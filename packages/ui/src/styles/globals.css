@@ -245,18 +245,44 @@
   }
 }
 
+/* Two ramps, intersected by shadcn's `mask-composite`. Each measures from its own edge, so no stop needs
+   `calc(100% - x)`: see the note on the scroll-fade overrides below. */
 @utility scroll-fade-sticky {
-  --scroll-fade-mask: linear-gradient(
-    to bottom,
-    #000 0,
-    #000 var(--scroll-fade-inset-t, 0px),
-    transparent var(--scroll-fade-inset-t, 0px),
-    #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px)),
-    #000 calc(100% - var(--scroll-fade-inset-b, 0px) - var(--scroll-fade-b, 0px)),
-    transparent calc(100% - var(--scroll-fade-inset-b, 0px)),
-    #000 calc(100% - var(--scroll-fade-inset-b, 0px)),
-    #000 100%
-  );
+  --scroll-fade-mask:
+    linear-gradient(
+      to bottom,
+      #000 0,
+      #000 var(--scroll-fade-inset-t, 0px),
+      transparent var(--scroll-fade-inset-t, 0px),
+      #000 calc(var(--scroll-fade-inset-t, 0px) + var(--scroll-fade-t, 0px))
+    ),
+    linear-gradient(
+      to top,
+      #000 0,
+      #000 var(--scroll-fade-inset-b, 0px),
+      transparent var(--scroll-fade-inset-b, 0px),
+      #000 calc(var(--scroll-fade-inset-b, 0px) + var(--scroll-fade-b, 0px))
+    );
+}
+
+/* WebKit leaks memory each time it resolves a `calc()` that mixes a percentage and a length, and these scroll
+   animations make it resolve the element's style every frame: shadcn's own masks and `animation-range` grew the
+   window by gigabytes a day. Keep percentages out of any `calc()` here. */
+.scroll-fade-y,
+.scroll-fade-x {
+  animation-range:
+    0 96px,
+    95% 100%;
+}
+.scroll-fade-y {
+  --scroll-fade-block:
+    linear-gradient(to bottom, transparent 0, #000 var(--scroll-fade-t, 0px)),
+    linear-gradient(to top, transparent 0, #000 var(--scroll-fade-b, 0px));
+}
+.scroll-fade-x {
+  --scroll-fade-inline:
+    linear-gradient(to right, transparent 0, #000 var(--scroll-fade-s, 0px)),
+    linear-gradient(to left, transparent 0, #000 var(--scroll-fade-e, 0px));
 }
 
 /* A link tooltip stays in DOM order and needs to paint beyond the transcript mask. */
