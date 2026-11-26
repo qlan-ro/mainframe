@@ -23,22 +23,31 @@ pub(super) async fn first_record(path: &str) -> Option<Vec<u8>> {
     .flatten()
 }
 
-pub(super) fn visit_lines(path: &str, mut visit: impl FnMut(&str)) {
-    if let Ok(file) = std::fs::File::open(path) {
-        read_chunks(BufReader::with_capacity(CHUNK_SIZE, file), &mut visit);
-    }
+pub(super) fn open_reader(path: &str) -> std::io::Result<BufReader<std::fs::File>> {
+    Ok(BufReader::with_capacity(
+        CHUNK_SIZE,
+        std::fs::File::open(path)?,
+    ))
 }
 
-fn read_chunks(mut reader: impl BufRead, mut visit: impl FnMut(&str)) {
+pub(super) fn visit_lines(path: &str, visit: impl FnMut(&str)) -> std::io::Result<()> {
+    read_chunks(open_reader(path)?, visit)
+}
+
+pub(super) fn read_chunks(
+    mut reader: impl BufRead,
+    mut visit: impl FnMut(&str),
+) -> std::io::Result<()> {
     let mut carry = Vec::new();
-    while let Ok(bytes) = reader.fill_buf() {
+    loop {
+        let bytes = reader.fill_buf()?;
         if bytes.is_empty() {
             if !carry.is_empty()
                 && let Ok(line) = std::str::from_utf8(&carry)
             {
                 visit(line);
             }
-            break;
+            return Ok(());
         }
         let mut lines = bytes.split(|&b| b == b'\n').peekable();
         while let Some(part) = lines.next() {
@@ -53,7 +62,7 @@ fn read_chunks(mut reader: impl BufRead, mut visit: impl FnMut(&str)) {
                 &carry
             };
             let Ok(line) = std::str::from_utf8(line) else {
-                return;
+                return Ok(());
             };
             visit(line.strip_suffix('\r').unwrap_or(line));
             carry.clear();
@@ -77,7 +86,8 @@ mod tests {
         read_chunks(
             std::io::BufReader::with_capacity(8, std::fs::File::open(path).unwrap()),
             |line| actual.push(line.to_owned()),
-        );
+        )
+        .unwrap();
         let mut old = BufReader::new(tokio::fs::File::open(path).await.unwrap()).lines();
         let mut expected = Vec::<String>::new();
         while let Ok(Some(line)) = old.next_line().await {
@@ -90,9 +100,12 @@ mod tests {
     async fn agrees_with_streaming_reader_at_boundaries() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sample");
-        visit_lines(path.to_str().unwrap(), |_| {
-            panic!("missing file yielded a line")
-        });
+        assert!(
+            visit_lines(path.to_str().unwrap(), |_| {
+                panic!("missing file yielded a line")
+            })
+            .is_err()
+        );
         std::fs::write(&path, "      \"é\"").unwrap();
         compare(&path).await;
         for size in [8191, 8192, 8193, 100_000] {

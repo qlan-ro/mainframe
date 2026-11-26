@@ -49,7 +49,8 @@ async fn plan_file_paths_from(
     let project_dir = project_dir.to_owned();
     run_history_worker(move || {
         for file in &files {
-            visit_lines(file, |line| {
+            /* expected */
+            let _ = visit_lines(file, |line| {
                 if line.trim().is_empty() {
                     return;
                 }
@@ -104,7 +105,8 @@ async fn skill_file_paths_from(
     let project_path = project_path.to_owned();
     run_history_worker(move || {
         for file in &files {
-            visit_lines(file, |line| {
+            /* expected */
+            let _ = visit_lines(file, |line| {
                 for skill in skill_names(line) {
                     push_skill_file(
                         &skill,

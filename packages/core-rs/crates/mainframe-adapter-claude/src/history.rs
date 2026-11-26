@@ -92,48 +92,9 @@ pub(crate) async fn load_history_in_dir_with_index(
         .map(|(messages, _)| messages)
 }
 
-pub(crate) async fn load_discovered_history(
-    session_id: &str,
-    discovered: &DiscoveredFiles,
-    base: &str,
-    messages: bool,
-) -> Result<
-    (
-        Vec<ChatMessage>,
-        mainframe_adapter_api::CollectedHistoryFiles,
-    ),
-    mainframe_adapter_api::AdapterError,
-> {
-    if discovered.all_files.is_empty() {
-        return Ok(Default::default());
-    }
-    let mut paths = PathCollector::default();
-    let mut load = HistoryLoad::default();
-    let files = discovered.all_files.clone();
-    let subagent_files = discovered.subagent_files.clone();
-    let (session_id, base) = (session_id.to_owned(), base.to_owned());
-    if messages && discovered.complete {
-        paths.files.sources = source_stamps(&files).await;
-    }
-    run_history_worker(move || {
-        for file in &files {
-            let is_subagent = subagent_files.contains(file);
-            visit_lines(file, |line| {
-                let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
-                    paths.observe_plan(line, &base);
-                    return;
-                };
-                paths.observe(&entry, line, &base);
-                if messages {
-                    load.entry(&entry, &session_id, is_subagent);
-                }
-            });
-        }
-        let rows = load.finish();
-        (rows, paths.files)
-    })
-    .await
-}
+#[path = "history_worker.rs"]
+mod history_worker;
+pub(crate) use history_worker::load_discovered_history;
 
 pub(crate) async fn run_history_worker<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
