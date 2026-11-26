@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { resolveResultText, stripErrorXml } from '../shared';
 import { useChatId } from '../chat-tool-context';
+import { useTranscriptScope } from '../../messages/turn/transcript-scope';
 import { ToolResultExpand } from '../ToolResultExpand';
 import type { ToolPart } from '../../view-model/turn/types';
 import { KeyValue, Surface } from './Surface';
@@ -19,6 +20,7 @@ export function ResultText({
   preserveText?: boolean;
 }) {
   const chatId = useChatId();
+  const { subagentId } = useTranscriptScope();
   const { text, truncated, fullBytes } = resolveResultText(
     part.result,
     preserveText ? cleanPreservingWhitespace : undefined,
@@ -28,6 +30,7 @@ export function ResultText({
       <ToolResultExpand
         chatId={chatId}
         toolUseId={part.toolCallId}
+        agentId={subagentId}
         truncatedContent={text}
         fullBytes={fullBytes}
         renderPreview={renderPreview}

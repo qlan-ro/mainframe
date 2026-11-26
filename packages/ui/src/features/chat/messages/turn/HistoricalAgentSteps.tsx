@@ -4,6 +4,7 @@ import { chatControllerRegistry } from '@/features/sessions/runtime/chat-control
 import { useKnownDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { AgentSteps, type AgentStepsProps } from './AgentSteps';
 import { historyKey, loadSubagentPage, useSubagentHistoryStore } from './subagent-history-store';
+import { SubagentTranscriptScope } from './transcript-scope';
 
 export function HistoricalAgentSteps({
   chatId,
@@ -78,7 +79,9 @@ export function HistoricalAgentSteps({
           </Button>
         )}
       </div>
-      <AgentSteps {...props} messages={entry?.messages ?? props.messages} />
+      <SubagentTranscriptScope subagentId={nativeAgentId ?? toolCallId}>
+        <AgentSteps {...props} messages={entry?.messages ?? props.messages} />
+      </SubagentTranscriptScope>
     </>
   );
 }
