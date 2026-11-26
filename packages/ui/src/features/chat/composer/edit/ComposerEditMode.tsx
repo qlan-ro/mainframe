@@ -15,6 +15,7 @@
  */
 import { useState, useCallback } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
+import { ApiRequestError } from '@/lib/api/http';
 import { Button } from '@/components/ui/button';
 import { splitHiddenPrefix } from '../../markers/message-markers';
 import { useChatExtras } from '../../runtime/chat-extras';
@@ -42,10 +43,18 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       .then(() => {
         onDone();
       })
-      .catch((err: unknown) => {
-        console.warn('[queued] edit save failed', { messageId: edit.messageId, err });
+      .catch(async (err: unknown) => {
+        if (err instanceof ApiRequestError && err.status === 409 && err.code === 'queued_message_gone') {
+          if (edit.recover) {
+            await edit.recover(trimmed);
+            onDone();
+            return;
+          }
+          setSaveError('This message was already sent. Your edit is still in the composer.');
+        } else {
+          setSaveError('Save failed — please try again.');
+        }
         setSaving(false);
-        setSaveError('Save failed — please try again.');
       });
   }, [text, extras, edit, onDone, hidden, visible]);
 

@@ -56,7 +56,12 @@ export class ApiRequestError extends Error {
   readonly details: ApiErrorDetail[];
   readonly status: number;
 
-  constructor(message: string, details: ApiErrorDetail[] = [], status = 0) {
+  constructor(
+    message: string,
+    details: ApiErrorDetail[] = [],
+    status = 0,
+    readonly code?: string,
+  ) {
     super(message);
     this.name = 'ApiRequestError';
     this.details = details;
@@ -100,14 +105,19 @@ async function fetchChecked(url: string, init: RequestInit): Promise<Response> {
 
 async function extractError(res: Response): Promise<ApiRequestError> {
   try {
-    const data = (await res.json()) as { error?: unknown; message?: unknown; errors?: unknown };
+    const data = (await res.json()) as { error?: unknown; message?: unknown; errors?: unknown; code?: unknown };
     const text =
       typeof data.error === 'string'
         ? data.error
         : typeof data.message === 'string'
           ? data.message
           : describeHttpFailure(res.status);
-    return new ApiRequestError(text, errorDetails(data.errors), res.status);
+    return new ApiRequestError(
+      text,
+      errorDetails(data.errors),
+      res.status,
+      typeof data.code === 'string' ? data.code : undefined,
+    );
   } catch {
     /* not JSON */
   }

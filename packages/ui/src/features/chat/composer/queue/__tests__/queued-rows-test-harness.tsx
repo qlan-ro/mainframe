@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-export const composer = { getState: () => ({ text: 'draft' }), setText: vi.fn() };
+export const composer = { getState: () => ({ text: 'draft' }), setText: vi.fn(), addAttachment: vi.fn() };
 export const mockChat = { transcriptIds: [] as string[], queued: {} as Record<string, QueuedMessageRef> };
 vi.mock('@assistant-ui/react', () => ({
   useAui: () => ({ composer }),
@@ -35,6 +35,9 @@ vi.mock('../../../runtime/chat-extras', () => ({
 
 export const startEdit = vi.fn();
 vi.mock('../../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ startEdit }) }));
+vi.mock('@/lib/api/attachments', () => ({
+  getAttachment: vi.fn(async () => ({ name: 'notes.txt', data: 'YQ==', mediaType: 'text/plain' })),
+}));
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/toast', () => ({ mfToast: { error: toastError, info: vi.fn() } }));
 const focusVisibleComposer = vi.hoisted(() => vi.fn());

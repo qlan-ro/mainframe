@@ -14,7 +14,7 @@ import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-er
 import { visibleMessageText } from '../../markers/message-markers';
 import { ComposerHint } from '../composer-card-context';
 import { useComposerEdit } from '../edit/composer-edit-context';
-import { copyQueuedToComposer } from './copy-queued-to-composer';
+import { appendQueuedDraft, copyQueuedToComposer } from './copy-queued-to-composer';
 import { focusVisibleComposer } from '../focus-composer';
 import { CLAIM_MS, settled, useHeldQueue, type HeldMessage } from './held-queue-store';
 
@@ -191,7 +191,21 @@ function useQueuedRows(): QueueRow[] {
                 onClick: () => void extras?.editQueued(messageId, content).catch(report('retry')),
               }
             : undefined,
-    onEdit: delivery ? undefined : () => startEdit({ messageId, content }),
+    onEdit: delivery
+      ? undefined
+      : () =>
+          startEdit({
+            messageId,
+            content,
+            recover: extras
+              ? async (replacement) => {
+                  const failed = await appendQueuedDraft(composer, extras.port, chatId, replacement, attachmentIds);
+                  mfToast.info('This message was already sent. Your edit is still in the composer.', {
+                    description: failed.length ? `Could not copy: ${failed.join(', ')}` : undefined,
+                  });
+                }
+              : undefined,
+          }),
     onRemove: () => void extras?.cancelQueued(messageId).catch(report('remove')),
   }));
 }

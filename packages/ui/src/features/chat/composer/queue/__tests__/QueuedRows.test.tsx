@@ -92,7 +92,22 @@ describe('QueuedRows — queued rows', () => {
 
     fireEvent.click(screen.getByTestId('chat-queued-edit'));
 
-    expect(startEdit).toHaveBeenCalledExactlyOnceWith({ messageId: 'm1', content: 'text m1' });
+    expect(startEdit).toHaveBeenCalledExactlyOnceWith({
+      messageId: 'm1',
+      content: 'text m1',
+      recover: expect.any(Function),
+    });
+  });
+
+  it('returns the replacement and original attachment to the draft on conflict', async () => {
+    mockChat.queued = queue(ref('m1', 1, { attachmentIds: ['file-1'] }));
+    renderRows();
+    fireEvent.click(screen.getByTestId('chat-queued-edit'));
+
+    await startEdit.mock.calls[0]![0].recover('replacement');
+
+    expect(composer.setText).toHaveBeenCalledWith('draft\n\nreplacement');
+    expect(composer.addAttachment).toHaveBeenCalledWith(expect.objectContaining({ name: 'notes.txt' }));
   });
 
   it('shows a rejected message as failed with Retry, and no edit', () => {

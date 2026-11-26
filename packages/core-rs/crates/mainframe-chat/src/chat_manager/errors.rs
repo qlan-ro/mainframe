@@ -15,6 +15,8 @@ pub struct CommandMeta {
 /// Error surfaced by `sendMessage`/queue ops. The texts cross the wire.
 #[derive(Debug, thiserror::Error)]
 pub enum SendError {
+    #[error("Queued message is gone")]
+    QueuedMessageGone,
     #[error("Chat {0} not running")]
     NotRunning(String),
     #[error("Chat {0}'s adapter cannot steer a running turn")]
@@ -42,7 +44,8 @@ impl SendError {
     /// unknown.
     pub fn never_delivered(&self) -> bool {
         match self {
-            Self::NotRunning(_)
+            Self::QueuedMessageGone
+            | Self::NotRunning(_)
             | Self::SteerUnsupported(_)
             | Self::NoActiveTurn(_)
             | Self::HandoffTooLarge(_) => true,

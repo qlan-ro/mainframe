@@ -182,6 +182,11 @@ async fn queue_edit(
     let cm = &ctx.chat.chat_manager;
     match cm.edit_queued_message(&id, &message_id, &content).await {
         Ok(()) => ok_empty(),
+        Err(mainframe_chat::chat_manager::SendError::QueuedMessageGone) => (
+            StatusCode::CONFLICT,
+            axum::Json(serde_json::json!({ "code": "queued_message_gone" })),
+        )
+            .into_response(),
         Err(err) => crate::respond::fail_internal(
             format!("queue.edit failed chat_id={}", id),
             &err,

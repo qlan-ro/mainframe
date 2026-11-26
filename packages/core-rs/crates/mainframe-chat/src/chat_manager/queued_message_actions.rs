@@ -16,10 +16,10 @@ impl ChatManager {
         }
         let r = self.find_ref(chat_id, message_id);
         let Some(r) = r else {
-            return Ok(());
+            return Err(SendError::QueuedMessageGone);
         };
         let Some(session) = self.get_session_for_chat(chat_id) else {
-            return Ok(());
+            return Err(SendError::QueuedMessageGone);
         };
 
         let cancelled = session.cancel_queued_message(r.uuid.clone()).await?;
@@ -29,7 +29,7 @@ impl ChatManager {
                 uuid = r.uuid,
                 "edit lost race: original already dequeued by CLI"
             );
-            return Ok(());
+            return Err(SendError::QueuedMessageGone);
         }
 
         self.shared

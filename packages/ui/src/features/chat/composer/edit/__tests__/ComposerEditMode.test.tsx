@@ -21,6 +21,7 @@ vi.mock('../../send/SendControls', () => ({
   StopControl: () => <button data-testid="chat-composer-cancel" />,
 }));
 
+import { ApiRequestError } from '@/lib/api/http';
 import { ComposerEditMode } from '../ComposerEditMode';
 import { ComposerEditProvider, useComposerEdit, type QueuedEdit } from '../composer-edit-context';
 
@@ -128,4 +129,15 @@ it('drops the queued edit on a thread switch without saving or altering either d
   rerender(view('original', 'original draft'));
   expect(screen.getByText('original draft')).toBeInTheDocument();
   expect(save).not.toHaveBeenCalled();
+});
+
+it('keeps the replacement text when the row disappeared before save', async () => {
+  const onDone = vi.fn();
+  const save = vi.fn().mockRejectedValue(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
+  render(<ComposerEditMode edit={{ ...EDIT, save }} onDone={onDone} />);
+  fireEvent.change(screen.getByTestId('chat-composer-edit-input'), { target: { value: 'replacement' } });
+  fireEvent.click(screen.getByTestId('chat-composer-edit-save'));
+  await screen.findByText('This message was already sent. Your edit is still in the composer.');
+  expect(screen.getByTestId('chat-composer-edit-input')).toHaveValue('replacement');
+  expect(onDone).not.toHaveBeenCalled();
 });
