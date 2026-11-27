@@ -121,6 +121,27 @@ describe('binary history responses', () => {
     expect(events).toEqual(['page applied', 'live/update']);
   });
 
+  it('delivers held messages in order even when an earlier listener throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { conn, socket } = await open();
+    const seen: string[] = [];
+    conn.onNotification((n) => {
+      if (n.method === 'a') throw new Error('listener failed');
+      seen.push(n.method);
+    });
+    const frames = binaryFramesFor('1', many(300_000));
+    const request = conn.sendRequest('m', {});
+    frames.forEach((frame) => socket.receive(frame));
+    socket.receive(binaryResponseFrame(1, frames.length));
+    socket.receive(note('a'));
+    socket.receive(note('b'));
+    await request;
+    await settle();
+    expect(seen).toEqual(['b']);
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
   it('answers a page with no updates (batchFrames 0) without waiting', async () => {
     const { conn, socket } = await open();
     const request = conn.sendRequest('m', {});

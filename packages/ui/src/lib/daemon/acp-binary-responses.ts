@@ -27,7 +27,12 @@ export class BinaryResponses<Entry> {
 
   constructor(private readonly host: BinaryResponseHost<Entry>) {}
 
-  /** The response for `key` arrived: wait for (or take) its frames. Resolves when the response has settled. */
+  /**
+   * The response for `key` arrived: wait for (or take) its frames. Resolves
+   * when the response has settled. Messages are held back only while frames
+   * inflate, not while a response still waits for a late frame; the daemon
+   * sends frames first, so that order is not expected in practice.
+   */
   response(key: string, entry: Entry, result: Record<string, unknown>, expected: number): Promise<void> | undefined {
     const parked = { entry, result, expected };
     this.parked.set(key, parked);

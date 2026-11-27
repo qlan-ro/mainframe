@@ -176,7 +176,14 @@ export class RpcConnection {
     this.blocked = true;
     void inflating.finally(() => {
       this.blocked = false;
-      while (!this.blocked && this.backlog.length > 0) this.receive(this.backlog.shift()!);
+      while (!this.blocked && this.backlog.length > 0) {
+        try {
+          this.receive(this.backlog.shift()!);
+        } catch (error) {
+          // A throwing listener loses only its own message, as before binary frames.
+          console.error('[acp-client] a held message failed while draining the backlog', error);
+        }
+      }
     });
   }
 

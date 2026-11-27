@@ -2,9 +2,9 @@
 //! response, for a connection that opted into `binaryHistoryFrames`.
 //!
 //! The JSON-RPC response arrives as a text frame with `batchFrames: N` in
-//! place of `batches`; the N batches follow (or precede it, the client
-//! tolerates either) as binary frames, each tied to the response by its
-//! request id:
+//! place of `batches`; the N batches go out as binary frames ahead of it (the
+//! socket loop drains them before any text frame; a client tolerates either
+//! order), each tied to the response by its request id:
 //!
 //! ```text
 //! offset  size  field

@@ -30,10 +30,11 @@ impl FacadeConnection {
     }
 
     /// A successful response whose `result` says `batchFrames: N`, followed
-    /// by its N binary frames tied to `id`. The text and binary channels are
-    /// independent, so the response and its frames may reach the client in
-    /// either order, interleaved with other messages; the client pairs them
-    /// by id and index. A frame that cannot be framed turns the whole reply
+    /// by its N binary frames tied to `id`. The frames are queued first and
+    /// the socket loop drains the binary queue ahead of any text frame
+    /// (`handle_outbound`), so they reach the client before the response,
+    /// though other messages may sit between them; the client pairs them by
+    /// id and index and tolerates either order. A frame that cannot be framed turns the whole reply
     /// into an error, so the client never waits for a batch that will not come.
     pub(crate) fn send_result_with_frames(
         &self,
