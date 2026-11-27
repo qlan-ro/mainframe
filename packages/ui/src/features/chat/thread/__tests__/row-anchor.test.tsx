@@ -35,6 +35,11 @@ it('suspends pending bottom pin work during disclosure and preserves the resulti
     result.current.contentRef(document.createElement('div'));
     resize();
   });
+  // The list stops resizing, so the opening ends and following waits for a frame again.
+  act(() => {
+    for (let i = 0; i < 3; i++) frame(0);
+  });
+  act(() => resize());
   const release = result.current.beginInteraction();
   viewport.scrollTop = 500;
   viewport.dispatchEvent(new Event('scroll'));
