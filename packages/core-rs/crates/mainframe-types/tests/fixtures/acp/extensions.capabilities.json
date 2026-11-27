@@ -12,5 +12,6 @@
   "compressedReplay": true,
   "windowedHistory": true,
   "historySearch": true,
+  "historyAround": true,
   "lazyToolImages": true
 }

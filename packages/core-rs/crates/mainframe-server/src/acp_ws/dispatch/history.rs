@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use mainframe_acp::{ResumePort, rpc};
-use mainframe_types::acp::extensions::{HistoryPageParams, HistorySearchParams};
+use mainframe_types::acp::extensions::{
+    HistoryAroundParams, HistoryPageParams, HistorySearchParams,
+};
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use serde::de::DeserializeOwned;
 use tracing::error;
@@ -49,6 +51,8 @@ pub(super) fn start(
             subagent_history::handle(request, &ctx, &connection).await;
         } else if request.method == "_mainframe.dev/history_search" {
             search(request, &connection, port.as_ref()).await;
+        } else if request.method == "_mainframe.dev/history_around" {
+            around(request, &connection, port.as_ref()).await;
         } else {
             page(request, &ctx, &connection, port).await;
         }
@@ -69,19 +73,112 @@ async fn search(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
             return;
         }
     };
-    let snapshot = port.resume_snapshot(&params.session_id).await;
+    // A scan encodes every container, so it runs on a copy off the cache
+    // lock; the lock is shared by every chat's live emissions.
+    let chat_id = params.session_id.clone();
+    let snapshot = port.resume_snapshot(&chat_id).await;
     let result = tokio::task::spawn_blocking(move || {
         mainframe_acp::history_search::search(&snapshot.messages, &params.query)
     })
     .await;
-    let response = match result {
-        Ok(result) => rpc::success_response(request.id, serde_json::json!(result)),
-        Err(err) => {
-            error!(error = %err, chat_id = params.session_id, "history search failed");
-            rpc::error_response(request.id, rpc::internal_error("history search failed"))
+    let (result, detail) = match result {
+        Ok(result) => (Some(result), None),
+        Err(err) => (None, Some(err.to_string())),
+    };
+    reply(
+        connection,
+        request.id,
+        Reply {
+            chat_id: &chat_id,
+            what: "history search",
+            result,
+            detail,
+        },
+    );
+}
+
+async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &dyn ResumePort) {
+    let params: HistoryAroundParams = match parse(&request) {
+        Ok(params) => params,
+        Err(error) => {
+            connection.send_json(&error);
+            return;
         }
     };
-    connection.send_json(&response);
+    let options = mainframe_acp::history_page::PageOptions {
+        previews: connection.is_replay_result_previews_opted_in(),
+        compressed: connection.is_compressed_replay_opted_in(),
+        lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+    };
+    let result = mainframe_acp::history_around::around_chat(port, &params, options).await;
+    reply(
+        connection,
+        request.id,
+        Reply {
+            chat_id: &params.session_id,
+            what: "history around",
+            result,
+            // The panic text is logged where it is caught, in `with_messages`.
+            detail: None,
+        },
+    );
+}
+
+struct Reply<'a, T> {
+    chat_id: &'a str,
+    what: &'a str,
+    result: Option<T>,
+    detail: Option<String>,
+}
+
+fn reply<T: serde::Serialize>(
+    connection: &FacadeConnection,
+    id: Option<mainframe_types::acp::jsonrpc::RequestId>,
+    reply: Reply<'_, T>,
+) {
+    connection.send_json(&match reply.result {
+        Some(result) => rpc::success_response(id, serde_json::json!(result)),
+        None => {
+            error!(
+                chat_id = reply.chat_id,
+                what = reply.what,
+                error = reply
+                    .detail
+                    .as_deref()
+                    .unwrap_or("reader produced no result"),
+                "history request failed"
+            );
+            rpc::error_response(id, rpc::internal_error(&format!("{} failed", reply.what)))
+        }
+    });
+}
+
+/// A bounded page borrows the list under the cache lock. A load-through page
+/// (`untilItemId`) or one that must seed the revision log first is unbounded,
+/// so it works on a copy off the lock.
+async fn compute_page(
+    port: Arc<dyn ResumePort>,
+    hub: Arc<crate::acp_ws::hub::FacadeHub>,
+    params: HistoryPageParams,
+    options: mainframe_acp::history_page::PageOptions,
+) -> Option<mainframe_acp::history_page::PreparedPage> {
+    if params.until_item_id.is_none() && !hub.history_seed_pending(&params.session_id) {
+        let chat_id = params.session_id.clone();
+        return mainframe_acp::history_page::prepare_chat(
+            port.as_ref(),
+            &params,
+            options,
+            |messages| hub.seed_history_snapshot(&chat_id, messages),
+        )
+        .await;
+    }
+    let snapshot = port.resume_snapshot(&params.session_id).await;
+    tokio::task::spawn_blocking(move || {
+        hub.seed_history_snapshot(&params.session_id, &snapshot.messages);
+        mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
+    })
+    .await
+    .ok()
 }
 
 async fn page(
@@ -110,18 +207,10 @@ async fn page(
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
     };
-    let seed_hub = Arc::clone(&ctx.chat.facade_hub);
-    let result = tokio::spawn(async move {
-        let snapshot = port.resume_snapshot(&params.session_id).await;
-        tokio::task::spawn_blocking(move || {
-            seed_hub.seed_history_snapshot(&params.session_id, &snapshot.messages);
-            mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
-        })
-        .await
-    })
-    .await;
+    let hub_for_work = Arc::clone(&ctx.chat.facade_hub);
+    let result = tokio::spawn(compute_page(port, hub_for_work, params, options)).await;
     match result {
-        Ok(Ok(page)) => hub.finish_history_page(connection, &chat_id, request.id, stream, page),
+        Ok(Some(page)) => hub.finish_history_page(connection, &chat_id, request.id, stream, page),
         other => {
             error!(chat_id, error = ?other.err(), "history page failed");
             connection.forget_chat(&chat_id);
@@ -133,3 +222,7 @@ async fn page(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod tests;

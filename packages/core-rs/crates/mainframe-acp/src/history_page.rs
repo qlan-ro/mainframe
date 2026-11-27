@@ -6,7 +6,9 @@ use mainframe_types::acp::extensions::{
 };
 use mainframe_types::display::DisplayMessage;
 
-use crate::{EncodedItem, SessionState, history_window, replay_previews};
+use crate::{
+    EncodedItem, ResumePort, SessionState, history_window, replay_previews, resume::with_messages,
+};
 
 #[path = "history_page_items.rs"]
 mod items;
@@ -26,10 +28,37 @@ pub struct PageOptions {
     pub lazy_tool_images: bool,
 }
 
+/// Serve a page from the chat's list in place. `inspect` sees the same
+/// borrowed list first (the server seeds its revision log from it); `None` if
+/// the port could not read it.
+pub async fn prepare_chat(
+    port: &dyn ResumePort,
+    params: &HistoryPageParams,
+    options: PageOptions,
+    inspect: impl FnOnce(&[DisplayMessage]) + Send,
+) -> Option<PreparedPage> {
+    with_messages(port, &params.session_id, |messages| {
+        inspect(messages);
+        prepare(messages, params, options)
+    })
+    .await
+}
+
 pub fn prepare(
     messages: &[DisplayMessage],
     params: &HistoryPageParams,
     options: PageOptions,
+) -> PreparedPage {
+    prepare_for(messages, params, options, None)
+}
+
+/// `agent` names the sub-agent whose transcript `messages` is, so lazy image
+/// references resolve against that child rather than the parent.
+fn prepare_for(
+    messages: &[DisplayMessage],
+    params: &HistoryPageParams,
+    options: PageOptions,
+    agent: Option<&str>,
 ) -> PreparedPage {
     let mut page = PreparedPage {
         result: HistoryPageResult::default(),
@@ -41,7 +70,7 @@ pub fn prepare(
     if params.items.is_some() {
         items::prepare(messages, params, &mut page);
         if !page.containers.is_empty() {
-            prepare_content(messages, params, options, &mut page);
+            prepare_content(messages, params, options, agent, &mut page);
         }
         return page;
     }
@@ -64,7 +93,7 @@ pub fn prepare(
     }
     page.start = history_window::snap(messages, start);
     page.containers = history_window::encode_range(messages, None, page.start, before);
-    prepare_content(messages, params, options, &mut page);
+    prepare_content(messages, params, options, agent, &mut page);
     page
 }
 
@@ -74,6 +103,7 @@ pub fn subagent_page(
     options: PageOptions,
 ) -> HistoryPageResult {
     let initial = request.before.is_none();
+    let agent = request.agent_id;
     let params = HistoryPageParams {
         session_id: request.session_id,
         before: request.before.unwrap_or_default(),
@@ -82,7 +112,7 @@ pub fn subagent_page(
         until_item_id: request.until_item_id,
     };
     if !initial {
-        return prepare(messages, &params, options).result;
+        return prepare_for(messages, &params, options, Some(&agent)).result;
     }
     let end = messages.len();
     let start = history_window::snap(
@@ -96,7 +126,7 @@ pub fn subagent_page(
         len: end,
         previews: HashSet::new(),
     };
-    prepare_content(messages, &params, options, &mut page);
+    prepare_content(messages, &params, options, Some(&agent), &mut page);
     page.result
 }
 
@@ -115,12 +145,27 @@ fn prepare_content(
     messages: &[DisplayMessage],
     params: &HistoryPageParams,
     options: PageOptions,
+    agent: Option<&str>,
+    page: &mut PreparedPage,
+) {
+    render(messages.len(), &params.session_id, options, agent, page);
+    if params.items.is_none() {
+        page.result.history = history_window::state(page.start, &page.containers);
+    }
+}
+
+/// Turn `page.containers` into `page.result`'s updates or batches. `total` is
+/// the transcript's container count: only the newest containers keep full
+/// tool results when `options.previews` is set.
+pub(crate) fn render(
+    total: usize,
+    session_id: &str,
+    options: PageOptions,
+    agent: Option<&str>,
     page: &mut PreparedPage,
 ) {
     if options.previews {
-        let old = messages
-            .len()
-            .saturating_sub(replay_previews::FULL_RESULT_CONTAINERS);
+        let old = total.saturating_sub(replay_previews::FULL_RESULT_CONTAINERS);
         let count = old.saturating_sub(page.start).min(page.containers.len());
         let mut candidates = page.containers[..count].to_vec();
         candidates.resize_with(count + replay_previews::FULL_RESULT_CONTAINERS, Vec::new);
@@ -132,14 +177,16 @@ fn prepare_content(
     let mut updates = state.diff(&items);
     if options.lazy_tool_images {
         for update in &mut updates {
-            crate::tool_images::reference_images(&params.session_id, update);
+            match agent {
+                Some(agent) => {
+                    crate::tool_images::reference_subagent_images(session_id, agent, update)
+                }
+                None => crate::tool_images::reference_images(session_id, update),
+            }
         }
     }
-    if params.items.is_none() {
-        page.result.history = history_window::state(page.start, &page.containers);
-    }
     if options.compressed {
-        page.result.batches = Some(batch_params(&params.session_id, &updates));
+        page.result.batches = Some(batch_params(session_id, &updates));
     } else {
         page.result.updates = Some(updates);
     }
@@ -227,6 +274,53 @@ mod tests {
                     .starts_with("/api/chats/chat/tool-result/tool/images/0?v=")
             );
         }
+    }
+
+    #[test]
+    fn subagent_pages_preview_old_results_and_reference_images_in_the_child() {
+        let long = "x".repeat(4 * replay_previews::PREVIEW_BYTES);
+        let mut messages: Vec<DisplayMessage> =
+            vec![serde_json::from_value(json!(
+            {"id":"m0","chatId":"chat","type":"assistant","timestamp":"now","content":[
+                {"type":"tool_call","id":"tool","name":"Read","input":{},"category":"default",
+                "result":{"content":long,"isError":false,
+                    "images":[{"mediaType":"image/png","data":"AAAA"}]}}
+            ]}
+        ))
+        .unwrap()];
+        for index in 1..=replay_previews::FULL_RESULT_CONTAINERS {
+            messages.push(
+                serde_json::from_value(json!({"id":format!("m{index}"),"chatId":"chat",
+                    "type":"user","timestamp":"now","content":[{"type":"text","text":"later"}]}))
+                .unwrap(),
+            );
+        }
+        let request = SubagentHistoryPageParams {
+            session_id: "chat".into(),
+            agent_id: "worker".into(),
+            before: None,
+            containers: None,
+            until_item_id: None,
+        };
+        let options = PageOptions {
+            previews: true,
+            lazy_tool_images: true,
+            compressed: true,
+        };
+        let updates = decode(subagent_page(&messages, request, options));
+        let tool = updates
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|update| update["toolCallId"] == "tool:tool")
+            .unwrap();
+        let text = tool["content"][0]["content"]["text"].as_str().unwrap();
+        assert!(text.len() < long.len());
+        let image = &tool["content"][1]["content"];
+        assert_eq!(image["data"], "");
+        let uri = image["uri"].as_str().unwrap();
+        assert!(uri.starts_with("/api/chats/chat/tool-result/tool/images/0?v="));
+        assert!(uri.ends_with("&agent=worker"));
     }
 
     fn decode(result: HistoryPageResult) -> Value {

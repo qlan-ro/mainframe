@@ -1,0 +1,10 @@
+{
+  "_provenance": "synthetic",
+  "updates": [],
+  "hasBefore": true,
+  "hasAfter": true,
+  "firstItemId": "message:0:top:m3",
+  "lastItemId": "tool:call-9",
+  "targetItemId": "tool:call-7",
+  "contextItemIds": ["tool:task"]
+}

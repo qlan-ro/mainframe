@@ -39,7 +39,7 @@
   "mainframe-plugins/src/manager.rs": 311,
   "mainframe-server/src/acp_ws/hub/fanout.rs": 299,
   "mainframe-server/src/routes/auth.rs": 356,
-  "mainframe-server/src/routes/chats.rs": 461,
+  "mainframe-server/src/routes/chats.rs": 385,
   "mainframe-server/src/routes/files.rs": 591,
   "mainframe-server/src/routes/git_write.rs": 413,
   "mainframe-server/src/websocket.rs": 383,

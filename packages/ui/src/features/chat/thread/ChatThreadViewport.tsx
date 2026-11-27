@@ -80,27 +80,20 @@ function ThreadFooter({
   );
 }
 function useViewportScroll(threadId: string | null) {
-  const {
-    viewportRef,
-    contentRef,
-    footerRef,
-    viewportElement,
-    viewport,
-    beginInteraction,
-    isFollowing,
-    isInteracting,
-  } = useThreadBottomPin(threadId);
+  const pin = useThreadBottomPin(threadId);
+  const { viewportElement, viewport, beginInteraction, isFollowing, isInteracting } = pin;
   const scroll = useMemo(
     () => ({ viewportElement, viewport, beginInteraction, isFollowing, isInteracting }),
     [viewportElement, viewport, beginInteraction, isFollowing, isInteracting],
   );
-  return { viewportRef, contentRef, footerRef, scroll };
+  return { pin, scroll };
 }
 
 export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
-  const { viewportRef, contentRef, footerRef, scroll } = useViewportScroll(threadId);
+  const { pin, scroll } = useViewportScroll(threadId);
+  const { viewportRef, contentRef, footerRef } = pin;
   // The footer's measured height is the opaque bottom band of the edge-fade mask.
   const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
   const footerHeight = useElementHeight(footerEl);
@@ -124,9 +117,20 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
         style={{ [TRANSCRIPT_WIDTH_VAR]: `${transcriptWidth}px` } as CSSProperties}
         className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
       >
+        {/* assistant-ui's scroll controllers are off: following, the jump to the
+            bottom on open and the scroll-to-bottom button all belong to
+            `useThreadBottomPin`. A run that starts by itself (a queued prompt,
+            a background task, a resumed permission wait) must not pull a reader
+            who scrolled up; the user's own send re-pins through the pin instead.
+            One library path stays on and has no switch: its prepend correction
+            (`messagesPrepended` in @assistant-ui/store's
+            thread-viewport-auto-scroll), which holds the first message in place
+            when older messages load above it. */}
         <ThreadPrimitive.Viewport
           ref={viewportRef}
           autoScroll={false}
+          scrollToBottomOnRunStart={false}
+          scrollToBottomOnInitialize={false}
           scrollToBottomOnThreadSwitch={false}
           data-testid="chat-thread-viewport"
           data-mf-chat-thread
@@ -149,7 +153,13 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
             <TurnTranscript key={threadId ?? ''} />
           </div>
           <ThreadFooter variant={variant} readOnly={readOnly} footerRef={composedFooterRef} />
-          <TranscriptScrollToBottom host={overlayHost} footerHeight={footerHeight} />
+          <TranscriptScrollToBottom
+            host={overlayHost}
+            footerHeight={footerHeight}
+            isPinned={pin.isPinned}
+            subscribePinned={pin.subscribePinned}
+            onPin={pin.pinToBottom}
+          />
         </ThreadPrimitive.Viewport>
         <div ref={setOverlayHost} className="pointer-events-none absolute inset-0" />
       </div>

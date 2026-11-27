@@ -59,8 +59,9 @@ pub(super) async fn handle(request: JsonRpcRequest, ctx: &AppCtx, connection: &F
         return;
     }
     let options = mainframe_acp::history_page::PageOptions {
+        previews: connection.is_replay_result_previews_opted_in(),
         compressed: connection.is_compressed_replay_opted_in(),
-        ..Default::default()
+        lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
     };
     let result = tokio::task::spawn_blocking(move || render(&messages, op, options)).await;
     let reply = match result {

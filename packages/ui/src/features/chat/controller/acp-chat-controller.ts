@@ -4,7 +4,14 @@ import type { Chat, ControlResponse, PromptRemedy } from '@qlan-ro/mainframe-typ
 import type { DaemonWsClient } from '../../../lib/daemon/ws-client';
 import { getAcpFacadeClient } from '../../../lib/daemon/acp-clients';
 import type { AcpSessionClientPort } from './acp-session-plane';
-import { cancelQueuedMessage, editQueuedMessage, getChat, interruptChat } from '../../../lib/api/chats';
+import {
+  cancelQueuedMessage,
+  editQueuedMessage,
+  getChat,
+  interruptChat,
+  resumeQueuedMessages,
+} from '../../../lib/api/chats';
+import { emitUserSent } from './user-sent';
 import {
   createChatThreadState,
   reduceChatThreadState,
@@ -241,8 +248,16 @@ export class AcpChatController {
     return this.load(true);
   }
 
+  /** The user's own send (composer, Compact, review comments via `onNew`), announced once its bubble is in state. */
   public sendMessage(message: AppendMessage): Promise<void> {
-    return sendChatMessage(this.actionHost, message);
+    const sent = sendChatMessage(this.actionHost, message);
+    this.announceUserSend();
+    return sent;
+  }
+
+  /** Tells this chat's transcript the user sent something (`user-sent.ts`). */
+  private announceUserSend(): void {
+    emitUserSent([this.threadId, this.daemonId]);
   }
 
   public markAttachmentsRestoredForFailure(error: unknown): void {
@@ -289,7 +304,16 @@ export class AcpChatController {
 
   /** Send a message a Stop held back, and line up the ones behind it. */
   public sendHeld(messageId: string): Promise<void> {
-    return sendHeldMessages(this.actionHost, messageId);
+    const sent = sendHeldMessages(this.actionHost, messageId);
+    this.announceUserSend();
+    return sent;
+  }
+
+  /** Resume a paused queue: the daemon sends the oldest held prompt as the next turn. */
+  public resumeQueue(): Promise<void> {
+    const resumed = resumeQueuedMessages(this.port, this.daemonId);
+    this.announceUserSend();
+    return resumed;
   }
 
   public async cancelQueued(messageId: string): Promise<void> {

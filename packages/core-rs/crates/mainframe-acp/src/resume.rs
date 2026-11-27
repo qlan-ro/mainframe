@@ -48,7 +48,7 @@ pub enum ReplayCursor {
 pub use mainframe_types::resume::ResumeSnapshot;
 
 mod port;
-pub use port::{ResumePort, SnapshotReader};
+pub use port::{MessageReader, ResumePort, SnapshotReader, with_messages};
 
 /// Everything besides the JSON-RPC response a `session/resume` call
 /// produces: the replay `session/update` notifications, and — when a gate
