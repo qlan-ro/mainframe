@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderQuota } from '@qlan-ro/mainframe-types';
 import { resetQuota, useQuotaStore } from '../quota';
-import { seedQuota } from '../quota-seed';
+import { QUOTA_SEED_TIMEOUT_MS, seedQuota } from '../quota-seed';
 
 const getQuota = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/api/quota', () => ({ getQuota }));
@@ -53,5 +53,19 @@ describe('seedQuota — seeded flag', () => {
     answer(null);
     await flush();
     expect(useQuotaStore.getState().seeded).toBe(false);
+  });
+
+  it('is seeded after a timeout when a request hangs, so the capsule never stays empty', async () => {
+    vi.useFakeTimers();
+    try {
+      getQuota.mockImplementation(() => new Promise(() => undefined));
+      seedQuota(1);
+      await vi.advanceTimersByTimeAsync(QUOTA_SEED_TIMEOUT_MS - 1);
+      expect(useQuotaStore.getState().seeded).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(useQuotaStore.getState().seeded).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

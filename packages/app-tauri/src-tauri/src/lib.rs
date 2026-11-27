@@ -58,6 +58,23 @@ fn external_daemon() -> bool {
     )
 }
 
+/// Whether the system appearance is dark, asked before any window exists. macOS only: `defaults`
+/// exits non-zero when the appearance is light (the key is absent).
+fn system_prefers_dark() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().eq_ignore_ascii_case("dark"))
+            .unwrap_or(false)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Daily-rotating JSON log sink (renderer + host logs) — held for app lifetime.
@@ -143,8 +160,17 @@ pub fn run() {
             // doesn't invalidate it. `no-store` forces every asset request to hit the
             // current bundle, at effectively zero cost since these are local reads.
             let window_config = app.config().app.windows[0].clone();
-            let main_window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
-                .expect("invalid main window config")
+            // The config colour is the light ground (`--sidebar`, `#f5f5f8`); on a dark system the
+            // window is created with the dark ground (`#262626`) instead, so it never starts with
+            // a mismatched frame. The persisted app theme lives in the webview's localStorage, which
+            // the shell cannot read before the page loads: an app set to light on a dark system
+            // still starts dark for the frames before `public/boot-theme.js` repaints the page.
+            let mut window_builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
+                .expect("invalid main window config");
+            if system_prefers_dark() {
+                window_builder = window_builder.background_color(tauri::window::Color(38, 38, 38, 255));
+            }
+            let main_window = window_builder
                 .on_web_resource_request(|_request, response| {
                     response.headers_mut().insert(
                         tauri::http::header::CACHE_CONTROL,
@@ -153,15 +179,6 @@ pub fn run() {
                 })
                 .build()
                 .expect("failed to create main window");
-
-            // The config colour is the light ground (`--sidebar`, `#f5f5f8`). On a dark system
-            // the window takes the dark ground (`#262626`) before it is shown, so neither theme
-            // starts with a white or mismatched frame. The page repaints both from its own CSS.
-            if matches!(main_window.theme(), Ok(tauri::Theme::Dark)) {
-                if let Err(e) = main_window.set_background_color(Some(tauri::window::Color(38, 38, 38, 255))) {
-                    tracing::warn!(err = %e, "failed to set dark window background");
-                }
-            }
 
             // Manually created windows are not auto-restored by the plugin —
             // reapply the saved geometry explicitly (no-op on first launch).

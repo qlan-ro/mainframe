@@ -434,7 +434,7 @@ A cool, near-neutral grey scale carries almost everything; a single system blue 
 
 **The Provider Dot Rule.** Provider brand colours appear only as small dots beside a name. They never tint text, fills or borders.
 
-**The First Frame Rule.** The window is the ground from its first frame: `ground` in light, `ground-dark` in dark, in the native window colour, the page background and the stored theme before any script of the bundle runs. Nothing white flashes, and nothing guessed is painted while the last chat is restored: the app holds the frame (rail, empty card) and then shows the restored chat once.
+**The First Frame Rule.** The window is the ground from its first frame: `ground` in light, `ground-dark` in dark, in the native window colour, the page background and the stored theme before any script of the bundle runs. Nothing white flashes, and nothing guessed is painted while the last chat is restored: the app holds the frame (rail, a covered card) and then shows the restored chat once. The cover is opaque, never `visibility:hidden`: the composer keeps its focus underneath.
 
 ### Tokens in code
 Built so far in the base theme of `packages/ui`, each with a light and a dark value and a Tailwind mapping:

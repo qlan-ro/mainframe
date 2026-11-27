@@ -18,19 +18,20 @@
  * - `decideBootRestore(chatId)` is called by the boot auto-select once the list
  *   has answered: `null` when there is nothing to reopen (the welcome is then
  *   the right screen), else the daemon id of the chat that was opened. The hold
- *   then ends when the chat's history is in and its transcript has stopped
- *   moving: the window arrives in pieces, and the thread pins itself to the end
- *   a few frames behind, so showing it earlier draws it half-scrolled.
+ *   then ends when the chat's history is in and its first pin has landed at the
+ *   tail of the transcript.
  */
 import { create } from 'zustand';
 import { chatControllerRegistry } from './chat-controller-registry';
 
-/** The longest the app waits for the restore before it shows what it has. */
-export const BOOT_HOLD_MAX_MS = 2500;
+/** The longest the app waits for the restore before it shows what it has. A running turn never holds past it. */
+export const BOOT_HOLD_MAX_MS = 1500;
 /** A chat with no transcript on screen (nothing to settle) is shown this long after it reports ready. */
 const SETTLE_MS = 48;
-/** The transcript has settled once its scroll size and offset have not moved for this long. */
-const STABLE_MS = 96;
+/** The first pin has landed once the main transcript has sat at its tail for this many polls in a row. */
+const TAIL_POLLS = 3;
+/** Within this many px of the end counts as the tail. */
+const TAIL_SLOP_PX = 2;
 const POLL_MS = 16;
 
 type Phase = 'idle' | 'holding' | 'released';
@@ -73,28 +74,27 @@ function chatLoaded(chatId: string): boolean {
   return type === 'ready' || type === 'error';
 }
 
-/** The chat's main transcript viewport, once it is mounted. Laid out even while not painted. */
-function transcriptOf(chatId: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`[data-mf-chat-thread][data-mf-chat-id="${CSS.escape(chatId)}"]`);
+/** Every transcript in the chat column (the conversation's own, never a workspace tab's side chat). */
+function mainTranscripts(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('[data-surface="chat"] [data-mf-chat-thread]')];
 }
 
-/**
- * The transcript's scroll size and offset: while either still changes, rows are
- * arriving or the thread is still pinning to the end.
- */
-export function transcriptSignature(el: HTMLElement): string {
-  return `${el.scrollHeight}:${Math.round(el.scrollTop)}`;
-}
-
-/** A history spinner anywhere in the shell (a restored side chat still loading): a transcript not there yet. */
-function historyStillLoading(): boolean {
-  return document.querySelector('[data-testid="chat-thread-loading"]') != null;
+function atTail(el: HTMLElement): boolean {
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - TAIL_SLOP_PX;
 }
 
 /**
  * The router has decided what to open. With nothing to open the hold ends at
- * once; otherwise it ends when the chat's history is in and its transcript has
- * stopped moving.
+ * once. Otherwise it ends when the chat's history is in, its transcript is
+ * mounted in the chat column, and the first pin has landed at its tail: the
+ * window arrives in pieces and the thread pins a few frames behind, so earlier
+ * would draw it half-scrolled. A turn still streaming does not matter: the
+ * tail is only checked, never waited to go quiet.
+ *
+ * Until the chat column shows THIS chat's transcript the hold keeps waiting:
+ * assistant-ui switches threads asynchronously, and for a moment the column
+ * still holds the draft welcome. Only a column with no transcript at all has
+ * nothing to settle.
  */
 export function decideBootRestore(chatId: string | null): void {
   if (!isBootRestoring()) return;
@@ -104,24 +104,18 @@ export function decideBootRestore(chatId: string | null): void {
   }
   clearTimeout(watch);
   let loadedAt = 0;
-  let signature = '';
-  let stableSince = 0;
+  let atTailPolls = 0;
   const poll = () => {
     if (!isBootRestoring()) return;
-    const now = Date.now();
     if (chatLoaded(chatId)) {
-      loadedAt ||= now;
-      const el = transcriptOf(chatId);
-      if (el == null) {
-        if (now - loadedAt >= SETTLE_MS) return release();
-      } else {
-        const next = transcriptSignature(el);
-        if (next !== signature || historyStillLoading()) {
-          signature = next;
-          stableSince = now;
-        } else if (now - stableSince >= STABLE_MS) {
-          return release();
-        }
+      loadedAt ||= Date.now();
+      const column = mainTranscripts();
+      const mine = column.find((el) => el.getAttribute('data-mf-chat-id') === chatId);
+      if (mine != null) {
+        atTailPolls = atTail(mine) ? atTailPolls + 1 : 0;
+        if (atTailPolls >= TAIL_POLLS) return release();
+      } else if (column.length === 0 && Date.now() - loadedAt >= SETTLE_MS) {
+        return release();
       }
     }
     watch = setTimeout(poll, POLL_MS);

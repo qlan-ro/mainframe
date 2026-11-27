@@ -4,6 +4,9 @@ import { applyProviderQuota, markQuotaSeeded } from './quota';
 
 let seedGeneration = 0;
 
+/** A provider that has not answered by now is unknown; the seed settles without it. */
+export const QUOTA_SEED_TIMEOUT_MS = 5000;
+
 /**
  * Seed quota for both quota-capable providers after a (re)connect or switch. A
  * newer call supersedes an in-flight fetch via the generation guard; a provider
@@ -22,7 +25,9 @@ export function seedQuota(port: number): void {
   );
   // Seeded once every provider has answered, whatever the answer: only then does an empty
   // store mean "unknown" rather than "not asked yet".
-  void Promise.all(answers).then(() => {
+  // A request that hangs must not leave the capsule empty for good: the seed also settles on a timeout.
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, QUOTA_SEED_TIMEOUT_MS));
+  void Promise.race([Promise.all(answers), timeout]).then(() => {
     if (gen === seedGeneration) markQuotaSeeded();
   });
 }

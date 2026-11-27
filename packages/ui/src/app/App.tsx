@@ -157,18 +157,18 @@ export function App() {
               <DaemonGatedShell fallbackPort={port} />
             </ActiveDaemonProvider>
           ) : (
-            // The window ground until the shell exists; the card on it only appears if the wait is long.
-            <div className="relative flex-1 bg-sidebar">
-              <ConnectionOverlay
-                open={showStartupCard}
-                embedded
-                testId="app-waiting-daemon"
-                title="Starting up…"
-                subtitle="Connecting to the daemon. This only takes a moment."
-              />
-            </div>
+            // The window ground until the shell exists.
+            <div className="flex-1 bg-sidebar" />
           )}
         </ConnectionStatusProvider>
+        {/* Over the ground, and over the shell once it mounts, until its minimum has passed:
+            shown only when the wait outlasts the delay, so a quick connect never draws it. */}
+        <ConnectionOverlay
+          open={showStartupCard}
+          testId="app-waiting-daemon"
+          title="Starting up…"
+          subtitle="Connecting to the daemon. This only takes a moment."
+        />
         {/* Top-right: errors persist until dismissed, and bottom-right parked
             them over the composer's Send corner. 48px clears the title bar. */}
         <Toaster position="top-center" offset={{ top: 56 }} gap={9} visibleToasts={5} expand />

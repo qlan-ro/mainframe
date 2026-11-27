@@ -73,9 +73,12 @@ describe('App startup card', () => {
     expect(card()).not.toBeNull();
     connection.ready = true;
     view.rerender(<App />);
-    // The shell replaces the waiting region at once; the card was part of it.
+    // The shell mounts, and the card stays over it until its minimum has passed.
     expect(screen.getByTestId('shell')).toBeInTheDocument();
-    advance(STARTUP_CARD_MIN_VISIBLE_MS);
+    expect(card()).not.toBeNull();
+    advance(STARTUP_CARD_MIN_VISIBLE_MS - 1);
+    expect(card()).not.toBeNull();
+    advance(1);
     expect(card()).toBeNull();
   });
 });
