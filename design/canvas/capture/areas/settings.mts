@@ -7,7 +7,7 @@ const area: CaptureArea = {
     {
       file: 'Settings-Chat',
       title: 'Settings — Chat',
-      subtitle: 'What Enter does while a turn runs.',
+      subtitle: 'What Enter does while a turn runs, and the chip composer preview.',
       width: 2400,
     },
     {
@@ -46,6 +46,16 @@ const area: CaptureArea = {
           crop: [0, 48, 1440, 420],
           setup: async ({ page }) => {
             await page.getByTestId('settings-chat-enter-running-steer').click();
+            await parkPointer(page);
+          },
+        },
+        {
+          id: 'chips',
+          caption:
+            '**Mentions and commands as chips** (preview, off by default): the composer shows `@` and `/` tokens as atomic chips; the sent text is unchanged.',
+          crop: [0, 48, 1440, 420],
+          setup: async ({ page }) => {
+            await page.getByTestId('settings-chat-chip-composer').click();
             await parkPointer(page);
           },
         },

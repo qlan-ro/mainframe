@@ -48,3 +48,22 @@ describe('ChatPane — Enter while running (C9)', () => {
     expect(useUiPrefs.getState().enterWhileRunning).toBe('queue');
   });
 });
+
+describe('ChatPane — mentions and commands as chips', () => {
+  beforeEach(() => useUiPrefs.setState({ chipComposer: false }));
+
+  it('is off by default', () => {
+    render(<ChatPane />);
+
+    expect(screen.getByTestId('settings-chat-chip-composer')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('turning it on saves the preference', () => {
+    render(<ChatPane />);
+
+    fireEvent.click(screen.getByTestId('settings-chat-chip-composer'));
+
+    expect(useUiPrefs.getState().chipComposer).toBe(true);
+    expect(screen.getByTestId('settings-chat-chip-composer')).toHaveAttribute('aria-checked', 'true');
+  });
+});

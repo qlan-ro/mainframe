@@ -105,6 +105,9 @@ interface UiPrefsState {
   setOpenLinksIn: (openLinksIn: LinkTarget) => void;
   enterWhileRunning: EnterWhileRunning;
   setEnterWhileRunning: (mode: EnterWhileRunning) => void;
+  /** The composer shows `@` and `/` tokens as atomic chips (a Lexical field). Off by default while it is tested. */
+  chipComposer: boolean;
+  setChipComposer: (on: boolean) => void;
   /** The composer's activity strip shows only its first row (K5). */
   activityStripCollapsed: boolean;
   setActivityStripCollapsed: (collapsed: boolean) => void;
@@ -149,6 +152,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     finishedWork: s.finishedWork,
     openLinksIn: s.openLinksIn,
     enterWhileRunning: s.enterWhileRunning,
+    chipComposer: s.chipComposer,
     activityStripCollapsed: s.activityStripCollapsed,
     transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
@@ -202,6 +206,7 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
     finishedWork: sanitizeFinishedWork(stored),
     openLinksIn: state.openLinksIn === 'browser' ? 'browser' : 'workspace',
     enterWhileRunning: state.enterWhileRunning === 'steer' ? 'steer' : 'queue',
+    chipComposer: state.chipComposer === true,
     activityStripCollapsed: state.activityStripCollapsed === true,
     transcriptWidth:
       typeof state.transcriptWidth === 'number'
@@ -256,6 +261,8 @@ export const useUiPrefs = create<UiPrefsState>()(
       setOpenLinksIn: (openLinksIn) => set({ openLinksIn }),
       enterWhileRunning: 'queue',
       setEnterWhileRunning: (enterWhileRunning) => set({ enterWhileRunning }),
+      chipComposer: false,
+      setChipComposer: (chipComposer) => set({ chipComposer }),
       activityStripCollapsed: false,
       setActivityStripCollapsed: (activityStripCollapsed) => set({ activityStripCollapsed }),
       transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,

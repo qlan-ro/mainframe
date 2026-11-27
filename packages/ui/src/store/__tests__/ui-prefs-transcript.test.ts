@@ -9,6 +9,7 @@ const savedPreferences = {
   sidebarView: 'tasks' as const,
   dontWarnOnTuningChange: true,
   enterWhileRunning: 'queue' as const,
+  chipComposer: false,
   activityStripCollapsed: false,
   sessionPanelOpen: true,
   sessionPanelSections: { plan: true, context: false },
@@ -17,9 +18,9 @@ const savedPreferences = {
   transcriptWidth: 900,
 };
 
-/** What a v7/v8 install had on disk: no v9 fields, and the removed confirm flag. */
+/** What a v7/v8 install had on disk: no v9 fields, no chip setting, and the removed confirm flag. */
 const legacyPreferences = (() => {
-  const { enterWhileRunning: _a, activityStripCollapsed: _b, ...rest } = savedPreferences;
+  const { enterWhileRunning: _a, activityStripCollapsed: _b, chipComposer: _c, ...rest } = savedPreferences;
   return { ...rest, dontConfirmProviderSwitch: true };
 })();
 
