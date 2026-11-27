@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use mainframe_adapter_api::pr_detection::scan_history_for_prs;
+use mainframe_adapter_api::pr_detection::{is_scan_relevant, scan_history_for_prs};
 use mainframe_types::adapter::{DetectedPr, DetectedPrSource};
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
 
@@ -102,4 +102,28 @@ fn scan_history_for_prs_dedupes_the_same_pr_seen_in_two_tool_results() {
 fn scan_history_for_prs_returns_empty_when_no_pr_url_present() {
     let history = vec![tool_result_msg("m1", "tu1", "no PR here")];
     assert!(scan_history_for_prs(&history).is_empty());
+}
+
+#[test]
+fn is_scan_relevant_keeps_only_pr_creates_and_results_with_links() {
+    let create = tool_use_msg("m1", "tu1", "Bash", "gh pr create --title x");
+    let other_command = tool_use_msg("m2", "tu2", "Bash", "ls");
+    let other_tool = tool_use_msg("m3", "tu3", "Read", "gh pr create");
+    let link = tool_result_msg("m4", "tu1", "https://github.com/acme/repo/pull/7\n");
+    let plain = tool_result_msg("m5", "tu2", "file.txt\n");
+    assert!(is_scan_relevant(&create));
+    assert!(is_scan_relevant(&link));
+    assert!(!is_scan_relevant(&other_command));
+    assert!(!is_scan_relevant(&other_tool));
+    assert!(!is_scan_relevant(&plain));
+    let history = [create, other_command, other_tool, link, plain];
+    let kept: Vec<_> = history
+        .iter()
+        .filter(|m| is_scan_relevant(m))
+        .cloned()
+        .collect();
+    assert_eq!(
+        format!("{:?}", scan_history_for_prs(&kept)),
+        format!("{:?}", scan_history_for_prs(&history))
+    );
 }
