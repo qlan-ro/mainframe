@@ -24,7 +24,7 @@ function image(index: number) {
 
 function createStore() {
   const transcript: Transcript = buildTranscript(params.totalTurns, params.groups, { image });
-  let start = transcript.windowStart;
+  let start = params.windowItems > 0 ? Math.max(0, transcript.all.length - params.windowItems) : transcript.windowStart;
   let state: RigState = { messages: transcript.all.slice(start), running: false };
   const listeners = new Set<() => void>();
   const set = (next: Partial<RigState>) => {
