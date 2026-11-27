@@ -139,8 +139,8 @@ vi.mock('@/features/files/DirectoryPickerModal', () => ({
   DirectoryPickerModal: () => null,
 }));
 
-vi.mock('../../features/review/ReviewPanel', () => ({
-  ReviewPanel: () => null,
+vi.mock('../../features/review/LazyReviewPanel', () => ({
+  LazyReviewPanel: () => null,
 }));
 
 vi.mock('@/features/sessions/TagPopoverHost', () => ({
