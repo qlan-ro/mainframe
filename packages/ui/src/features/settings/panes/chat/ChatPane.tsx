@@ -68,6 +68,8 @@ export function ChatPane() {
   const setEnter = useUiPrefs((s) => s.setEnterWhileRunning);
   const chips = useUiPrefs((s) => s.chipComposer);
   const setChips = useUiPrefs((s) => s.setChipComposer);
+  const plain = useUiPrefs((s) => s.plainTranscript);
+  const setPlain = useUiPrefs((s) => s.setPlainTranscript);
   return (
     <div data-testid="settings-pane-chat" className="flex flex-col">
       <section className="flex flex-col gap-3">
@@ -91,6 +93,13 @@ export function ChatPane() {
       <section className="mt-6 flex flex-col gap-3">
         <h3 className="text-sm font-semibold text-foreground">Transcript</h3>
         <HistoryTurnsRow />
+        <ToggleRow
+          label="Plain transcript list (preview)"
+          description="Every loaded message is a plain row under one scroll owner, with no virtualizer. Older pages land without moving what you are reading. Off keeps today's list."
+          checked={plain}
+          onChange={setPlain}
+          testId="settings-chat-plain-transcript"
+        />
       </section>
     </div>
   );

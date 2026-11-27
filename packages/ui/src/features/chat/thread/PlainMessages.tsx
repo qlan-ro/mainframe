@@ -1,0 +1,78 @@
+import { memo, useEffect, type ComponentProps } from 'react';
+import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
+import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
+import { markFirstTranscriptShown } from '@/lib/after-first-paint';
+import { TimeMarker } from './TimeMarker';
+import { TurnStatusRow } from './TurnStatusRow';
+import { statusAnchorId } from './turn-phase';
+import { useTranscriptScroll } from './transcript-scroll-context';
+import { useTailFirstRows } from './use-tail-first-rows';
+
+type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
+
+interface Row {
+  id: string;
+  index: number;
+  user: boolean;
+}
+
+/** One message. Its index and the status-row anchor come from the list, once, not from a search per row. */
+const MessageRow = memo(function MessageRow({
+  index,
+  anchor,
+  components,
+}: {
+  index: number;
+  anchor: boolean;
+  components: MessageComponents;
+}) {
+  return (
+    <>
+      <TimeMarker index={index} />
+      <ThreadPrimitive.MessageByIndex index={index} components={components} />
+      {anchor && <TurnStatusRow />}
+    </>
+  );
+});
+
+/** Ids and roles, re-read only when the rows themselves change; the status anchor is the newest sent message. */
+function useRows(): { rows: Row[]; anchorId: string | null } {
+  const serialized = useAuiState((s) =>
+    s.thread.messages.map((message) => `${message.role === 'user' ? 'u' : 'x'}${message.id}`).join('\0'),
+  );
+  const anchorId = useAuiState((s) => statusAnchorId(s.thread.messages));
+  const rows = serialized
+    ? serialized.split('\0').map((row, index) => ({ id: row.slice(1), index, user: row[0] === 'u' }))
+    : [];
+  return { rows, anchorId };
+}
+
+/**
+ * The transcript's messages as plain rows: every loaded row is in the DOM, the scroll owner
+ * (`use-scroll-owner.ts`) holds the position and the browser anchors what changes above the reader.
+ * The newest rows mount first and the rest follows in slices (`use-tail-first-rows.ts`).
+ */
+export function PlainMessages({ components }: { components: MessageComponents }) {
+  const { rows: all, anchorId } = useRows();
+  const scroll = useTranscriptScroll();
+  const rows = useTailFirstRows(all, scroll);
+  const userCount = all.filter((row) => row.user).length;
+  const shown = rows.length > 0;
+  useEffect(() => {
+    if (shown) markFirstTranscriptShown();
+  }, [shown]);
+  return (
+    <DisclosureStateProvider>
+      <div
+        data-testid="chat-message-list"
+        data-loaded-count={all.length}
+        data-loaded-user-count={userCount}
+        data-virtualized={false}
+      >
+        {rows.map(({ id, index }) => (
+          <MessageRow key={id} index={index} anchor={id === anchorId} components={components} />
+        ))}
+      </div>
+    </DisclosureStateProvider>
+  );
+}

@@ -128,6 +128,14 @@ const PROPS = {
       `${fmt(median(boots.map((b) => b.firstVisibleMs)))} / ${fmt(median(boots.map((b) => b.mountMs)))} ms`,
     );
   },
+  'B-short: newest row moves': (e, v) => {
+    const boots = of(e, v, 'B-short')
+      .filter((r) => r.boot)
+      .map((r) => r.boot);
+    if (!boots.length || boots.every((b) => b.newestMoved === undefined)) return verdict(null, 'n/a');
+    const moved = max(boots.map((b) => b.newestMoved));
+    return verdict(moved <= 1, `${fmt(moved)} px over the first frames`);
+  },
   'P6 mount 40': (e, v) => {
     const m = median(mounts(e, v, 'P5-open'));
     const base = median(mounts(e, v.includes('@') ? `v0@${v.split('@')[1]}` : 'v0', 'P5-open'));
@@ -190,6 +198,61 @@ const table = (title, rows, engine, variants) => {
   }
 };
 
+// S-top: a short first window, the reader at the top, a page landing mid-wheel. One row per case, one column per variant.
+const S_CASES = [
+  ['S-top-60', 'window=2, from the tail, -60 px steps'],
+  ['S-top-300', 'window=2, from the tail, -300 px steps'],
+  ['S-top-flick', 'window=2, from the tail, momentum flicks'],
+  ['S-top-park-60', 'window=2, parked at 0, -60 px steps'],
+  ['S-top-park-300', 'window=2, parked at 0, -300 px steps'],
+  ['S-top-park-flick', 'window=2, parked at 0, momentum flicks'],
+  ['S-top-real-60', 'real shape, -60 px steps'],
+  ['S-top-real-300', 'real shape, -300 px steps'],
+  ['S-top-real-flick', 'real shape, momentum flicks'],
+];
+function sTopTable(engine) {
+  const rows = results.filter((r) => r.engine === engine && r.case.startsWith('S-top'));
+  if (!rows.length) return;
+  const vs = VARIANTS.filter((v) => rows.some((r) => r.variant === v));
+  log(
+    `\n### ${NAMES[engine]}: S-top (React build: ${[...new Set(rows.map((r) => r.react ?? 'unrecorded'))].join(' + ')})\n`,
+  );
+  log(`| Case | ${vs.join(' | ')} |\n| --- | ${vs.map(() => '---').join(' | ')} |`);
+  for (const [id, label] of S_CASES) {
+    const cells = vs.map((v) => {
+      const runs = of(engine, v, id).filter((r) => r.case === id);
+      if (!runs.length) return 'n/a';
+      const x = runs.map((r) => r.result).filter((r) => r && r.loads !== undefined);
+      if (!x.length) return `error ${runs.map((r) => r.error ?? r.result?.error ?? r.result?.skipped).join('; ')}`;
+      // The ledger's own error on flicks (S-noise-flick) is the floor the residual is read against.
+      const floor = id.endsWith('flick')
+        ? Math.max(2, ...res(of(engine, 'v1', 'S-noise-flick')).map((n) => n.noise ?? 0))
+        : 2;
+      const jump = max(x.map((r) => r.jump));
+      const end = max(x.map((r) => r.endResidual));
+      const lost = x.reduce((a, r) => a + r.lostFrames, 0);
+      const pinned = x.reduce((a, r) => a + r.pinned, 0);
+      const gap = max(x.map((r) => r.gapJump));
+      // An unmounted anchor (a virtualizer) cannot be followed; the distance to the bottom still can.
+      const ok = (lost ? gap <= floor : jump <= floor && end <= floor) && !pinned;
+      const loads = x.map((r) => r.loads).join('/');
+      return verdict(
+        ok,
+        `jump ${fmt(jump)}, end ${fmt(end)}${lost ? `, anchor lost ${lost} fr (bottom gap ${fmt(gap)})` : ''}, pinned ${pinned}, loads ${loads}`,
+      );
+    });
+    log(`| ${label} | ${cells.join(' | ')} |`);
+  }
+  const noise = vs.map((v) => {
+    const cells = ['60', '300', 'flick'].map((k) => {
+      const n = res(of(engine, v, `S-noise-${k}`));
+      return n.length ? fmt(max(n.map((r) => r.noise ?? 0))) : 'n/a';
+    });
+    return `${v} ${cells.join('/')} px`;
+  });
+  log(`\nLedger noise floor (-60/-300/flick) (the same input, no page landing, per variant): ${noise.join('; ')}.`);
+}
+
 for (const engine of ENGINES) {
   if (!results.some((r) => r.engine === engine)) continue;
   const shown = VARIANTS.filter((v) =>
@@ -243,6 +306,7 @@ for (const engine of ENGINES) {
       progressive,
     );
 
+  sTopTable(engine);
   const failed = results.filter((r) => r.engine === engine && !r.ok);
   if (failed.length) log(`\nErrors: ${failed.map((r) => `${r.variant} ${r.case}: ${r.error}`).join('; ')}`);
 }

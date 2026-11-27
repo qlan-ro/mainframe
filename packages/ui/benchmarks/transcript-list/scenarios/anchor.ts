@@ -1,6 +1,7 @@
 /** P1 to P3: the reader's anchor while something changes above them. */
-import { Recorder, maxDrift, pickAnchor, round, sleep, frame, viewport } from '../probe';
+import { Recorder, frames, maxDrift, pickAnchor, round, sleep, frame, viewport } from '../probe';
 import { wheel } from '../input';
+import { params } from '../params';
 import { store } from '../store';
 import { approach, park, ready } from './setup';
 
@@ -31,7 +32,12 @@ export async function p1({ at = 'middle', eager = false }: { at?: 'middle' | 'to
   const el = viewport();
   const parked = await park(at === 'top' ? 0 : Math.round(el.scrollHeight * 0.35), eager);
   let added = 0;
-  const result = await watch(() => {
+  const result = await watch(async () => {
+    // The app's boundary row shows its loading state first, then the page lands (the indicator comes and goes).
+    if (params.variant === 'app') {
+      store.set({ loading: true });
+      await frames(3);
+    }
     added = store.prependPage();
   });
   return { ...result, at, pageMessages: added, parkedScrollTop: round(parked.scrollTop), parkedGap: round(parked.gap) };
@@ -47,6 +53,7 @@ export async function p2({ prepend = true, eager = false }: { prepend?: boolean;
   recorder.start();
   await frame();
   for (let i = 0; i < 20; i++) {
+    if (i === 7 && prepend && params.variant === 'app') store.set({ loading: true });
     if (i === 8 && prepend) {
       recorder.mark('page');
       store.prependPage();

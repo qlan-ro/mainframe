@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
+/** How long a loading indicator that has appeared stays: the chat-open spinner and the top of the plain list share it. */
+export const LOADING_MIN_VISIBLE_MS = 300;
+
 export interface DelayedVisibleOptions {
   /** How long `active` must hold before the indicator shows, so a fast load never flashes it. */
   delay?: number;

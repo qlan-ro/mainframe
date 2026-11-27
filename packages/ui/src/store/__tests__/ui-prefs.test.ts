@@ -185,6 +185,7 @@ describe('useUiPrefs persistence', () => {
         'dontWarnOnTuningChange',
         'enterWhileRunning',
         'historyTurns',
+        'plainTranscript',
         'sessionPanelHiddenSections',
         'sessionPanelOpen',
         'sessionPanelSections',

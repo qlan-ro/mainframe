@@ -12,4 +12,5 @@ function noRowAnchor(_open: boolean) {
   return { rowRef, beforeToggle: (_automatic?: boolean) => {} };
 }
 
-export const useRowAnchor = params.variant === 'v0' ? todaysRowAnchor : noRowAnchor;
+// `app` mounts the real hook: under the scroll owner it does nothing by itself.
+export const useRowAnchor = params.variant === 'v0' || params.variant === 'app' ? todaysRowAnchor : noRowAnchor;

@@ -1,10 +1,10 @@
-/** The conversation as turns, in the virtualized message list. */
+/** The conversation as turns, in the message list (virtualized, or plain rows under the scroll owner). */
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { DisclosureScope } from '@/components/ui/disclosure-state';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
-import { VirtualMessages } from '../../thread/VirtualMessages';
+import { TranscriptList } from '../../thread/TranscriptList';
 import { TurnCache } from '../../view-model/turn/turn-cache';
 import { buildTurns } from '../../view-model/turn/build-turns';
 import type { TurnModel } from '../../view-model/turn/types';
@@ -117,7 +117,7 @@ export function TurnTranscript() {
     <TurnProvider value={value}>
       <AgentWorldProvider value={world}>
         <div ref={root} data-testid="chat-transcript">
-          <VirtualMessages components={components} />
+          <TranscriptList components={components} />
         </div>
       </AgentWorldProvider>
     </TurnProvider>

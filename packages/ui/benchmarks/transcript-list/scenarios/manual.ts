@@ -1,12 +1,13 @@
 /**
- * P7 by hand (`?manual=1`): flick up with a trackpad; a page lands whenever the
- * reader comes within 1.5 viewports of the top, and the readout shows, per load,
+ * P7 by hand (`?manual=1`): flick up with a trackpad; a page lands, as in the app, when an upward
+ * gesture finds the reader within one viewport of the top (`window=2` opens on a short window, as after a compaction), and the readout shows, per load,
  * the largest single-frame step of what the reader was looking at. Pass: the
  * steps stay at 2 px or less over five loads, three times, and nothing visibly jumps.
  */
 import { Recorder, frame, viewport } from '../probe';
-import { store } from '../store';
+import { params } from '../params';
 import { ready } from './setup';
+import { installOlderPageLoader, pickReaderAnchor } from './older-page';
 
 function show(text: string) {
   let hud = document.querySelector<HTMLDivElement>('.rig-manual');
@@ -19,16 +20,22 @@ function show(text: string) {
   hud.textContent = text;
 }
 
-async function measureLoad(recorder: Recorder, el: HTMLElement) {
-  const box = el.getBoundingClientRect();
-  recorder.anchor(document.elementFromPoint(box.left + el.clientWidth / 2, box.top + el.clientHeight / 2)!);
-  const from = recorder.samples.length;
-  store.prependPage();
-  for (let i = 0; i < 14; i++) await frame();
-  const window = recorder.samples.slice(from);
-  const steps = window.slice(1).map((s, i) => Math.abs((s.top ?? NaN) - (window[i]!.top ?? NaN)));
-  return Math.max(0, ...steps.filter(Number.isFinite));
+/**
+ * The largest single-frame step of the reader's anchor over the load. An anchor that is gone (not
+ * mounted) counts as a jump (Infinity, shown as "lost"), never as a missing sample: dropping
+ * non-finite samples hid the jumps where the anchor left the viewport or was unmounted.
+ */
+export function largestStep(tops: (number | null)[]) {
+  let max = 0;
+  for (let i = 1; i < tops.length; i++) {
+    const from = tops[i - 1] ?? null;
+    const to = tops[i] ?? null;
+    max = Math.max(max, from === null || to === null ? Infinity : Math.abs(to - from));
+  }
+  return max;
 }
+
+const shown = (step: number) => (Number.isFinite(step) ? String(Math.round(step * 10) / 10) : 'lost');
 
 export async function startManual() {
   await ready();
@@ -37,19 +44,17 @@ export async function startManual() {
   recorder.anchor(el.querySelector('[data-message-id]')!);
   recorder.start();
   const steps: number[] = [];
-  let busy = false;
-  show('flick up: a page loads near the top');
-  el.addEventListener(
-    'scroll',
-    () => {
-      if (busy || !store.hasMore() || el.scrollTop > el.clientHeight * 1.5) return;
-      busy = true;
-      void measureLoad(recorder, el).then((step) => {
-        steps.push(Math.round(step * 10) / 10);
-        show(`loads ${steps.length} · steps ${steps.join(', ')} px · max ${Math.max(...steps)}`);
-        busy = false;
-      });
+  show(`flick up: a page loads near the top (${params.pageDelay} ms ±30%)`);
+  installOlderPageLoader(el, {
+    onRequest: () => pickReaderAnchor(recorder, el),
+    onLanded: () => {
+      const from = recorder.samples.length;
+      void (async () => {
+        for (let i = 0; i < 14; i++) await frame();
+        steps.push(largestStep(recorder.samples.slice(from).map((s) => s.top)));
+        const worst = Math.max(...steps);
+        show(`loads ${steps.length} · steps ${steps.map(shown).join(', ')} px · max ${shown(worst)}`);
+      })();
     },
-    { passive: true },
-  );
+  });
 }

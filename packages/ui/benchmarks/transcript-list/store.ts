@@ -5,12 +5,15 @@
  * `useSyncExternalStore`.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
+import { buildRealTranscript } from './fixture-real';
 import { answerText, buildTranscript, previousPage, userMessage, type Transcript } from './fixture';
 import { params } from './params';
 
 export interface RigState {
   messages: readonly ThreadMessage[];
   running: boolean;
+  /** `app` only: an older page is in flight (the real `historyWindow.loading`). */
+  loading: boolean;
 }
 
 export const CHAT_ID = 'rig-chat';
@@ -23,9 +26,10 @@ function image(index: number) {
 }
 
 function createStore() {
-  const transcript: Transcript = buildTranscript(params.totalTurns, params.groups, { image });
-  let start = transcript.windowStart;
-  let state: RigState = { messages: transcript.all.slice(start), running: false };
+  const transcript: Transcript =
+    params.shape === 'real' ? buildRealTranscript() : buildTranscript(params.totalTurns, params.groups, { image });
+  let start = params.windowItems > 0 ? Math.max(0, transcript.all.length - params.windowItems) : transcript.windowStart;
+  let state: RigState = { messages: transcript.all.slice(start), running: false, loading: false };
   const listeners = new Set<() => void>();
   const set = (next: Partial<RigState>) => {
     state = { ...state, ...next };
@@ -50,7 +54,7 @@ function createStore() {
       const page = transcript.all.slice(from, start);
       start = from;
       window.dispatchEvent(new CustomEvent(PREPEND_EVENT, { detail: CHAT_ID }));
-      set({ messages: [...page, ...state.messages] });
+      set({ messages: [...page, ...state.messages], loading: false });
       return page.length;
     },
     growCode(id: string, index: number, lines: number) {

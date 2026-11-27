@@ -1,0 +1,4701 @@
+{
+ "note": "The app's list (variant app) after the second review round. Part 1: one pass of B-short, P1 to P5, S-top and S-noise. Part 2: three repetitions of S-top. Part 3: six repetitions of P4 and P5 from the first review round (same list apart from the short-tail fix, which does not touch them). Part 4: B-short before the short-tail fix (the newest row moved 315 px in 5 of 5). No record lost its web process. Part 5: one pass (B-short, P1 to P5, S-top, S-noise) after the layout passes were bounded; B-short 0 px in 5 of 5; the window=2 from-tail -60 px cell showed its single 60.2 px ledger frame (end 0.2 px).",
+ "runs": [
+  {
+   "part": "one pass",
+   "load": [
+    2.90380859375,
+    3.1982421875,
+    5.1494140625
+   ]
+  },
+  {
+   "part": "three repetitions of S-top",
+   "load": [
+    2.794921875,
+    3.025390625,
+    4.3955078125
+   ]
+  },
+  {
+   "part": "six repetitions of P4 and P5",
+   "load": [
+    8.81591796875,
+    9.1220703125,
+    8.66064453125
+   ]
+  },
+  {
+   "part": "B-short before the fix",
+   "load": [
+    5.17626953125,
+    8.08740234375,
+    10.13623046875
+   ]
+  },
+  {
+   "part": "one pass after the bounded layout passes",
+   "load": [
+    4.189453125,
+    4.234375,
+    4.3271484375
+   ]
+  }
+ ],
+ "results": [
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "maxDrift": 0.19,
+    "heightChange": 17251,
+    "scrollTopChange": 17251,
+    "frames": 107,
+    "anchorLost": false,
+    "at": "middle",
+    "pageMessages": 51,
+    "parkedScrollTop": 23902,
+    "parkedGap": 43782
+   },
+   "engine": "wk",
+   "case": "P1-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 108,
+    "firstVisibleMs": 108,
+    "mountMs": 108,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "maxDrift": 0.81,
+    "heightChange": 17251,
+    "scrollTopChange": 17250,
+    "frames": 106,
+    "anchorLost": false,
+    "at": "top",
+    "pageMessages": 51,
+    "parkedScrollTop": 0,
+    "parkedGap": 67684
+   },
+   "engine": "wk",
+   "case": "P1-top",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 72,
+    "firstVisibleMs": 72,
+    "mountMs": 72,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "prepend": false,
+    "travelled": 2000,
+    "againstWheel": 0,
+    "finalTop": 2069.72
+   },
+   "engine": "wk",
+   "case": "P2-control",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "prepend": true,
+    "travelled": 1999.81,
+    "againstWheel": 0,
+    "finalTop": 2069.53
+   },
+   "engine": "wk",
+   "case": "P2-page",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "image",
+    "dir": "up",
+    "above": 249,
+    "maxDrift": 0,
+    "heightChange": 0,
+    "scrollTopChange": 0,
+    "frames": 121,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-image-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "code",
+    "dir": "up",
+    "above": 248,
+    "maxDrift": 0,
+    "heightChange": 228,
+    "scrollTopChange": 228,
+    "frames": 132,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-code-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "fold",
+    "dir": "up",
+    "above": 150,
+    "maxDrift": 0.31,
+    "heightChange": -719,
+    "scrollTopChange": -691,
+    "frames": 131,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.97
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "image",
+    "dir": "down",
+    "above": 249,
+    "maxDrift": 0,
+    "heightChange": 0,
+    "scrollTopChange": 0,
+    "frames": 124,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-image-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "code",
+    "dir": "down",
+    "above": 248,
+    "maxDrift": 0,
+    "heightChange": 228,
+    "scrollTopChange": 228,
+    "frames": 132,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-code-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 57,
+    "firstVisibleMs": 57,
+    "mountMs": 57,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "fold",
+    "dir": "down",
+    "above": 150,
+    "maxDrift": 0.31,
+    "heightChange": -719,
+    "scrollTopChange": -691,
+    "frames": 133,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 50,
+    "firstVisibleMs": 50,
+    "mountMs": 50,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.97
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3999,
+    "renderP95": 8,
+    "renderP50": 4,
+    "writeToDomP95": 22,
+    "chunks": 252,
+    "frameP95": 24
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 54,
+    "firstVisibleMs": 54,
+    "mountMs": 54,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 65,
+    "firstVisibleMs": 65,
+    "mountMs": 65,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 54,
+    "firstVisibleMs": 54,
+    "mountMs": 54,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 60,
+    "firstVisibleMs": 60,
+    "mountMs": 60,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 39,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 64,
+    "firstVisibleMs": 64,
+    "mountMs": 64,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 40,
+    "firstVisibleMs": 40,
+    "mountMs": 40,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 38,
+    "firstVisibleMs": 38,
+    "mountMs": 38,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 50,
+    "firstVisibleMs": 50,
+    "mountMs": 50,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 213
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 114
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 114,
+    "wheelSum": -1630,
+    "frames": 259
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15279,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 217
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 33,
+    "firstVisibleMs": 33,
+    "mountMs": 33,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 113
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16072,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 111,
+    "wheelSum": -1630,
+    "frames": 257
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 223
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 37,
+    "firstVisibleMs": 37,
+    "mountMs": 43,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 122,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 117
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 66,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     587,
+     590
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 922,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 118,
+    "wheelSum": -1630,
+    "frames": 266
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 53,
+    "firstVisibleMs": 53,
+    "mountMs": 60,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 16,
+    "wheelEvents": 40,
+    "frames": 174
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 6,
+    "wheelEvents": 10,
+    "frames": 77
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 61,
+    "firstVisibleMs": 61,
+    "mountMs": 61,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 22,
+    "wheelEvents": 122,
+    "frames": 233
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 57,
+    "firstVisibleMs": 57,
+    "mountMs": 57,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 196
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 57,
+    "firstVisibleMs": 57,
+    "mountMs": 57,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 214
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 60.19,
+    "endResidual": 0.19,
+    "gapJump": 60,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 214
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15390,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 117
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 35,
+    "firstVisibleMs": 35,
+    "mountMs": 35,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 113
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 111
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 113,
+    "wheelSum": -1630,
+    "frames": 264
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 111,
+    "wheelSum": -1630,
+    "frames": 259
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 27,
+    "firstVisibleMs": 27,
+    "mountMs": 27,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 110,
+    "wheelSum": -1630,
+    "frames": 259
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15219,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 219
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15279,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 214
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15279,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 217
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 115
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 113
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 114
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 27,
+    "firstVisibleMs": 27,
+    "mountMs": 27,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16315,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 114,
+    "wheelSum": -1630,
+    "frames": 260
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 23,
+    "firstVisibleMs": 23,
+    "mountMs": 23,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16315,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 114,
+    "wheelSum": -1630,
+    "frames": 265
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16293,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 113,
+    "wheelSum": -1630,
+    "frames": 256
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 212
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 36,
+    "firstVisibleMs": 36,
+    "mountMs": 41,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 219
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 45,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 219
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 43,
+    "firstVisibleMs": 43,
+    "mountMs": 49,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 122,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 119
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 53,
+    "firstVisibleMs": 53,
+    "mountMs": 59,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 422,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 116
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 35,
+    "firstVisibleMs": 35,
+    "mountMs": 43,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 122,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 117
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 35,
+    "firstVisibleMs": 35,
+    "mountMs": 42,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     573,
+     606
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 891,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 121,
+    "wheelSum": -1630,
+    "frames": 276
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 40,
+    "firstVisibleMs": 40,
+    "mountMs": 47,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     556,
+     606
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 891,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 122,
+    "wheelSum": -1630,
+    "frames": 275
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 36,
+    "firstVisibleMs": 36,
+    "mountMs": 42,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     587,
+     590
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 922,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 121,
+    "wheelSum": -1630,
+    "frames": 274
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 38,
+    "firstVisibleMs": 38,
+    "mountMs": 44,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "rep3"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3981,
+    "renderP95": 8,
+    "renderP50": 4,
+    "writeToDomP95": 25,
+    "chunks": 249,
+    "frameP95": 26
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 118,
+    "firstVisibleMs": 118,
+    "mountMs": 118,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3999,
+    "renderP95": 7,
+    "renderP50": 4,
+    "writeToDomP95": 21,
+    "chunks": 250,
+    "frameP95": 24
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 67,
+    "firstVisibleMs": 67,
+    "mountMs": 67,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3923,
+    "renderP95": 7,
+    "renderP50": 4,
+    "writeToDomP95": 20,
+    "chunks": 254,
+    "frameP95": 24
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 79,
+    "firstVisibleMs": 79,
+    "mountMs": 79,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3981,
+    "renderP95": 7,
+    "renderP50": 4,
+    "writeToDomP95": 22,
+    "chunks": 251,
+    "frameP95": 24
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 80,
+    "firstVisibleMs": 80,
+    "mountMs": 80,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3923,
+    "renderP95": 8,
+    "renderP50": 4,
+    "writeToDomP95": 21,
+    "chunks": 253,
+    "frameP95": 24
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 73,
+    "firstVisibleMs": 73,
+    "mountMs": 73,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3845,
+    "renderP95": 7,
+    "renderP50": 4,
+    "writeToDomP95": 25,
+    "chunks": 249,
+    "frameP95": 27
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 72,
+    "firstVisibleMs": 72,
+    "mountMs": 72,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 83,
+    "firstVisibleMs": 83,
+    "mountMs": 83,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 112,
+    "firstVisibleMs": 112,
+    "mountMs": 112,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 64,
+    "firstVisibleMs": 64,
+    "mountMs": 64,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 65,
+    "firstVisibleMs": 65,
+    "mountMs": 65,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 75,
+    "firstVisibleMs": 75,
+    "mountMs": 75,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 75,
+    "firstVisibleMs": 75,
+    "mountMs": 75,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 83,
+    "firstVisibleMs": 83,
+    "mountMs": 83,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 62,
+    "firstVisibleMs": 62,
+    "mountMs": 62,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 2,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 87,
+    "firstVisibleMs": 87,
+    "mountMs": 87,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 83,
+    "firstVisibleMs": 83,
+    "mountMs": 83,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 67,
+    "firstVisibleMs": 67,
+    "mountMs": 67,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 66,
+    "firstVisibleMs": 66,
+    "mountMs": 66,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 77,
+    "firstVisibleMs": 77,
+    "mountMs": 77,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 74,
+    "firstVisibleMs": 74,
+    "mountMs": 74,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   },
+   "part": "p4-rep6"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 40,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 0,
+    "newestMoved": 315
+   },
+   "part": "b-short-before-fix"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 40,
+    "rowsInDomMs": 28,
+    "firstVisibleMs": 28,
+    "mountMs": 28,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 0,
+    "newestMoved": 315
+   },
+   "part": "b-short-before-fix"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 40,
+    "rowsInDomMs": 23,
+    "firstVisibleMs": 23,
+    "mountMs": 23,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 0,
+    "newestMoved": 315
+   },
+   "part": "b-short-before-fix"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 40,
+    "rowsInDomMs": 23,
+    "firstVisibleMs": 23,
+    "mountMs": 23,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 0,
+    "newestMoved": 315
+   },
+   "part": "b-short-before-fix"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 40,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 0,
+    "newestMoved": 315
+   },
+   "part": "b-short-before-fix"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "maxDrift": 0.19,
+    "heightChange": 17251,
+    "scrollTopChange": 17251,
+    "frames": 102,
+    "anchorLost": false,
+    "at": "middle",
+    "pageMessages": 51,
+    "parkedScrollTop": 23902,
+    "parkedGap": 43782
+   },
+   "engine": "wk",
+   "case": "P1-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 128,
+    "firstVisibleMs": 128,
+    "mountMs": 128,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "maxDrift": 0.81,
+    "heightChange": 17251,
+    "scrollTopChange": 17250,
+    "frames": 103,
+    "anchorLost": false,
+    "at": "top",
+    "pageMessages": 51,
+    "parkedScrollTop": 0,
+    "parkedGap": 67684
+   },
+   "engine": "wk",
+   "case": "P1-top",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 63,
+    "firstVisibleMs": 63,
+    "mountMs": 63,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "prepend": false,
+    "travelled": 2000,
+    "againstWheel": 0,
+    "finalTop": 2069.72
+   },
+   "engine": "wk",
+   "case": "P2-control",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 54,
+    "firstVisibleMs": 54,
+    "mountMs": 54,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "prepend": true,
+    "travelled": 1999.81,
+    "againstWheel": 0,
+    "finalTop": 2069.53
+   },
+   "engine": "wk",
+   "case": "P2-page",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "image",
+    "dir": "up",
+    "above": 249,
+    "maxDrift": 0,
+    "heightChange": 0,
+    "scrollTopChange": 0,
+    "frames": 113,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-image-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "code",
+    "dir": "up",
+    "above": 248,
+    "maxDrift": 0,
+    "heightChange": 228,
+    "scrollTopChange": 228,
+    "frames": 125,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-code-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 66,
+    "firstVisibleMs": 66,
+    "mountMs": 66,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "fold",
+    "dir": "up",
+    "above": 150,
+    "maxDrift": 0.31,
+    "heightChange": -719,
+    "scrollTopChange": -691,
+    "frames": 123,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 49,
+    "firstVisibleMs": 49,
+    "mountMs": 49,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.97
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "image",
+    "dir": "down",
+    "above": 249,
+    "maxDrift": 0,
+    "heightChange": 0,
+    "scrollTopChange": 0,
+    "frames": 112,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-image-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "code",
+    "dir": "down",
+    "above": 248,
+    "maxDrift": 0,
+    "heightChange": 228,
+    "scrollTopChange": 228,
+    "frames": 123,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-code-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 60,
+    "firstVisibleMs": 60,
+    "mountMs": 60,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "change": "fold",
+    "dir": "down",
+    "above": 150,
+    "maxDrift": 0.31,
+    "heightChange": -719,
+    "scrollTopChange": -691,
+    "frames": 123,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 53,
+    "firstVisibleMs": 53,
+    "mountMs": 53,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.97
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3923,
+    "renderP95": 7,
+    "renderP50": 4,
+    "writeToDomP95": 23,
+    "chunks": 251,
+    "frameP95": 25
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 66,
+    "firstVisibleMs": 66,
+    "mountMs": 66,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 80,
+    "firstVisibleMs": 80,
+    "mountMs": 80,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 61,
+    "firstVisibleMs": 61,
+    "mountMs": 61,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 64,
+    "firstVisibleMs": 64,
+    "mountMs": 64,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 71,
+    "firstVisibleMs": 71,
+    "mountMs": 71,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "P5-open",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 41,
+    "firstVisibleMs": 41,
+    "mountMs": 41,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 37,
+    "firstVisibleMs": 37,
+    "mountMs": 37,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 40,
+    "firstVisibleMs": 40,
+    "mountMs": 40,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 40,
+    "firstVisibleMs": 40,
+    "mountMs": 40,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app",
+   "case": "B-short",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 52,
+    "firstVisibleMs": 52,
+    "mountMs": 52,
+    "firstFrameScrollTop": 282,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 60.19,
+    "endResidual": 0.19,
+    "gapJump": 60,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 215
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 32,
+    "firstVisibleMs": 32,
+    "mountMs": 32,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 109
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 112,
+    "wheelSum": -1630,
+    "frames": 260
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 27,
+    "firstVisibleMs": 27,
+    "mountMs": 27,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15219,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 215
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 34,
+    "firstVisibleMs": 34,
+    "mountMs": 34,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 112
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.19,
+    "gapJump": 1,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16389,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 108,
+    "wheelSum": -1630,
+    "frames": 255
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 28,
+    "firstVisibleMs": 28,
+    "mountMs": 28,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 204
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 49,
+    "firstVisibleMs": 49,
+    "mountMs": 54,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 422,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 107
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 46,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     556,
+     606
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 891,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 120,
+    "wheelSum": -1630,
+    "frames": 248
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 1,
+    "rowsInDomMs": 51,
+    "firstVisibleMs": 51,
+    "mountMs": 59,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 190,
+    "newestMoved": 190
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 14,
+    "wheelEvents": 40,
+    "frames": 160
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 79,
+    "firstVisibleMs": 79,
+    "mountMs": 79,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 69
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  },
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "noise": 0,
+    "windows": 19,
+    "wheelEvents": 124,
+    "frames": 204
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 53,
+    "firstVisibleMs": 53,
+    "mountMs": 53,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   },
+   "part": "bounded-layout-pass"
+  }
+ ]
+}

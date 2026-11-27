@@ -16,6 +16,9 @@ export const CASES = [
   { id: 'P5-open', query: '', run: null, repeat: 5 },
   { id: 'P6-open-10', query: '&groups=10', run: null, repeat: 5 },
   { id: 'P6-open-20', query: '&groups=20', run: null, repeat: 5 },
+  // A short tail: the real shape's newest rows are shorter than the viewport, so a tail-first mount that shows them
+  // before the list overflows paints them at the top and then jumps them to the bottom. Boot only; `newestMoved` is the jump.
+  { id: 'B-short', query: '&shape=real&window=24', run: null, repeat: 5 },
   { id: 'P6-open-400', query: '&groups=400&total=400', run: null, repeat: 3 },
   { id: 'P6-scroll-400', query: '&groups=400&total=400', run: 'p6scroll', options: {} },
   { id: 'P6-stream-400', query: '&groups=400&total=400', run: 'p4follow', options: { seconds: 5 } },
@@ -44,5 +47,23 @@ export const CASES = [
   { only: 'tail', id: 'E-P4-follow', query: '', run: 'p4follow', options: { eager: true } },
   { only: 'tail', id: 'E-P4-wheel-up', query: '', run: 'p4release', options: { dy: -120, eager: true } },
   { only: 'tail', id: 'E-P4-wheel-down', query: '', run: 'p4release', options: { dy: 120, eager: true } },
+  // S-top: a short first window, the reader at the top, and an older page landing 60 ms (+-30%) after the request
+  // while the wheel keeps going: fixed -60 px and -300 px steps, and (WKWebView only) momentum flicks with the
+  // harness's real NSEvent phases. `window=2` is the newest two messages (2.2-2.5 viewports here), with the reader
+  // walking up from the tail or parked at offset 0 first (`park`); `shape=real` is the measured shape of a real
+  // first window (two folded tool-heavy turns, about one viewport, 80-item pages), where the reader reaches the top at once.
+  ...[
+    ['', '&window=2', {}],
+    ['-park', '&window=2', { park: true }],
+    ['-real', '&shape=real', {}],
+  ].flatMap(([name, query, extra]) => [
+    { id: `S-top${name}-60`, query, run: 'sTop', options: { dy: -60, steps: 40, ...extra } },
+    { id: `S-top${name}-300`, query, run: 'sTop', options: { dy: -300, steps: 10, ...extra } },
+    { id: `S-top${name}-flick`, query, run: 'sTop', options: { dy: -700, flicks: 2, ...extra }, engines: ['wk'] },
+  ]),
+  // The ledger's own error: the same input with no page landing, scored over every 20-frame window.
+  { id: 'S-noise-60', query: '', run: 'sNoise', options: { dy: -60, steps: 40 } },
+  { id: 'S-noise-300', query: '', run: 'sNoise', options: { dy: -300, steps: 10 } },
+  { id: 'S-noise-flick', query: '', run: 'sNoise', options: { dy: -700, flicks: 2 }, engines: ['wk'] },
   { id: 'P7-flicks', query: '', run: 'p7proxy', options: { loads: 3 }, engines: ['wk'] },
 ];

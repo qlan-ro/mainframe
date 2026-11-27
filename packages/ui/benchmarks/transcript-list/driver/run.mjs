@@ -64,7 +64,7 @@ for (const engineName of engines) {
       if (c.only === 'tail' && !variant.includes('progressive')) continue;
       for (let r = 0; r < (c.run ? repeat : (c.repeat ?? 1)); r++) {
         const [name, ...extras] = variant.split('+');
-        const url = `http://127.0.0.1:${PORT}/?v=${name}${extras.map((x) => `&${x}=1`).join('')}${c.query}`;
+        const url = `http://127.0.0.1:${PORT}/?v=${name}${extras.map((x) => (x.includes('=') ? `&${x}` : `&${x}=1`)).join('')}${c.query}`;
         let record;
         for (let attempt = 0; attempt < 2; attempt++) {
           try {

@@ -1,20 +1,14 @@
 import { EarlierMessages } from './EarlierMessages';
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefCallback } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { useDraftConfigStore } from '@/features/sessions/runtime/draft-config';
-import { Composer } from '../composer/Composer';
-import { BottomStrip } from '../composer/strips/BottomStrip';
-import { DraftStrip } from '../composer/strips/DraftStrip';
-import { WorktreeSwitchBanner } from '../composer/WorktreeSwitchBanner';
-import { AgentOutboxChip } from '../orchestration/AgentOutboxChip';
 import { TurnTranscript } from '../messages/turn/TurnTranscript';
-import { ChatGateMount } from '../gates/ChatGateMount';
 import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
-import { DegradedChatCard } from './DegradedChatCard';
+import { ThreadFooter } from './ThreadFooter';
 import { useThreadBottomPin } from './use-thread-bottom-pin';
+import { OwnedChatThreadViewport } from './OwnedChatThreadViewport';
 import { useElementHeight } from './use-element-height';
 import { TranscriptScrollToBottom } from './TranscriptScrollToBottom';
 import { TranscriptScrollProvider } from './transcript-scroll-context';
@@ -23,62 +17,6 @@ import { ChatThreadLoadingSpinner, LoadErrorBanner } from './ChatThreadIndicator
 import type { ChatThreadVariant } from './ChatThread';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
 
-const useDirectoryMissing = (): boolean => useChatExtras()?.state.chatConfig?.directoryMissing ?? false;
-function ThreadFooterInput({ variant }: { variant: ChatThreadVariant }) {
-  const directoryMissing = useDirectoryMissing();
-  const itemId = useSideAwareThreadId();
-  const itemStatus = useAuiState((s) => s.threadListItem?.status);
-  const hasDraftCfg = useDraftConfigStore((s) => (itemId ? s.drafts.has(itemId) : false));
-  const projectlessDraft = itemId?.startsWith('__LOCALID_') === true && itemStatus === 'new' && !hasDraftCfg;
-  return (
-    <>
-      <DegradedChatCard />
-      {projectlessDraft ? <DraftStrip standalone /> : !directoryMissing && <Composer variant={variant} />}
-    </>
-  );
-}
-function ThreadFooter({
-  variant,
-  readOnly,
-  footerRef,
-}: {
-  variant: ChatThreadVariant;
-  readOnly: boolean;
-  footerRef: RefCallback<HTMLDivElement>;
-}) {
-  const directoryMissing = useDirectoryMissing();
-  // A plain div, not `ThreadPrimitive.ViewportFooter`: from 0.15.38 aui counts a
-  // registered footer's height as "at bottom", which hid the scroll-to-bottom
-  // button until the reader was a whole composer-height up.
-  return (
-    <div
-      ref={footerRef}
-      className="sticky bottom-0 mt-auto flex max-h-[calc(100cqh-2rem)] shrink-0 flex-col bg-background"
-    >
-      <div
-        data-testid="chat-thread-footer"
-        data-chat-footer
-        className="mx-auto flex w-[calc(100%-0.5rem)] min-h-0 max-w-(--mf-transcript-width) flex-col px-5 pb-4"
-      >
-        <ChatGateMount />
-        <div className="flex min-h-0 flex-col">
-          {readOnly ? (
-            <p data-testid="chat-read-only-note" className="py-2 text-center text-xs text-muted-foreground">
-              Delegated task transcript · read-only
-            </p>
-          ) : (
-            <>
-              {variant !== 'side' && <WorktreeSwitchBanner />}
-              {variant !== 'side' && <AgentOutboxChip />}
-              <ThreadFooterInput variant={variant} />
-            </>
-          )}
-          {variant === 'main' && <BottomStrip fixed={readOnly || directoryMissing} />}
-        </div>
-      </div>
-    </div>
-  );
-}
 function useViewportScroll(threadId: string | null) {
   const pin = useThreadBottomPin(threadId);
   const { viewportElement, viewport, beginInteraction, isFollowing, isInteracting } = pin;
@@ -89,7 +27,13 @@ function useViewportScroll(threadId: string | null) {
   return { pin, scroll };
 }
 
-export function ChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
+/** Today's list (react-virtuoso in assistant-ui's viewport), or the plain list under one scroll owner (Settings › Chat). */
+export function ChatThreadViewport(props: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
+  const plain = useUiPrefs((s) => s.plainTranscript);
+  return plain ? <OwnedChatThreadViewport {...props} /> : <VirtualChatThreadViewport {...props} />;
+}
+
+function VirtualChatThreadViewport({ emptyState, variant }: { emptyState?: ReactNode; variant: ChatThreadVariant }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
   const { pin, scroll } = useViewportScroll(threadId);
@@ -135,6 +79,7 @@ export function ChatThreadViewport({ emptyState, variant }: { emptyState?: React
           data-testid="chat-thread-viewport"
           data-mf-chat-thread
           data-mf-chat-id={chatId}
+          data-scrollbar="none"
           tabIndex={-1}
           style={{ '--scroll-fade-inset-b': `${footerHeight}px` } as CSSProperties}
           className="scroll-fade-y scroll-fade-sticky relative flex flex-1 flex-col overflow-y-auto [overflow-anchor:none]"

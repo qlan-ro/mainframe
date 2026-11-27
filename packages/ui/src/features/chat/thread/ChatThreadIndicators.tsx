@@ -1,6 +1,8 @@
 import { useAuiState } from '@assistant-ui/react';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
-import { AlertTriangleIcon, Loader2Icon } from 'lucide-react';
+import { AlertTriangleIcon } from 'lucide-react';
+import { Spinner } from '@/components/ui/spinner';
+import { LOADING_MIN_VISIBLE_MS, useDelayedVisible } from '@/lib/use-delayed-visible';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
@@ -25,13 +27,24 @@ export function LoadErrorBanner() {
   );
 }
 
+/** Shown only when a load outlasts this, so a cached or fast open never flashes it. */
+export const LOADING_DELAY_MS = 200;
+
 export function ChatThreadLoadingSpinner() {
   const extras = useChatExtras();
   const threadId = useSideAwareThreadId();
   // assistant-ui's stand-in for the coming reply is no history.
   const messages = useAuiState((s) => messageCount(s.thread.messages));
   const isDraft = threadId?.startsWith('__LOCALID_') === true;
-  if (extras?.state.loadState.type !== 'loading' || messages > 0 || isDraft) return null;
+  const loadState = extras?.state.loadState.type;
+  const loading = loadState === 'loading' && messages === 0 && !isDraft;
+  const visible = useDelayedVisible(loading, {
+    delay: LOADING_DELAY_MS,
+    minVisible: LOADING_MIN_VISIBLE_MS,
+    resetKey: threadId,
+  });
+  // An error replaces the spinner at once; so do the first messages.
+  if (!visible || loadState === 'error' || messages > 0) return null;
   return (
     <div
       data-testid="chat-thread-loading"
@@ -39,7 +52,7 @@ export function ChatThreadLoadingSpinner() {
       aria-label="Loading chat history"
       className="absolute inset-0 flex items-center justify-center"
     >
-      <Loader2Icon className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden />
+      <Spinner aria-hidden role="presentation" className="size-6 text-muted-foreground" />
     </div>
   );
 }

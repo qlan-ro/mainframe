@@ -1,8 +1,8 @@
 declare const __RIG_REACT__: 'plain' | 'profiling';
 
 /** Query parameters: `?v=v0|v1|v1s|v2&groups=40&total=160&hold=31&live=1`. */
-export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2';
-const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2'];
+export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2' | 'app';
+const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2', 'app'];
 
 const query = new URLSearchParams(location.search);
 const number = (name: string, fallback: number) => {
@@ -24,6 +24,29 @@ export const params = {
   live: query.get('live') === '1',
   /** P7 by hand: pages load near the top and the readout shows the step at each load. */
   manual: query.get('manual') === '1',
+  /**
+   * Manual mode: how long an older page takes to arrive, in ms, like a daemon `history_page`
+   * reply. Default 60, from the corrected benchmark (an older page shows ~80 ms after the
+   * request, about 25 ms of which is rendering); each load varies ±30%. `delay=0` lands at once.
+   */
+  /**
+   * Manual mode: open with only the newest N messages, like a chat whose first window is short
+   * (after a compaction). The first upward scroll then has to load a page. Unset = `groups` turns.
+   */
+  windowItems: query.has('window') ? number('window', 2) : 0,
+  /**
+   * `shape=real`: the measured shape of a real tool-heavy chat's first window instead of the fixture's
+   * tall turns. It holds the newest 80 items, two folded turns (33 tool calls, 5 texts and 2 thoughts;
+   * 24 tool calls, 5 texts and 5 thoughts) between five short user messages, about one viewport tall,
+   * and each older page of 80 items adds about one more (`fixture-real.ts`).
+   */
+  shape: query.get('shape') === 'real' ? ('real' as const) : ('default' as const),
+  pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
+  /**
+   * Manual mode: the overlay scrollbar thumb. Off by default, as the app's transcript has none (it jumped and
+   * resized as older pages landed); `scrollbar=1` brings it back for a comparison.
+   */
+  scrollbar: query.get('scrollbar') === '1',
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */
@@ -32,4 +55,8 @@ export const params = {
   /** Which react-dom the bundle was built with (`RIG_PROFILE=0` builds plain). */
   react: __RIG_REACT__,
   progressive: query.get('progressive') === '1',
+  /** v1: the owner with the first short-window prototype (`v1+fix`): an absolute `scrollTop` write. Fails, kept for the record. */
+  fixOwner: Number(query.get('fix') ?? 0),
+  /** v1: the near-top correction (`v1+near`): relative `scrollBy` after layout, browser anchoring left on. */
+  nearFix: query.get('near') === '1',
 };

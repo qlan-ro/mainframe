@@ -16,20 +16,24 @@ import { p1, p2, p3 } from './scenarios/anchor';
 import { p4follow, p4release } from './scenarios/follow';
 import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
+import { sNoise, sTop } from './scenarios/short-window';
+import { installOverlayScrollbars } from '@/lib/overlay-scrollbars/manager';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
 import { V1sShell } from './shells/V1sShell';
 import { V2Shell } from './shells/V2Shell';
+import { AppShell } from './shells/AppShell';
 import { openSomeTurns } from './open-turns';
 
-const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell };
-const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy } as Record<
+const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell, app: AppShell };
+const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy, sTop, sNoise } as Record<
   string,
   (o: object) => Promise<unknown>
 >;
 
 openSomeTurns();
-if (params.live) store.set({ messages: [...store.get().messages, ...buildLongTurn(9000)], running: true });
+if (params.live && params.shape !== 'real')
+  store.set({ messages: [...store.get().messages, ...buildLongTurn(9000)], running: true });
 
 function Rig() {
   const Shell = SHELLS[params.variant];
@@ -53,6 +57,8 @@ function Rig() {
 const start = performance.now();
 tail.start = start;
 const boot = watchBoot(start);
+// Manual mode draws the app's own overlay scrollbar thumb (native bars are hidden app-wide).
+if (params.manual && params.scrollbar) installOverlayScrollbars();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Rig />
