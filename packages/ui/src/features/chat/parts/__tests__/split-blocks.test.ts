@@ -12,6 +12,12 @@ describe('hasFootnoteSyntax', () => {
     expect(hasFootnoteSyntax('```sh\ngrep "[^a-z]" file')).toBe(false); // fence still open
   });
 
+  it('does not fire on `[^` on the second or a later line of a fence', () => {
+    expect(hasFootnoteSyntax('```js\na\nb [^1]\nc\n```')).toBe(false);
+    expect(hasFootnoteSyntax('~~~\na\n[^x]\n~~~')).toBe(false);
+    expect(hasFootnoteSyntax('```js\na\nb [^1]')).toBe(false); // still open
+  });
+
   it('fires on prose after a code fence that also holds `[^`', () => {
     expect(hasFootnoteSyntax('```\n[^a]\n```\n\nSee[^1].')).toBe(true);
   });
@@ -30,5 +36,10 @@ describe('splitFootnoteBlocks', () => {
     const text = 'One[^1].\n\n```md\n[^1]: not a note\n```\n\nTwo.';
     expect(splitFootnoteBlocks(text).length).toBeGreaterThan(1);
     expect(splitFootnoteBlocks(text).join('')).toBe(text);
+  });
+
+  it('reads a definition straight after a multi-line fence as a definition', () => {
+    const text = 'Claim[^1].\n\n```js\na\nb\n```\n[^1]: The note.';
+    expect(splitFootnoteBlocks(text)).toEqual([text]);
   });
 });

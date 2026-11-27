@@ -12,8 +12,16 @@ const FOOTNOTE_DEFINITION = /^ {0,3}\[\^[^\]\s]+\]:/m;
 /** Same length as `^`, so offsets in the masked text are offsets in the original. */
 const MASK = '⁠';
 
-/** A fence to its closing line, or to the end of the text while it is still open. */
-const FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*(?:\n[\s\S]*?(?:\n {0,3}\1[`~]*[ \t]*(?=\n|$)|$)|$)/gm;
+/**
+ * A fence to its closing line, or to the end of the text while it is still open.
+ * The `m` flag is for the opener's `^`; "end of text" is `(?![\s\S])` because `$`
+ * would also match at the end of every line and end the fence after its first line.
+ */
+const END = '(?![\\s\\S])';
+const FENCE = new RegExp(
+  `^ {0,3}(\`{3,}|~{3,})[^\\n]*(?:\\n[\\s\\S]*?(?:\\n {0,3}\\1[\`~]*[ \\t]*(?=\\n|${END})|${END})|${END})`,
+  'gm',
+);
 const INLINE_CODE = /(`+)[^`\n][^\n]*?\1(?!`)/g;
 const blank = (match: string) => match.replace(/[^\n]/g, ' ');
 

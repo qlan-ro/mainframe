@@ -16,6 +16,8 @@ import { useRetainedValue } from './disclosure-state';
 import { ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+const BLOCK_CEILING = 'has-[pre,table]:max-h-[calc(var(--read-more-lines)*(1lh+2rem))]';
+
 export interface ReadMoreProps {
   children: ReactNode;
   /** Plain-text length source for the clamp heuristic (jsdom has no layout engine). */
@@ -54,22 +56,28 @@ export function ReadMore({
   const collapsed = needsToggle && !expanded;
 
   // `line-clamp` counts lines of text only. WebKit also clips a block child such as a code
-  // block; Chromium does not and shows it at full height. `max-height` is the ceiling that
-  // makes both clip: the clamped lines plus 1rem per line for the gaps between blocks, which
-  // text never reaches (so WebKit's own clamp, with its ellipsis, still decides there).
-  const clampStyle: CSSProperties | undefined = collapsed
-    ? {
+  // block or a table; Chromium does not and shows it at full height. So when the content
+  // holds one, `max-height` is the ceiling that makes both clip: the clamped lines plus 2rem
+  // per line for the gaps between blocks. Text-only content keeps the pure line clamp, whose
+  // ellipsis and line boundary a ceiling would cut into.
+  const clampStyle = collapsed
+    ? ({
         display: '-webkit-box',
         WebkitBoxOrient: 'vertical',
         WebkitLineClamp: clampLines,
         overflow: 'hidden',
-        maxHeight: `calc(${clampLines} * (1lh + 1rem))`,
-      }
+        '--read-more-lines': clampLines,
+      } as CSSProperties)
     : undefined;
 
   return (
     <div className={cn('relative flex flex-col gap-[5px]', className)}>
-      <div {...contentProps} data-clamp={needsToggle ? '' : undefined} className={contentClassName} style={clampStyle}>
+      <div
+        {...contentProps}
+        data-clamp={needsToggle ? '' : undefined}
+        className={cn(contentClassName, collapsed && BLOCK_CEILING)}
+        style={clampStyle}
+      >
         {children}
       </div>
 

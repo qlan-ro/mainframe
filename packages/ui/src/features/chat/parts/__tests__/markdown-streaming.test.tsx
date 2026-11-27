@@ -63,6 +63,12 @@ describe('an unfinished tail while streaming', () => {
     expect(container.textContent).toBe(text);
   });
 
+  it('a footnote defined straight after a multi-line fence still renders its note', () => {
+    const { container } = render(<MarkdownBody text={'Claim[^1].\n\n```js\na\nb\n```\n[^1]: The note.'} />);
+    expect(container.textContent).toContain('The note.');
+    expect(container.querySelector('sup')).not.toBeNull();
+  });
+
   it('once settled, the same text is left as written', () => {
     const { container } = render(<MarkdownBody text="This is **impor" />);
     expect(container.querySelector('strong')).toBeNull();

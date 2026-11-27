@@ -46,6 +46,10 @@ const TITLE = 'mf-tr-meta font-normal text-muted-foreground';
 const COPY =
   "h-6 gap-1 rounded-md border-0 px-1.5 mf-tr-meta font-medium transition-colors hover:bg-accent hover:text-foreground focus-visible:focus-line-inset data-copied:text-mf-tr-ok [&_svg:not([class*='size-'])]:size-3";
 const BODY = 'mf-tr-mono bg-mf-tr-code px-3 py-2.5 group-has-data-[slot=code-block-header]/code-block:pt-2.5';
+// A plain block has no gutter; this pads its text to where the numbered one starts it (the
+// px-3 inset, the 22 px number column, the gap-x-5), so a fence that grows past the size limit
+// while streaming does not shift its text sideways.
+const PLAIN_BODY = 'pl-13.5';
 const LINE =
   '-mx-3 px-3 in-data-numbered:gap-x-5 before:min-w-[22px] before:font-mono before:text-xs before:text-muted-foreground/50';
 
@@ -86,7 +90,7 @@ export function MarkdownCodeBlock({ code, language }: { code: string; language?:
         </CodeBlockActions>
       </CodeBlockHeader>
       {large ? (
-        <CodeBlockContent className={BODY} data-plain>
+        <CodeBlockContent className={cn(BODY, PLAIN_BODY)} data-plain>
           {code}
         </CodeBlockContent>
       ) : (

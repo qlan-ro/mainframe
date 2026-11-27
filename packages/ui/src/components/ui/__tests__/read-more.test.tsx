@@ -26,16 +26,17 @@ describe('ReadMore', () => {
     expect(btn).toHaveTextContent('Show less');
   });
 
-  it('caps the collapsed height too, so a block child such as a code block is clipped in Chromium', () => {
+  it('adds the block ceiling only while collapsed, and keeps the line clamp', () => {
     render(
       <ReadMore measureText={long} testId="t-toggle" contentProps={{ 'data-testid': 't-content' }}>
         {long}
       </ReadMore>,
     );
     const content = screen.getByTestId('t-content');
-    // jsdom reserialises the expression, so match its parts rather than the exact text.
-    expect(content.style.maxHeight).toMatch(/^calc\(.*lh.*rem/);
+    expect(content.className).toContain('has-[pre,table]:max-h-');
+    expect(content.style.getPropertyValue('--read-more-lines')).toBe('4');
+    expect(content.style.webkitLineClamp || content.style.getPropertyValue('-webkit-line-clamp')).toBeTruthy();
     fireEvent.click(screen.getByTestId('t-toggle'));
-    expect(content.style.maxHeight).toBe('');
+    expect(content.className).not.toContain('max-h-');
   });
 });

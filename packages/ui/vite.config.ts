@@ -3,26 +3,41 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
+import type { Plugin } from 'vite';
+
+/**
+ * Streamdown statically imports rehype-raw (with parse5), rehype-sanitize and
+ * rehype-harden for its default `rehypePlugins`. Mainframe passes none (raw HTML
+ * renders as text), so they never run; in a build they resolve to stubs, which
+ * keeps about 50 KB gzip out of the entry chunk. Only imports made from inside
+ * the streamdown package are stubbed: anything else importing them gets the real
+ * module. `src/__tests__/streamdown-pin.test.ts` fails when Streamdown's version
+ * changes, to re-verify this. Tests and the dev server use the real modules.
+ */
+const STREAMDOWN_UNUSED = new Set(['rehype-raw', 'rehype-sanitize', 'rehype-harden']);
+const STREAMDOWN_STUB = resolve(__dirname, './build-stubs/streamdown-unused.js');
+const streamdownImporter = /[\\/]node_modules[\\/]streamdown[\\/]/;
+
+function stubStreamdownHtmlPlugins(): Plugin {
+  return {
+    name: 'mainframe:stub-streamdown-html-plugins',
+    apply: 'build',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer || !STREAMDOWN_UNUSED.has(source) || !streamdownImporter.test(importer)) return null;
+      return STREAMDOWN_STUB;
+    },
+  };
+}
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   base: './',
   // React Compiler (infer mode) memoizes every component and hook it can prove
   // safe; opt one out with a `'use no memo'` directive plus a one-line reason.
-  plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
+  plugins: [stubStreamdownHtmlPlugins(), tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
-    alias: [
-      { find: '@', replacement: resolve(__dirname, './src') },
-      // Streamdown imports these for its default rehype plugins, which we replace
-      // with none (raw HTML renders as text). Not applied to tests, so they see
-      // the real modules.
-      ...(mode === 'production'
-        ? [/^rehype-raw$/, /^rehype-sanitize$/, /^rehype-harden$/].map((find) => ({
-            find,
-            replacement: resolve(__dirname, './build-stubs/streamdown-unused.js'),
-          }))
-        : []),
-    ],
+    alias: { '@': resolve(__dirname, './src') },
   },
   // Prevent vite from obscuring rust errors
   clearScreen: false,
