@@ -446,3 +446,21 @@ describe('AcpItemAccumulator — empty-content clear (R2.1)', () => {
     expect(acc.itemsInOrder).toHaveLength(1);
   });
 });
+
+describe('AcpItemAccumulator — a window that pages both ways', () => {
+  const page = (...ids: string[]): SessionUpdate[] =>
+    ids.map((id) => ({ sessionUpdate: 'agent_message', messageId: id, content: [textBlock(id)] }) as SessionUpdate);
+  const order = (acc: AcpItemAccumulator) => acc.itemsInOrder.map((item) => item.id);
+
+  it('drops an item and everything after it, and takes the same items back from a later page', () => {
+    const acc = new AcpItemAccumulator();
+    acc.prepend(page('m3', 'm4'));
+    acc.prepend(page('m1', 'm2'));
+    expect(acc.trimFrom('m3')).toEqual(['m3', 'm4']);
+    expect(order(acc)).toEqual(['m1', 'm2']);
+    expect(acc.has('m4')).toBe(false);
+    acc.append(page('m3', 'm4'));
+    expect(order(acc)).toEqual(['m1', 'm2', 'm3', 'm4']);
+    expect(acc.trimFrom('unknown')).toEqual([]);
+  });
+});

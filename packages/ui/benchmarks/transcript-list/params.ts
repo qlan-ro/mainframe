@@ -1,8 +1,8 @@
 declare const __RIG_REACT__: 'plain' | 'profiling';
 
 /** Query parameters: `?v=v0|v1|v1s|v2&groups=40&total=160&hold=31&live=1`. */
-export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2' | 'app';
-const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2', 'app'];
+export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2' | 'app' | 'agent';
+const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2', 'app', 'agent'];
 
 const query = new URLSearchParams(location.search);
 const number = (name: string, fallback: number) => {
@@ -59,4 +59,10 @@ export const params = {
   fixOwner: Number(query.get('fix') ?? 0),
   /** v1: the near-top correction (`v1+near`): relative `scrollBy` after layout, browser anchoring left on. */
   nearFix: query.get('near') === '1',
+  /** `agent`: containers in the long sub-agent (`agent-pager.ts`, 40 a page). */
+  agentSteps: number('steps', 2000),
+  /** `agent`: the steps inline in the chat's own list (its owner, opened at the tail) instead of the sub-agent tab. */
+  inline: query.get('inline') === '1',
+  /** `agent`: Settings › Chat › plain transcript list; `plain=0` is the other list, for a comparison. */
+  plain: query.get('plain') !== '0',
 };

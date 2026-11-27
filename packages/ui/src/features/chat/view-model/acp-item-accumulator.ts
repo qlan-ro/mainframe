@@ -158,6 +158,19 @@ export class AcpItemAccumulator {
     return gone;
   }
 
+  /**
+   * Drops `id` and every item after it, oldest side untouched. For a window that pages both ways
+   * (a sub-agent's history): what goes is below the window and a later page brings it back, so
+   * nothing is remembered as dropped. Returns the ids that went.
+   */
+  trimFrom(id: string): string[] {
+    const at = this.order.indexOf(id);
+    if (at < 0) return [];
+    const gone = this.order.splice(at);
+    for (const goneId of gone) this.items.delete(goneId);
+    return gone;
+  }
+
   reset(): void {
     this.dropped.clear();
     this.items.clear();

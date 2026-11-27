@@ -40,7 +40,7 @@ const WINDOW = 20;
 const arrived = (events: WheelRecord[], t: number) => events.filter((e) => e.t <= t).length;
 
 /** Residuals of one landing: per frame after `base`, for the anchor offset and the distance to the bottom. */
-function scoreLanding(all: Sample[], base: number, end: number, events: WheelRecord[], pageHeight: number) {
+export function scoreLanding(all: Sample[], base: number, end: number, events: WheelRecord[], pageHeight: number) {
   const b = all[base]!;
   const top = Array<number>(end - base - 1).fill(Infinity);
   const gap = Array<number>(end - base - 1).fill(Infinity);

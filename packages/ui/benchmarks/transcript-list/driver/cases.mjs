@@ -68,4 +68,12 @@ export const CASES = [
   // #462: the window stays bounded. Scroll up 10 pages and back down, twice, on the app's list (`--variants app`).
   { id: 'W-bound', query: '&total=400', run: 'bound', options: { pages: 10, cycles: 2 }, engines: ['wk'] },
   { id: 'P7-flicks', query: '', run: 'p7proxy', options: { loads: 3 }, engines: ['wk'] },
+  // #463: a long sub-agent's steps (`--variants agent,agent+inline,agent+plain=0,agent+inline+plain=0`). A-park: one
+  // older page lands under a parked reader (400 px into the steps, or at offset 0 in the tab). A-wheel: the reader
+  // wheels up through several pages, each landing 60 ms (+-30%) after the app's gesture asks. A-bound: 20 pages up
+  // and back down on a 2,000-step sub-agent; what the DOM and the held entry hold at each point.
+  { id: 'A-park-middle', query: '', run: 'agentPark', options: { at: 'middle' }, only: 'agent' },
+  { id: 'A-park-top', query: '', run: 'agentPark', options: { at: 'top' }, only: 'agent-tab' },
+  { id: 'A-wheel', query: '', run: 'agentWheel', options: { dy: -120, steps: 60 }, only: 'agent' },
+  { id: 'A-bound', query: '', run: 'agentBound', options: { pages: 20 }, only: 'agent', engines: ['wk'] },
 ];

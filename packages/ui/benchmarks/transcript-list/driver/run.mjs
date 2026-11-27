@@ -62,6 +62,10 @@ for (const engineName of engines) {
       if (c.onlyProgressive && !variant.includes('progressive')) continue;
       // E- cases start before the slices land: only the tail-first variant has any.
       if (c.only === 'tail' && !variant.includes('progressive')) continue;
+      // A- cases need the sub-agent variant; A-park-top only its tab (inline, offset 0 is the parent's turns).
+      if (c.only === 'agent' && !variant.startsWith('agent')) continue;
+      if (c.only === 'agent-tab' && (!variant.startsWith('agent') || variant.includes('inline'))) continue;
+      if (variant.startsWith('agent') && !c.id.startsWith('A-')) continue;
       for (let r = 0; r < (c.run ? repeat : (c.repeat ?? 1)); r++) {
         const [name, ...extras] = variant.split('+');
         const url = `http://127.0.0.1:${PORT}/?v=${name}${extras.map((x) => (x.includes('=') ? `&${x}` : `&${x}=1`)).join('')}${c.query}`;

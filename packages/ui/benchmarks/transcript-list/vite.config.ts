@@ -1,7 +1,8 @@
 /**
- * Builds the rig as a production bundle. Two imports inside the real transcript
+ * Builds the rig as a production bundle. Imports inside the real transcript
  * are redirected so the variants can swap the list around the same rows:
- * `thread/VirtualMessages` (from `TurnTranscript`) and `messages/turn/use-row-anchor`.
+ * `thread/VirtualMessages` (from `TurnTranscript`) and `messages/turn/use-row-anchor`;
+ * and the chat controller registry, so a sub-agent's pages come from `agent-pager.ts`.
  * Nothing in `src/` changes.
  */
 import { defineConfig, type Plugin } from 'vite';
@@ -15,6 +16,8 @@ const here = import.meta.dirname;
 const REDIRECTS: Record<string, string> = {
   [resolve(src, 'features/chat/thread/VirtualMessages.tsx')]: resolve(here, 'lists/list-switch.tsx'),
   [resolve(src, 'features/chat/messages/turn/use-row-anchor.ts')]: resolve(here, 'lists/row-anchor-switch.ts'),
+  // The `agent` variant's sub-agent pages come from a synthetic pager, never a daemon.
+  [resolve(src, 'features/sessions/runtime/chat-controller-registry.ts')]: resolve(here, 'lists/agent-registry.ts'),
 };
 
 function redirectList(): Plugin {

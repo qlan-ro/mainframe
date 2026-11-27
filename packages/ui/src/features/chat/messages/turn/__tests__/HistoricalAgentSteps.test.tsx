@@ -1,21 +1,37 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 import { DaemonPortProvider } from '@/features/sessions/runtime/daemon-port-context';
+import { useUiPrefs } from '@/store/ui-prefs';
+import { TranscriptScrollProvider, type TranscriptScrollController } from '../../../thread/transcript-scroll-context';
 import { HistoricalAgentSteps } from '../HistoricalAgentSteps';
-import { releaseSubagentHistory } from '../subagent-history-store';
+import { historyKey, loadSubagentPage, releaseSubagentHistory } from '../subagent-history-store';
+import { SUBAGENT_PAGES_KEPT } from '../subagent-window';
+import { fakeSubagentPager } from './subagent-pager';
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { getOrCreate: () => ({ subagentHistory: { page: request } }) },
 }));
 vi.mock('../AgentSteps', () => ({
-  AgentSteps: ({ messages }: { messages: Array<{ id: string }> }) => (
-    <ol>
-      {messages.map((message) => (
-        <li key={message.id}>{message.id}</li>
-      ))}
-    </ol>
+  AgentSteps: ({
+    messages,
+    after,
+    endsEarly,
+  }: {
+    messages: Array<{ id: string }>;
+    after?: ReactNode;
+    endsEarly?: boolean;
+  }) => (
+    <>
+      <ol data-ends-early={endsEarly}>
+        {messages.map((message) => (
+          <li key={message.id}>{message.id}</li>
+        ))}
+      </ol>
+      {after}
+    </>
   ),
 }));
 
@@ -33,12 +49,14 @@ function page(id: string, hasMore = false): HistoryPageResult {
   };
 }
 
-function show() {
+function show(scroll: TranscriptScrollController | null = null) {
   return render(
     <DaemonPortProvider port={1234}>
-      <div data-conversation-scroller>
-        <HistoricalAgentSteps chatId="chat" toolCallId="agent" messageId="parent" messages={[]} outcome="done" />
-      </div>
+      <TranscriptScrollProvider value={scroll}>
+        <div data-conversation-scroller>
+          <HistoricalAgentSteps chatId="chat" toolCallId="agent" messageId="parent" messages={[]} outcome="done" />
+        </div>
+      </TranscriptScrollProvider>
     </DaemonPortProvider>,
   );
 }
@@ -46,6 +64,79 @@ function show() {
 beforeEach(() => {
   releaseSubagentHistory('chat');
   request.mockReset();
+});
+afterEach(() => useUiPrefs.setState({ plainTranscript: false }));
+
+const rows = () => screen.queryAllByRole('listitem').map((item) => item.textContent);
+
+/** The sub-agent paged up until its newest pages were dropped. */
+async function pagedPastTheCap(pager: ReturnType<typeof fakeSubagentPager>) {
+  const key = historyKey('chat', 'agent');
+  await loadSubagentPage(key, pager.request);
+  for (let page = 0; page < SUBAGENT_PAGES_KEPT; page++) await loadSubagentPage(key, pager.request, 'older');
+  request.mockImplementation((_agent: string, before?: string, until?: string) => pager.request(before, until));
+}
+
+it('offers the dropped newest pages below the steps and loads them back', async () => {
+  await pagedPastTheCap(fakeSubagentPager(200));
+  show();
+  expect(screen.getByRole('list')).toHaveAttribute('data-ends-early', 'true');
+  expect(rows()[0]).toBe('m40');
+  fireEvent.click(screen.getByTestId('chat-agent-later-agent'));
+  await screen.findByText('m199');
+  expect(request).toHaveBeenLastCalledWith('agent', undefined);
+  expect(rows()[0]).toBe('m80');
+  expect(screen.queryByTestId('chat-agent-later-agent')).toBeNull();
+  expect(screen.getByRole('list')).toHaveAttribute('data-ends-early', 'false');
+});
+
+it('loads a page on the reader own input only, never on a scroll a landing page caused', async () => {
+  await pagedPastTheCap(fakeSubagentPager(200));
+  const view = show();
+  const viewport = view.container.querySelector('[data-conversation-scroller]')!;
+  request.mockClear();
+  // The browser's anchoring moves the scroll position down as rows land above: not the reader.
+  Object.defineProperty(viewport, 'scrollTop', { value: 500, configurable: true });
+  fireEvent.scroll(viewport);
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.keyDown(viewport, { key: 'PageDown' });
+  await screen.findByText('m199');
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('tells the plain list scroll owner before the rows of a page commit', async () => {
+  useUiPrefs.setState({ plainTranscript: true });
+  await pagedPastTheCap(fakeSubagentPager(200));
+  const seen: Array<Array<string | null>> = [];
+  const beforePrepend = vi.fn(() => seen.push(rows()));
+  show({
+    owned: true,
+    beforePrepend,
+    viewportElement: { current: null },
+    isFollowing: () => false,
+    beginInteraction: () => () => undefined,
+  });
+  const shown = rows();
+  fireEvent.click(screen.getByTestId('chat-agent-earlier-agent'));
+  await screen.findByText('m0');
+  // Once, for the page (the loading state changes no rows), while the reader's rows were still on screen.
+  expect(beforePrepend).toHaveBeenCalledTimes(1);
+  expect(seen[seen.length - 1]).toEqual(shown);
+});
+
+it('leaves the scroll position alone on the other list', async () => {
+  await pagedPastTheCap(fakeSubagentPager(200));
+  const beforePrepend = vi.fn();
+  show({
+    owned: true,
+    beforePrepend,
+    viewportElement: { current: null },
+    isFollowing: () => false,
+    beginInteraction: () => () => undefined,
+  });
+  fireEvent.click(screen.getByTestId('chat-agent-earlier-agent'));
+  await screen.findByText('m0');
+  expect(beforePrepend).not.toHaveBeenCalled();
 });
 
 it('loads on open and reuses the same page on reopen', async () => {
