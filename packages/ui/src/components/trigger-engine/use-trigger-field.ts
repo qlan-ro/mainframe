@@ -57,6 +57,22 @@ export interface UseTriggerFieldOptions {
   triggers: readonly TriggerConfig[];
   /** When given, the caret is restored after an insertion (mouse picks fire no change event). */
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
+  /**
+   * A rich-text field inserts the pick itself (a chip node) instead of the
+   * engine splicing text and calling `onChange`. Returns false when it found
+   * no token to replace, which leaves the field untouched (the composer's chip field).
+   */
+  insert?(request: TriggerInsertRequest): boolean;
+}
+
+/** What a rich-text field needs to replace the token before its caret with a pick. */
+export interface TriggerInsertRequest {
+  char: string;
+  item: TriggerItem;
+  /** The formatter's text for the pick: what the wire body will carry. */
+  directive: string;
+  /** False for a drill-down pick (`@dir/`), which stays an open text token. */
+  appendSpace: boolean;
 }
 
 interface ActiveTrigger {
@@ -77,7 +93,13 @@ function detectActive(triggers: readonly TriggerConfig[], value: string, cursor:
 
 const wrap = (next: number, length: number) => (length === 0 ? 0 : (next + length) % length);
 
-export function useTriggerField({ value, onChange, triggers, textareaRef }: UseTriggerFieldOptions): TriggerField {
+export function useTriggerField({
+  value,
+  onChange,
+  triggers,
+  textareaRef,
+  insert,
+}: UseTriggerFieldOptions): TriggerField {
   const listboxId = useId();
   const [cursor, setCursor] = useState(0);
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -95,8 +117,8 @@ export function useTriggerField({ value, onChange, triggers, textareaRef }: UseT
 
   useEffect(() => setHighlightedIndex(0), [entries]);
 
-  const snapshot = useRef({ value, active, entries, highlightedIndex, activeCategoryId, query, onChange });
-  snapshot.current = { value, active, entries, highlightedIndex, activeCategoryId, query, onChange };
+  const snapshot = useRef({ value, active, entries, highlightedIndex, activeCategoryId, query, onChange, insert });
+  snapshot.current = { value, active, entries, highlightedIndex, activeCategoryId, query, onChange, insert };
 
   const pendingCaret = useRef<number | null>(null);
   useLayoutEffect(() => {
@@ -118,7 +140,7 @@ export function useTriggerField({ value, onChange, triggers, textareaRef }: UseT
   }, []);
 
   const selectEntry = useCallback((entry: TriggerEntry) => {
-    const { active: current, value: text, onChange: emit } = snapshot.current;
+    const { active: current, value: text, onChange: emit, insert: insertRich } = snapshot.current;
     if (!current) return;
     if (!isItem(entry)) {
       setActiveCategoryId(entry.id);
@@ -126,7 +148,15 @@ export function useTriggerField({ value, onChange, triggers, textareaRef }: UseT
     }
     const { config, detected } = current;
     const appendSpace = config.closeOnInsert?.(entry) ?? true;
-    const next = insertDirective(text, config.char, detected, config.formatter.serialize(entry), { appendSpace });
+    const directive = config.formatter.serialize(entry);
+    if (insertRich) {
+      // The field's own selection listener reports the new caret.
+      if (!insertRich({ char: config.char, item: entry, directive, appendSpace })) return;
+      setActiveCategoryId(null);
+      config.onInserted?.(entry);
+      return;
+    }
+    const next = insertDirective(text, config.char, detected, directive, { appendSpace });
     setActiveCategoryId(null);
     setCursor(next.cursor);
     pendingCaret.current = next.cursor;

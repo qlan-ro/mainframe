@@ -6,8 +6,18 @@
  * controls (amber Plan toggle, accent-active Features/Worktree dots) visibly
  * desaturate as well as dim. Parity finding 8.7 (2026-07-02-design-parity-drift-audit.md §8).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  FIELD_MODES,
+  RuntimeShell,
+  chipsIn,
+  fieldText,
+  findField,
+  isReadOnly,
+  replaceText,
+  setFieldMode,
+} from '../../__tests__/composer-field-driver';
 
 vi.mock('../../../runtime/chat-extras', () => ({
   useChatExtras: () => undefined,
@@ -65,113 +75,145 @@ describe('ComposerEditMode — what it edits', () => {
   });
 });
 
-describe('ComposerEditMode — blocks the message carries for the agent', () => {
-  const CAPTURES = '\0__MF_SANDBOX_CAPTURE__\n> **Preview captures**\n> - `element1` — selector `.a`';
-  const edit = (content: string) => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const onDone = vi.fn();
-    render(<ComposerEditMode edit={{ messageId: 'm1', content, save }} onDone={onDone} />);
-    return { save, onDone, input: screen.getByTestId<HTMLTextAreaElement>('chat-composer-edit-input') };
-  };
-  const commit = (input: HTMLElement) => fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
+// The field itself: run against the textarea and the chip editor alike.
+describe.each(FIELD_MODES)('ComposerEditMode field (%s)', (mode) => {
+  beforeEach(() => setFieldMode(mode));
+  afterEach(() => setFieldMode('textarea'));
 
-  it('are not in the field, and go back on save', async () => {
-    const { save, onDone, input } = edit(`${CAPTURES}\n\nFix it`);
-    expect(input).toHaveValue('Fix it');
-    fireEvent.change(input, { target: { value: 'Fix it now' } });
-    commit(input);
-    expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it now`);
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
-  });
-
-  it('stay whole when there was no text yet', () => {
-    const { save, input } = edit(CAPTURES);
-    expect(input).toHaveValue('');
-    fireEvent.change(input, { target: { value: 'Fix it' } });
-    commit(input);
-    expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it`);
-  });
-
-  it('are edited with the text when they sit inside it', () => {
-    const content = '/review\n\nReferenced session @session[Q]: /x\n\nmore';
-    expect(edit(content).input).toHaveValue(content);
-  });
-
-  it('do not count as a change', () => {
-    const { save, onDone, input } = edit(`${CAPTURES}\n\nFix it`);
-    commit(input);
-    expect(save).not.toHaveBeenCalled();
-    expect(onDone).toHaveBeenCalled();
-  });
-});
-
-it('drops the queued edit on a thread switch without saving or altering either draft', () => {
-  const save = vi.fn();
-  function Panel({ draft }: { draft: string }) {
-    const { editing, startEdit, cancelEdit } = useComposerEdit();
-    return editing ? (
-      <ComposerEditMode edit={editing} onDone={cancelEdit} />
-    ) : (
-      <button onClick={() => startEdit({ ...EDIT, save })}>{draft}</button>
+  it('shows the tokens of the queued text as chips only in the chip field, and the text is unchanged', async () => {
+    const { container } = render(
+      <RuntimeShell>
+        <ComposerEditMode edit={{ messageId: 'm1', content: '/review look at @src/a.ts' }} onDone={vi.fn()} />
+      </RuntimeShell>,
     );
-  }
-  const view = (scope: string, draft: string) => (
-    <ComposerEditProvider scope={scope}>
-      <Panel draft={draft} />
-    </ComposerEditProvider>
-  );
-  const { rerender } = render(view('original', 'original draft'));
-  fireEvent.click(screen.getByText('original draft'));
-  fireEvent.change(screen.getByTestId('chat-composer-edit-input'), { target: { value: 'unsaved queue edit' } });
-  rerender(view('next', 'next draft'));
-  expect(screen.getByText('next draft')).toBeInTheDocument();
-  expect(screen.queryByTestId('chat-composer-edit-save')).toBeNull();
-  rerender(view('original', 'original draft'));
-  expect(screen.getByText('original draft')).toBeInTheDocument();
-  expect(save).not.toHaveBeenCalled();
-});
+    const input = await findField('chat-composer-edit-input');
 
-it('keeps the replacement text when the row disappeared before save', async () => {
-  const onDone = vi.fn();
-  const save = vi.fn().mockRejectedValue(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
-  render(<ComposerEditMode edit={{ ...EDIT, save }} onDone={onDone} />);
-  fireEvent.change(screen.getByTestId('chat-composer-edit-input'), { target: { value: 'replacement' } });
-  fireEvent.click(screen.getByTestId('chat-composer-edit-save'));
-  await screen.findByText('This message was already sent. Your edit is still in the composer.');
-  expect(screen.getByTestId('chat-composer-edit-input')).toHaveValue('replacement');
-  expect(onDone).not.toHaveBeenCalled();
-});
-
-it('keeps the latest input on conflict and locks the editor through recovery', async () => {
-  let rejectSave!: (reason: Error) => void;
-  let finishRecovery!: () => void;
-  const patch = new Promise<void>((_, reject) => {
-    rejectSave = reject;
+    expect(fieldText(input)).toBe('/review look at @src/a.ts');
+    expect(chipsIn(container)).toEqual(mode === 'chips' ? ['/review', '@src/a.ts'] : []);
   });
-  const recovery = new Promise<void>((resolve) => {
-    finishRecovery = resolve;
+
+  describe('ComposerEditMode — blocks the message carries for the agent', () => {
+    const CAPTURES = '\0__MF_SANDBOX_CAPTURE__\n> **Preview captures**\n> - `element1` — selector `.a`';
+    const edit = async (content: string) => {
+      const save = vi.fn().mockResolvedValue(undefined);
+      const onDone = vi.fn();
+      render(
+        <RuntimeShell>
+          <ComposerEditMode edit={{ messageId: 'm1', content, save }} onDone={onDone} />
+        </RuntimeShell>,
+      );
+      return { save, onDone, input: await findField('chat-composer-edit-input') };
+    };
+    const commit = (input: HTMLElement) => fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
+
+    it('are not in the field, and go back on save', async () => {
+      const { save, onDone, input } = await edit(`${CAPTURES}\n\nFix it`);
+      expect(fieldText(input)).toBe('Fix it');
+      replaceText(input, 'Fix it now');
+      commit(input);
+      expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it now`);
+      await waitFor(() => expect(onDone).toHaveBeenCalled());
+    });
+
+    it('stay whole when there was no text yet', async () => {
+      const { save, input } = await edit(CAPTURES);
+      expect(fieldText(input)).toBe('');
+      replaceText(input, 'Fix it');
+      commit(input);
+      expect(save).toHaveBeenCalledExactlyOnceWith(`${CAPTURES}\n\nFix it`);
+    });
+
+    it('are edited with the text when they sit inside it', async () => {
+      const content = '/review\n\nReferenced session @session[Q]: /x\n\nmore';
+      expect(fieldText((await edit(content)).input)).toBe(content);
+    });
+
+    it('do not count as a change', async () => {
+      const { save, onDone, input } = await edit(`${CAPTURES}\n\nFix it`);
+      commit(input);
+      expect(save).not.toHaveBeenCalled();
+      expect(onDone).toHaveBeenCalled();
+    });
   });
-  const save = vi.fn(() => patch);
-  const recover = vi.fn(() => recovery);
-  const onDone = vi.fn();
-  render(<ComposerEditMode edit={{ ...EDIT, save, recover }} onDone={onDone} />);
-  const input = screen.getByTestId('chat-composer-edit-input');
-  const saveButton = screen.getByTestId('chat-composer-edit-save');
-  fireEvent.change(input, { target: { value: 'replacement' } });
-  fireEvent.click(saveButton);
 
-  expect(input).toHaveAttribute('readonly');
-  expect(saveButton).toHaveTextContent('Saving…');
-  expect(screen.getByTestId('chat-composer-edit-cancel')).toBeDisabled();
-  fireEvent.keyDown(input, { key: 'Escape' });
+  it('drops the queued edit on a thread switch without saving or altering either draft', async () => {
+    const save = vi.fn();
+    function Panel({ draft }: { draft: string }) {
+      const { editing, startEdit, cancelEdit } = useComposerEdit();
+      return editing ? (
+        <ComposerEditMode edit={editing} onDone={cancelEdit} />
+      ) : (
+        <button onClick={() => startEdit({ ...EDIT, save })}>{draft}</button>
+      );
+    }
+    const view = (scope: string, draft: string) => (
+      <RuntimeShell>
+        <ComposerEditProvider scope={scope}>
+          <Panel draft={draft} />
+        </ComposerEditProvider>
+      </RuntimeShell>
+    );
+    const { rerender } = render(view('original', 'original draft'));
+    fireEvent.click(screen.getByText('original draft'));
+    replaceText(await findField('chat-composer-edit-input'), 'unsaved queue edit');
+    rerender(view('next', 'next draft'));
+    expect(screen.getByText('next draft')).toBeInTheDocument();
+    expect(screen.queryByTestId('chat-composer-edit-save')).toBeNull();
+    rerender(view('original', 'original draft'));
+    expect(screen.getByText('original draft')).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
 
-  // Deliver an input event directly to model an update racing the read-only render.
-  fireEvent.change(input, { target: { value: 'replacement with more text' } });
-  rejectSave(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
-  await waitFor(() => expect(recover).toHaveBeenCalledExactlyOnceWith('replacement with more text'));
-  expect(input).toHaveAttribute('readonly');
-  expect(onDone).not.toHaveBeenCalled();
+  it('keeps the replacement text when the row disappeared before save', async () => {
+    const onDone = vi.fn();
+    const save = vi.fn().mockRejectedValue(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
+    render(
+      <RuntimeShell>
+        <ComposerEditMode edit={{ ...EDIT, save }} onDone={onDone} />
+      </RuntimeShell>,
+    );
+    replaceText(await findField('chat-composer-edit-input'), 'replacement');
+    fireEvent.click(screen.getByTestId('chat-composer-edit-save'));
+    await screen.findByText('This message was already sent. Your edit is still in the composer.');
+    expect(fieldText(screen.getByTestId('chat-composer-edit-input'))).toBe('replacement');
+    expect(onDone).not.toHaveBeenCalled();
+  });
 
-  finishRecovery();
-  await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+  it('keeps the latest input on conflict and locks the editor through recovery', async () => {
+    let rejectSave!: (reason: Error) => void;
+    let finishRecovery!: () => void;
+    const patch = new Promise<void>((_, reject) => {
+      rejectSave = reject;
+    });
+    const recovery = new Promise<void>((resolve) => {
+      finishRecovery = resolve;
+    });
+    const save = vi.fn(() => patch);
+    const recover = vi.fn(() => recovery);
+    const onDone = vi.fn();
+    render(
+      <RuntimeShell>
+        <ComposerEditMode edit={{ ...EDIT, save, recover }} onDone={onDone} />
+      </RuntimeShell>,
+    );
+    const input = await findField('chat-composer-edit-input');
+    const saveButton = screen.getByTestId('chat-composer-edit-save');
+    replaceText(input, 'replacement');
+    fireEvent.click(saveButton);
+
+    expect(isReadOnly(input)).toBe(true);
+    expect(saveButton).toHaveTextContent('Saving…');
+    expect(screen.getByTestId('chat-composer-edit-cancel')).toBeDisabled();
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    // Deliver an input event directly to model an update racing the read-only render.
+    replaceText(input, 'replacement with more text');
+    rejectSave(new ApiRequestError('Conflict', [], 409, 'queued_message_gone'));
+    await waitFor(() => expect(recover).toHaveBeenCalledExactlyOnceWith('replacement with more text'));
+    expect(isReadOnly(input)).toBe(true);
+    expect(onDone).not.toHaveBeenCalled();
+
+    finishRecovery();
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+  });
 });
