@@ -92,6 +92,7 @@ async fn search(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
             chat_id: &chat_id,
             what: "history search",
             result,
+            frames: Vec::new(),
             detail,
         },
     );
@@ -109,8 +110,13 @@ async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
         previews: connection.is_replay_result_previews_opted_in(),
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+        binary: connection.is_binary_history_frames_opted_in(),
     };
-    let result = mainframe_acp::history_around::around_chat(port, &params, options).await;
+    let mut result = mainframe_acp::history_around::around_chat(port, &params, options).await;
+    let frames = result
+        .as_mut()
+        .map(|result| std::mem::take(&mut result.frames))
+        .unwrap_or_default();
     reply(
         connection,
         request.id,
@@ -118,6 +124,7 @@ async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
             chat_id: &params.session_id,
             what: "history around",
             result,
+            frames,
             // The panic text is logged where it is caught, in `with_messages`.
             detail: None,
         },
@@ -128,6 +135,8 @@ struct Reply<'a, T> {
     chat_id: &'a str,
     what: &'a str,
     result: Option<T>,
+    /// Binary frames for a result that says `batchFrames`.
+    frames: Vec<mainframe_types::acp::extensions::BatchFrame>,
     detail: Option<String>,
 }
 
@@ -136,8 +145,8 @@ fn reply<T: serde::Serialize>(
     id: Option<mainframe_types::acp::jsonrpc::RequestId>,
     reply: Reply<'_, T>,
 ) {
-    connection.send_json(&match reply.result {
-        Some(result) => rpc::success_response(id, serde_json::json!(result)),
+    let result = match reply.result {
+        Some(result) => serde_json::json!(result),
         None => {
             error!(
                 chat_id = reply.chat_id,
@@ -148,9 +157,14 @@ fn reply<T: serde::Serialize>(
                     .unwrap_or("reader produced no result"),
                 "history request failed"
             );
-            rpc::error_response(id, rpc::internal_error(&format!("{} failed", reply.what)))
+            connection.send_json(&rpc::error_response(
+                id,
+                rpc::internal_error(&format!("{} failed", reply.what)),
+            ));
+            return;
         }
-    });
+    };
+    connection.send_result(id, result, reply.frames);
 }
 
 /// A bounded page borrows the list under the cache lock. A load-through page
@@ -206,6 +220,7 @@ async fn page(
         previews,
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+        binary: connection.is_binary_history_frames_opted_in(),
     };
     let hub_for_work = Arc::clone(&ctx.chat.facade_hub);
     let result = tokio::spawn(compute_page(port, hub_for_work, params, options)).await;
@@ -223,6 +238,9 @@ async fn page(
     }
 }
 
+#[cfg(test)]
+#[path = "history_binary_tests.rs"]
+mod binary_tests;
 #[cfg(test)]
 #[path = "history_tests.rs"]
 mod tests;

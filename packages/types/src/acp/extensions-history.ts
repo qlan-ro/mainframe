@@ -33,9 +33,21 @@ export const HistoryPageParamsSchema = z
   .loose();
 export type HistoryPageParams = z.infer<typeof HistoryPageParamsSchema>;
 
+/**
+ * Batches the RPC layer inflated from a response's binary frames, in order.
+ * Client-side only: never on the wire, the transport fills it in (replacing
+ * `batchFrames`) before the result reaches its consumer, which validates each
+ * entry of `updates` like any other update.
+ */
+export const InflatedBatchSchema = z.object({ count: z.number().int().nonnegative(), updates: z.array(z.unknown()) });
+export type InflatedBatch = z.infer<typeof InflatedBatchSchema>;
+
 export const HistoryPageResultSchema = HistoryStateSchema.extend({
   updates: z.array(SessionUpdateSchema).optional(),
   batches: z.array(ReplayBatchParamsSchema).optional(),
+  /** Binary frames carrying this result's batches (opt-in); the transport turns it into `inflatedBatches`. */
+  batchFrames: z.number().int().nonnegative().optional(),
+  inflatedBatches: z.array(InflatedBatchSchema).optional(),
   stale: z.boolean().optional(),
 });
 export type HistoryPageResult = z.infer<typeof HistoryPageResultSchema>;
@@ -62,6 +74,8 @@ export const HistoryAroundResultSchema = z
   .object({
     updates: z.array(SessionUpdateSchema).optional(),
     batches: z.array(ReplayBatchParamsSchema).optional(),
+    batchFrames: z.number().int().nonnegative().optional(),
+    inflatedBatches: z.array(InflatedBatchSchema).optional(),
     hasBefore: z.boolean(),
     hasAfter: z.boolean(),
     firstItemId: z.string().optional(),

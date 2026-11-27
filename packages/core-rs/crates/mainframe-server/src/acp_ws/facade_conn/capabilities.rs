@@ -54,4 +54,13 @@ impl FacadeConnection {
         self.lazy_tool_images_opted_in
             .store(true, Ordering::Relaxed);
     }
+
+    pub(crate) fn is_binary_history_frames_opted_in(&self) -> bool {
+        self.binary_history_frames_opted_in.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn mark_binary_history_frames_opted_in(&self) {
+        self.binary_history_frames_opted_in
+            .store(true, Ordering::Relaxed);
+    }
 }

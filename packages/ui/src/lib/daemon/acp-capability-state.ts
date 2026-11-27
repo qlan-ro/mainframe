@@ -1,3 +1,4 @@
+import { canInflateBinaryFrames } from './acp-binary-frame';
 import {
   MAINFRAME_META_NAMESPACE,
   PINNED_PROTOCOL_VERSION,
@@ -43,6 +44,8 @@ export function initializeRequest(info: { name: string; version: string }): Init
         compressedReplay: true,
         windowedHistory: true,
         lazyToolImages: true,
+        // Large history responses as binary frames, only where the platform can inflate them.
+        ...(canInflateBinaryFrames() && { binaryHistoryFrames: true }),
       },
     },
   };

@@ -134,6 +134,13 @@ export const MainframeCapabilitiesSchema = z
     /** Whether `history_around` honours `includeDescendants`. */
     historyAroundDescendants: z.boolean().optional(),
     lazyToolImages: z.boolean().optional(),
+    /**
+     * Whether history responses (`history_page`, `history_around`,
+     * `subagent_history_page`) can carry their compressed batches as binary
+     * WebSocket frames for a connection that opted in with
+     * `BINARY_HISTORY_FRAMES_OPT_IN_KEY`.
+     */
+    binaryHistoryFrames: z.boolean().optional(),
   })
   .loose();
 export type MainframeCapabilities = z.infer<typeof MainframeCapabilitiesSchema>;
@@ -162,6 +169,14 @@ export const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY = 'replayResultPreviews';
  * `MainframeCapabilities.compressedReplay` advertises server support.
  */
 export const COMPRESSED_REPLAY_OPT_IN_KEY = 'compressedReplay';
+
+/**
+ * The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+ * `true` to receive history responses with their compressed batches as binary
+ * frames instead of base64 inside the JSON. Absent or `false` keeps the
+ * `batches` (or `updates`) form exactly as it was.
+ */
+export const BINARY_HISTORY_FRAMES_OPT_IN_KEY = 'binaryHistoryFrames';
 
 /**
  * The replay boundary a revision-cursor `session/resume` reply returns and

@@ -54,6 +54,12 @@ pub struct MainframeCapabilities {
     pub history_around_descendants: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lazy_tool_images: Option<bool>,
+    /// Whether history responses (`history_page`, `history_around`,
+    /// `subagent_history_page`) can carry their updates as binary WebSocket
+    /// frames for a connection that opted in with
+    /// [`BINARY_HISTORY_FRAMES_OPT_IN_KEY`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binary_history_frames: Option<bool>,
 }
 
 /// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
@@ -76,6 +82,12 @@ pub const REPLAY_RESULT_PREVIEWS_OPT_IN_KEY: &str = "replayResultPreviews";
 /// even when [`MainframeCapabilities::compressed_replay`] advertises server
 /// support.
 pub const COMPRESSED_REPLAY_OPT_IN_KEY: &str = "compressedReplay";
+
+/// The `initialize` request `_meta["_mainframe.dev"]` key a client sets to
+/// `true` to receive history responses with their compressed batches as
+/// binary frames instead of base64 inside the JSON. Absent or `false` keeps
+/// the `batches` (or `updates`) form exactly as it was.
+pub const BINARY_HISTORY_FRAMES_OPT_IN_KEY: &str = "binaryHistoryFrames";
 
 /// The replay boundary a revision-cursor `session/resume` reply returns and
 /// the `_mainframe.dev/cursor` notification advances. `epoch`
@@ -128,6 +140,7 @@ mod tests {
             history_around: None,
             history_around_descendants: None,
             lazy_tool_images: None,
+            binary_history_frames: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));
     }

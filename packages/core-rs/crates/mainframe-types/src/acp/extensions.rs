@@ -10,8 +10,9 @@ mod retry;
 use crate::adapter::ControlResponse;
 use crate::chat::{DiffHunk, QueuedMessageRef};
 pub use capabilities::{
-    COMPRESSED_REPLAY_OPT_IN_KEY, CursorParams, MainframeCapabilities,
-    REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY, RevisionCursor,
+    BINARY_HISTORY_FRAMES_OPT_IN_KEY, COMPRESSED_REPLAY_OPT_IN_KEY, CursorParams,
+    MainframeCapabilities, REPLAY_RESULT_PREVIEWS_OPT_IN_KEY, REVISION_CURSORS_OPT_IN_KEY,
+    RevisionCursor,
 };
 pub use history::*;
 pub use prompt::*;
