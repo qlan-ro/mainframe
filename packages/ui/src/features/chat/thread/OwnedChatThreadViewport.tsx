@@ -6,6 +6,7 @@ import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { TurnTranscript } from '../messages/turn/TurnTranscript';
 import { useChatExtras } from '../runtime/chat-extras';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
+import { TranscriptEdgeFades } from './TranscriptEdgeFades';
 import { ThreadFooter } from './ThreadFooter';
 import { useElementHeight } from './use-element-height';
 import { useScrollOwner } from './use-scroll-owner';
@@ -26,6 +27,8 @@ import type { SessionCustom } from '@/features/sessions/view-model/chat-to-threa
  * - The composer is below the scroller, not sticky inside it, so the reader's scroll area is only the
  *   transcript and "the bottom" needs no footer arithmetic.
  * - The scrollbar thumb is off: it jumped and resized as older pages landed.
+ * - The edge fades are gradient strips, not a mask: a mask on a scroller with every row mounted costs
+ *   a streaming reply most of its frames (`TranscriptEdgeFades.tsx`).
  */
 export function OwnedChatThreadViewport({
   emptyState,
@@ -37,7 +40,9 @@ export function OwnedChatThreadViewport({
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
   const chatId = useChatExtras()?.state.chatId;
-  const owner = useScrollOwner(threadId, chatId);
+  // Find searches the focused main chat only; the plain list reveals every row for it (use-tail-first-rows.ts).
+  const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
+  const owner = useScrollOwner(threadId, chatId, { findOwner: focused && variant === 'main' });
   const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
   const footerHeight = useElementHeight(footerEl);
   const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
@@ -53,28 +58,31 @@ export function OwnedChatThreadViewport({
         style={{ [TRANSCRIPT_WIDTH_VAR]: `${transcriptWidth}px` } as CSSProperties}
         className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
       >
-        <div
-          ref={owner.setViewport}
-          data-testid="chat-thread-viewport"
-          data-mf-chat-thread
-          data-mf-chat-id={chatId}
-          data-scrollbar="none"
-          tabIndex={-1}
-          className="scroll-fade-y relative flex min-h-0 flex-1 flex-col overflow-y-auto"
-        >
-          <ChatThreadLoadingSpinner />
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <div
-            ref={owner.setContent}
-            className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
+            ref={owner.setViewport}
+            data-testid="chat-thread-viewport"
+            data-mf-chat-thread
+            data-mf-chat-id={chatId}
+            data-scrollbar="none"
+            tabIndex={-1}
+            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
           >
-            <TranscriptWidthHandle side="left" rootRef={rootRef} />
-            <TranscriptWidthHandle side="right" rootRef={rootRef} />
-            <LoadErrorBanner />
-            {variant !== 'side' && <ContextNotPreservedNotice />}
-            {messageCount === 0 && emptyState != null ? emptyState : null}
-            <EarlierMessages />
-            <TurnTranscript key={threadId ?? ''} />
+            <ChatThreadLoadingSpinner />
+            <div
+              ref={owner.setContent}
+              className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
+            >
+              <TranscriptWidthHandle side="left" rootRef={rootRef} />
+              <TranscriptWidthHandle side="right" rootRef={rootRef} />
+              <LoadErrorBanner />
+              {variant !== 'side' && <ContextNotPreservedNotice />}
+              {messageCount === 0 && emptyState != null ? emptyState : null}
+              <EarlierMessages />
+              <TurnTranscript key={threadId ?? ''} />
+            </div>
           </div>
+          <TranscriptEdgeFades />
         </div>
         <ThreadFooter variant={variant} readOnly={readOnly} footerRef={footerRef} sticky={false} />
         <div ref={setOverlayHost} className="pointer-events-none absolute inset-0" />

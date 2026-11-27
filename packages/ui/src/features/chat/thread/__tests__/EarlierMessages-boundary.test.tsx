@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EarlierMessages, LOADING_MIN_VISIBLE_MS } from '../EarlierMessages';
 import { TranscriptScrollProvider, type TranscriptScrollController } from '../transcript-scroll-context';
 
 const f = vi.hoisted(() => ({
+  load: vi.fn(),
   hasMore: true,
   loading: false,
   error: undefined as string | undefined,
@@ -18,11 +19,16 @@ vi.mock('@assistant-ui/react', () => ({
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
     state: { chatId: f.chatId, historyWindow: { hasMore: f.hasMore, loading: f.loading, error: f.error } },
-    loadEarlier: vi.fn(),
+    loadEarlier: f.load,
   }),
 }));
 
 const viewport = document.createElement('div');
+const pendingStore = (initial: boolean) => ({
+  get: () => initial,
+  subscribe: () => () => undefined,
+  set: () => undefined,
+});
 const owned: TranscriptScrollController = {
   owned: true,
   viewportElement: { current: viewport },
@@ -45,6 +51,7 @@ const state = () => screen.getByTestId('chat-history-boundary').getAttribute('da
 beforeEach(() => {
   vi.useFakeTimers();
   Object.assign(f, { hasMore: true, loading: false, error: undefined, chatId: 'chat' });
+  f.load.mockReset().mockResolvedValue(true);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -105,6 +112,45 @@ describe('the top of the plain list', () => {
     });
     expect(new Set(classes).size).toBe(1);
     expect(classes[0]).toContain('h-12');
+  });
+});
+
+describe('the top of the plain list: failures, focus and rows still landing', () => {
+  it('says so, with a Retry that loads again, when a page failed', () => {
+    f.error = 'Could not load earlier messages';
+    view(owned);
+    expect(state()).toBe('error');
+    expect(screen.getByText('Could not load earlier messages')).toBeVisible();
+    fireEvent.click(screen.getByTestId('chat-load-earlier-retry'));
+    expect(f.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps no alert inside the live region, and hides the spinner from it', () => {
+    f.error = 'boom';
+    const rendered = view(owned);
+    expect(screen.queryByRole('alert')).toBeNull();
+    f.error = undefined;
+    f.loading = true;
+    rendered.update();
+    expect(screen.getByTestId('chat-history-spinner')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('keeps focus in the band when the pressed button goes away', () => {
+    const rendered = view(owned);
+    const button = screen.getByTestId('chat-load-earlier');
+    button.focus();
+    fireEvent.click(button);
+    expect(screen.getByTestId('chat-history-boundary')).toHaveFocus();
+    f.loading = true;
+    rendered.update();
+    expect(screen.getByTestId('chat-history-boundary')).toHaveFocus();
+  });
+
+  it('does not say the conversation begins while rows of the first window are still landing above', () => {
+    f.hasMore = false;
+    view({ ...owned, tailPending: pendingStore(true) });
+    expect(state()).toBe('pending');
+    expect(screen.queryByText('Beginning of conversation')).toBeNull();
   });
 });
 

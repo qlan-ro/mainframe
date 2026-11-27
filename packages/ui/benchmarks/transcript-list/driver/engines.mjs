@@ -70,6 +70,17 @@ async function wkEngine(binary, { synthetic }) {
   return {
     info: { engine: 'wk', ...info },
     async open(url) {
+      // The web view is reused: while the old page still answers (`window.__rig` is still there), a call made
+      // right after `load` can land on the document that is being torn down and fail with "undefined" or
+      // "completion handler no longer reachable", which looked like a lost web process. Leave the old page
+      // first, then wait for the new one.
+      send({ cmd: 'load', url: 'about:blank' });
+      for (let i = 0; i < 100; i++) {
+        await new Promise((r) => setTimeout(r, 30));
+        try {
+          if (!(await call('return Boolean(window.__rig)'))) break;
+        } catch {}
+      }
       send({ cmd: 'load', url });
       for (let i = 0; i < 200; i++) {
         await new Promise((r) => setTimeout(r, 50));

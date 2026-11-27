@@ -48,7 +48,11 @@ interface Near {
   scrollTop: number;
 }
 
-export function useScrollOwner(threadId: string | null, chatId: string | undefined) {
+export function useScrollOwner(
+  threadId: string | null,
+  chatId: string | undefined,
+  { findOwner = false }: { findOwner?: boolean } = {},
+) {
   const [viewport, setViewportState] = useState<HTMLDivElement | null>(null);
   const [content, setContentState] = useState<HTMLDivElement | null>(null);
   const viewportElement = useRef<HTMLDivElement | null>(null);
@@ -189,6 +193,24 @@ export function useScrollOwner(threadId: string | null, chatId: string | undefin
       listeners.delete(listener);
     };
   }, []);
+  const tailPending = useMemo(() => {
+    const listeners = new Set<() => void>();
+    let pending = false;
+    return {
+      get: () => pending,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      set: (next: boolean) => {
+        if (next === pending) return;
+        pending = next;
+        listeners.forEach((listener) => listener());
+      },
+    };
+  }, []);
   const isFollowing = useCallback(() => state.current.following, []);
   const isPinned = useCallback(() => state.current.published, []);
   const controller: TranscriptScrollController = useMemo(
@@ -200,8 +222,11 @@ export function useScrollOwner(threadId: string | null, chatId: string | undefin
       isInteracting: () => false,
       beginInteraction: () => () => undefined,
       beforePrepend,
+      chatId,
+      findOwner,
+      tailPending,
     }),
-    [viewport, isFollowing, beforePrepend],
+    [viewport, isFollowing, beforePrepend, chatId, findOwner, tailPending],
   );
   return { controller, setViewport, setContent, isPinned, subscribePinned, pinToBottom };
 }

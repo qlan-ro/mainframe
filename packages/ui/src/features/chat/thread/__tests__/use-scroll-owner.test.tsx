@@ -189,6 +189,44 @@ describe('follow', () => {
   });
 });
 
+describe('what counts as the reader taking over', () => {
+  const closed = () => viewport.querySelector<HTMLElement>('[data-testid="trigger"]')!;
+
+  it('collapsing an open row does not stop follow', () => {
+    mount();
+    closed().setAttribute('aria-expanded', 'true');
+    fireEvent.click(closed());
+    grow(100);
+    expect(layout.top).toBe(1600);
+  });
+
+  it('a menu trigger does not stop follow', () => {
+    mount();
+    closed().setAttribute('aria-haspopup', 'menu');
+    fireEvent.click(closed());
+    grow(100);
+    expect(layout.top).toBe(1600);
+  });
+
+  it('opening a closed row stops follow', () => {
+    mount();
+    fireEvent.click(closed());
+    grow(100);
+    expect(layout.top).toBe(1500);
+  });
+
+  it('a touchmove with no vertical movement does not stop follow; one that moves up does', () => {
+    mount();
+    fireEvent.touchStart(viewport, { touches: [{ clientX: 10, clientY: 300 }] });
+    fireEvent.touchMove(viewport, { touches: [{ clientX: 80, clientY: 300 }] });
+    grow(100);
+    expect(layout.top).toBe(1600);
+    fireEvent.touchMove(viewport, { touches: [{ clientX: 80, clientY: 380 }] });
+    grow(100);
+    expect(layout.top).toBe(1600);
+  });
+});
+
 describe('a page above a reader near the top', () => {
   const readNearTop = () => {
     mount();

@@ -120,11 +120,18 @@ describe('ChatThread — plain transcript list', () => {
     expect(footer.parentElement!.className).not.toContain('sticky');
   });
 
-  it('starts at the tail', () => {
+  it('follows to the tail on the user’s own send', () => {
     const viewport = renderViewport();
-    expect(viewport.scrollTop).toBe(0);
+    readerScrollsTo(viewport, 300);
     act(() => emitUserSent(['thread-1']));
     expect(viewport.scrollTop).toBe(BOTTOM);
+  });
+
+  it('draws the edge fades as strips, not a mask on the scroller', () => {
+    const viewport = renderViewport();
+    expect(viewport.className).not.toContain('scroll-fade');
+    expect(screen.getByTestId('chat-thread-fade-top')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('chat-thread-fade-bottom')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('leaves a reader who scrolled up in place', () => {

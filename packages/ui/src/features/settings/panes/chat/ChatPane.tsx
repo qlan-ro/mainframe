@@ -89,6 +89,10 @@ export function ChatPane() {
           onChange={setChips}
           testId="settings-chat-chip-composer"
         />
+      </section>
+      <section className="mt-6 flex flex-col gap-3">
+        <h3 className="text-sm font-semibold text-foreground">Transcript</h3>
+        <HistoryTurnsRow />
         <ToggleRow
           label="Plain transcript list (preview)"
           description="Every loaded message is a plain row under one scroll owner, with no virtualizer. Older pages land without moving what you are reading. Off keeps today's list."
@@ -96,10 +100,6 @@ export function ChatPane() {
           onChange={setPlain}
           testId="settings-chat-plain-transcript"
         />
-      </section>
-      <section className="mt-6 flex flex-col gap-3">
-        <h3 className="text-sm font-semibold text-foreground">Transcript</h3>
-        <HistoryTurnsRow />
       </section>
     </div>
   );

@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { EarlierMessages } from '@/features/chat/thread/EarlierMessages';
 import { TurnTranscript } from '@/features/chat/messages/turn/TurnTranscript';
 import { TranscriptScrollProvider } from '@/features/chat/thread/transcript-scroll-context';
+import { TranscriptEdgeFades } from '@/features/chat/thread/TranscriptEdgeFades';
 import { useScrollOwner } from '@/features/chat/thread/use-scroll-owner';
 import { controls } from '../controls';
 import { CHAT_ID } from '../store';
@@ -23,22 +24,25 @@ export function AppShell() {
   return (
     <TranscriptScrollProvider value={owner.controller}>
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          ref={owner.setViewport}
-          data-mf-chat-thread
-          data-mf-chat-id={CHAT_ID}
-          data-rig-viewport
-          data-scrollbar="none"
-          tabIndex={-1}
-          className="scroll-fade-y relative flex min-h-0 flex-1 flex-col overflow-y-auto"
-        >
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <div
-            ref={owner.setContent}
-            className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
+            ref={owner.setViewport}
+            data-mf-chat-thread
+            data-mf-chat-id={CHAT_ID}
+            data-rig-viewport
+            data-scrollbar="none"
+            tabIndex={-1}
+            className="relative flex min-h-0 flex-1 flex-col overflow-y-auto"
           >
-            <EarlierMessages />
-            <TurnTranscript key={CHAT_ID} />
+            <div
+              ref={owner.setContent}
+              className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
+            >
+              <EarlierMessages />
+              <TurnTranscript key={CHAT_ID} />
+            </div>
           </div>
+          <TranscriptEdgeFades />
         </div>
         <ComposerStub />
       </div>

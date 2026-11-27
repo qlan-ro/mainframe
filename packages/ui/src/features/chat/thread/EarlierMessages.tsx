@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { ArrowUpIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,17 +23,13 @@ export function EarlierMessages() {
   const history = extras?.state.historyWindow;
   const anchoring = usePrependAnchor(firstId, extras?.state.chatId, history?.floorItemId);
   const loading = history?.loading === true || anchoring;
-  const held = useDelayedVisible(loading, {
-    delay: 0,
-    minVisible: LOADING_MIN_VISIBLE_MS,
-    resetKey: extras?.state.chatId,
-  });
   useOlderPageGesture(extras?.loadEarlier, history?.hasMore === true, loading);
   if (!firstId) return null;
   if (scroll?.owned) {
     return (
       <OwnedBoundary
-        loading={held}
+        chatId={extras?.state.chatId}
+        loading={loading}
         hasMore={history?.hasMore === true}
         error={history?.error}
         load={extras?.loadEarlier}
@@ -70,56 +66,75 @@ export function EarlierMessages() {
 
 /**
  * The top of the plain list. Its height is the same in every state (a loading spinner, the
- * cue that more is above, the start of the chat), so it never moves the rows under the reader
- * when it changes.
+ * cue that more is above, the start of the chat, a failed load with Retry), so it never moves the
+ * rows under the reader when it changes. While rows of the first window are still mounting above the
+ * newest ones, it says nothing: "Beginning of conversation" would sit over rows that are about to land.
  */
 function OwnedBoundary({
+  chatId,
   loading,
   hasMore,
   error,
   load,
 }: {
+  chatId: string | undefined;
   loading: boolean;
   hasMore: boolean;
   error: string | undefined;
   load: ((target?: string) => Promise<boolean>) | undefined;
 }) {
-  const state = loading ? 'loading' : hasMore ? 'more' : 'start';
+  const scroll = useTranscriptScroll();
+  const tail = scroll?.tailPending;
+  const rowsPending = useSyncExternalStore(
+    tail?.subscribe ?? NO_SUBSCRIBE,
+    tail?.get ?? NOT_PENDING,
+    tail?.get ?? NOT_PENDING,
+  );
+  const held = useDelayedVisible(loading, { delay: 0, minVisible: LOADING_MIN_VISIBLE_MS, resetKey: chatId });
+  const box = useRef<HTMLDivElement>(null);
+  const retry = () => {
+    // The button that was pressed goes away with the state it belongs to: keep focus in the band.
+    box.current?.focus({ preventScroll: true });
+    void load?.().catch(() => undefined);
+  };
+  const state = held ? 'loading' : error ? 'error' : hasMore ? 'more' : rowsPending ? 'pending' : 'start';
   return (
     <div
+      ref={box}
+      tabIndex={-1}
       data-testid="chat-history-boundary"
       data-state={state}
-      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground"
+      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground outline-none"
       aria-live="polite"
-      aria-busy={loading}
+      aria-busy={held}
     >
-      {error && !loading ? (
-        <span role="alert" className="truncate">
-          {error}
-        </span>
-      ) : loading ? (
+      {state === 'loading' && (
         <>
-          <Spinner data-testid="chat-history-spinner" aria-label="Loading earlier messages" className="size-3.5" />
+          <Spinner data-testid="chat-history-spinner" aria-hidden role="presentation" className="size-3.5" />
           <span>Loading earlier messages</span>
         </>
-      ) : hasMore ? (
-        <Button
-          data-testid="chat-load-earlier"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            void load?.().catch(() => undefined);
-          }}
-        >
+      )}
+      {state === 'error' && (
+        <>
+          <span className="truncate">{error}</span>
+          <Button data-testid="chat-load-earlier-retry" variant="ghost" size="sm" onClick={retry}>
+            Retry
+          </Button>
+        </>
+      )}
+      {state === 'more' && (
+        <Button data-testid="chat-load-earlier" variant="ghost" size="sm" onClick={retry}>
           <ArrowUpIcon />
           Earlier messages
         </Button>
-      ) : (
-        <span>Beginning of conversation</span>
       )}
+      {state === 'start' && <span>Beginning of conversation</span>}
     </div>
   );
 }
+
+const NO_SUBSCRIBE = () => () => undefined;
+const NOT_PENDING = () => false;
 
 function useOlderPageGesture(
   load: ((target?: string) => Promise<boolean>) | undefined,

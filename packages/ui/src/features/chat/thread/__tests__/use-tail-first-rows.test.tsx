@@ -7,18 +7,24 @@ import { FIRST_ROWS, STEP_ROWS, useTailFirstRows } from '../use-tail-first-rows'
 import type { TranscriptScrollController } from '../transcript-scroll-context';
 
 const make = (count: number, from = 0) => Array.from({ length: count }, (_, i) => ({ id: `m${from + i}` }));
-const owner = (beforePrepend: () => void): TranscriptScrollController => ({
+const owner = (
+  beforePrepend: () => void,
+  extra: Partial<TranscriptScrollController> = {},
+): TranscriptScrollController => ({
   owned: true,
+  chatId: 'chat',
+  findOwner: true,
   viewportElement: { current: null },
   isFollowing: () => false,
   beginInteraction: () => () => undefined,
   beforePrepend,
+  ...extra,
 });
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
-    setTimeout(() => callback(performance.now()), 0),
+    setTimeout(() => callback(performance.now()), 16),
   );
   vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
   useFindInChatStore.setState({ isOpen: false });
@@ -28,7 +34,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const tick = () => act(() => void vi.advanceTimersByTime(5));
+const tick = () => act(() => void vi.advanceTimersByTime(17));
 
 describe('tail-first mount', () => {
   it('mounts the newest rows first, then lands the rest above in slices', () => {
@@ -103,17 +109,53 @@ describe('tail-first mount', () => {
     expect(result.current[0]!.id).toBe('m70');
   });
 
-  it('shows every row at once for a jump to a row', () => {
+  it('shows every row at once for a jump to a row of this chat, and ignores one for another chat', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, null));
-    act(() => void window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId: 'c' } })));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
+    act(() => void window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId: 'other' } })));
+    expect(result.current).toHaveLength(FIRST_ROWS);
+    act(() => void window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId: 'chat' } })));
     expect(result.current).toHaveLength(40);
   });
 
-  it('shows every row at once while Find is open', () => {
+  it('shows every row at once while Find is open in the chat that owns it', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, null));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
     act(() => useFindInChatStore.setState({ isOpen: true }));
     expect(result.current).toHaveLength(40);
+  });
+
+  it('keeps every row mounted when Find closes again (Escape), so the reader’s block does not unmount', () => {
+    const rows = make(40);
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
+    act(() => useFindInChatStore.setState({ isOpen: true }));
+    const above = result.current.map((row) => row.id);
+    act(() => useFindInChatStore.setState({ isOpen: false }));
+    tick();
+    tick();
+    expect(result.current.map((row) => row.id)).toEqual(above);
+    expect(result.current).toHaveLength(40);
+  });
+
+  it('does not reveal rows for Find in a list that does not own it', () => {
+    const rows = make(40);
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn(), { findOwner: false })));
+    act(() => useFindInChatStore.setState({ isOpen: true }));
+    expect(result.current).toHaveLength(FIRST_ROWS);
+  });
+
+  it('reports whether rows are still to land above, so the top does not claim the start too early', () => {
+    const pending = vi.fn();
+    const rows = make(40);
+    const { result } = renderHook(() =>
+      useTailFirstRows(
+        rows,
+        owner(vi.fn(), { tailPending: { get: () => false, subscribe: () => () => {}, set: pending } }),
+      ),
+    );
+    expect(pending).toHaveBeenLastCalledWith(true);
+    for (let i = 0; i < 4; i++) tick();
+    expect(result.current).toHaveLength(40);
+    expect(pending).toHaveBeenLastCalledWith(false);
   });
 });

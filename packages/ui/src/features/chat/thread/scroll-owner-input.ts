@@ -7,7 +7,8 @@ const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
 const DOWN_KEYS = new Set(['ArrowDown', 'PageDown', ' ']);
 const FIELDS = 'input, textarea, [contenteditable="true"]';
 /** A click on a disclosure (a row the reader opens) is the reader taking over: it reads what opens. */
-const DISCLOSURE = '[aria-expanded]';
+/** Only one that is closed and opens a row: collapsing a row, or a menu's trigger, is not the reader taking over. */
+const DISCLOSURE = '[aria-expanded="false"]:not([aria-haspopup])';
 
 export interface ScrollInputHandlers {
   /** The reader moved up, or opened a row: stop following. */
@@ -32,7 +33,8 @@ export function listenForScrollInput(viewport: HTMLElement, { release, down, end
   };
   const touchMove = (event: TouchEvent) => {
     const y = event.touches[0]?.clientY;
-    if (y === undefined) return;
+    // A touchmove with no vertical movement (a sideways drag, a tap's jitter) scrolls nothing.
+    if (y === undefined || y === lastY) return;
     // A finger moving up scrolls the content down.
     if (lastY !== null && y < lastY) down();
     else release();
