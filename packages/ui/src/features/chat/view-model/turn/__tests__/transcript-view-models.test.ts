@@ -141,4 +141,21 @@ describe('transcript view models', () => {
     expect(cache.model(two, 'root', inputs(kept))).toBe(model);
     shown();
   });
+
+  it('lets a late release touch only the entry it held, not one made after a dispose', () => {
+    // Every idle entry goes as soon as another is built.
+    const cache = new TranscriptViewModels({ budget: 1 });
+    const chat = {};
+    const other = {};
+    const lateRelease = cache.hold(chat, 'root');
+    cache.model(chat, 'root', inputs(window1()));
+    cache.release(chat);
+    cache.hold(chat, 'root');
+    const messages = window1();
+    const model = cache.model(chat, 'root', inputs(messages));
+    lateRelease();
+    cache.model(other, 'root', inputs(window1()));
+    // Still held by the new mount: not evicted, so the same model comes back.
+    expect(cache.model(chat, 'root', inputs(messages))).toBe(model);
+  });
 });

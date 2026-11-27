@@ -12,7 +12,9 @@
  *   rebuilds through the chat's own `TurnCache`, which keeps every turn and slice that did not change.
  * - **Invalidation.** An older page, a trim, a jump window (opening, moving or leaving it) and a
  *   change of display settings drop the cached model. An entry no view shows is dropped whole,
- *   so it never holds messages the window has let go.
+ *   so it does not hold messages those changes replaced. Anything else that changes an off-screen
+ *   chat's messages (a resync, a new turn seen by another view) leaves its entry on the old ones
+ *   until it is evicted, released or shown again, which rebuilds it.
  * - **Budget.** Entries are sized by an estimate of what they hold. Past the budget the least
  *   recently used entries go, never one a mounted view holds.
  */
@@ -24,7 +26,11 @@ import type { TurnModel, TurnScope } from './types';
 export const VIEW_MODEL_BUDGET_BYTES = 4 * 1024 * 1024;
 /**
  * Estimated heap per message (its cached units, slice and turn objects) and per part (its unit),
- * measured in V8 on ten-turn windows of prose and tool calls.
+ * measured in V8 on ten-turn windows of prose and tool calls. The estimate counts only what the
+ * cache adds: the messages and their text belong to the controller's window and are not counted,
+ * although an entry nobody shows still points at the messages of the window it was built from
+ * until it is invalidated (a window change), evicted or released. That stale snapshot is what
+ * the window watch exists to drop.
  */
 const BYTES_PER_MESSAGE = 768;
 const BYTES_PER_PART = 384;
@@ -123,13 +129,14 @@ export class TranscriptViewModels {
   /** A mounted view: its entry is not evicted, and an invalidation keeps its `TurnCache` (row identity). */
   hold(owner: object, view: string): () => void {
     const key = this.key(owner, view);
-    this.touch(key, owner).holds += 1;
+    const entry = this.touch(key, owner);
+    entry.holds += 1;
     let held = true;
     return () => {
       if (!held) return;
       held = false;
-      const entry = this.entries.get(key);
-      if (entry) entry.holds -= 1;
+      // Only the entry this hold was taken on: a released owner's view may have a new one by now.
+      if (this.entries.get(key) === entry) entry.holds -= 1;
       this.evict();
     };
   }

@@ -6,7 +6,8 @@ import { PanelColumnContext } from '@/features/session-panel/panel-control-store
 import { useUiPrefs } from '@/store/ui-prefs';
 import type { AcpChatController } from '../../../controller/acp-chat-controller';
 import type { ChatThreadState } from '../../../controller/chat-thread-state';
-import { assistant, scope, text, user } from '../../../view-model/turn/__tests__/fixtures';
+import { assistant, bash, scope, text, user } from '../../../view-model/turn/__tests__/fixtures';
+import type { TurnScope } from '../../../view-model/turn/types';
 import { releaseTranscriptViewModels, transcriptViewModels, useTranscriptTurns } from '../use-transcript-turns';
 
 /** Just what the cache reads of a controller: its window, and a way to hear it change. */
@@ -113,5 +114,40 @@ describe('the chat column keeps its turns across a switch', () => {
     const { unmount } = renderHook(() => useTranscriptTurns(tail(), ROOT, () => controller));
     expect(transcriptViewModels.size).toBe(0);
     unmount();
+  });
+});
+
+describe('the same window under another scope', () => {
+  const messages = [user('u1', 'run it'), assistant('a1', [bash('ls'), text('Listed')])];
+  function mountScoped(controller: AcpChatController, initial: TurnScope) {
+    return renderHook(({ scoped }) => useTranscriptTurns(messages, scoped, () => controller), {
+      initialProps: { scoped: initial },
+      wrapper: column,
+    });
+  }
+
+  it.each([
+    ['a pending permission', { pendingToolIds: new Set(['ls-call']) }],
+    ['the run it began after', { runAfter: 'u1' }],
+    ['whether its work can still be going', { live: false }],
+    ['whether the chat runs', { isRunning: true }],
+  ] as const)('rebuilds for %s', (_, change) => {
+    const { controller } = fakeController('u1');
+    const view = mountScoped(controller, ROOT);
+    const model = view.result.current;
+    view.rerender({ scoped: { ...ROOT, ...change } });
+    expect(view.result.current).not.toBe(model);
+    view.unmount();
+    releaseTranscriptViewModels(controller);
+  });
+
+  it('reuses the model for the same pending set in another order', () => {
+    const { controller } = fakeController('u1');
+    const view = mountScoped(controller, { ...ROOT, pendingToolIds: new Set(['b', 'a']) });
+    const model = view.result.current;
+    view.rerender({ scoped: { ...ROOT, pendingToolIds: new Set(['a', 'b']) } });
+    expect(view.result.current).toBe(model);
+    view.unmount();
+    releaseTranscriptViewModels(controller);
   });
 });

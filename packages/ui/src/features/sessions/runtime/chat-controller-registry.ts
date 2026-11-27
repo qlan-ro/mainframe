@@ -46,6 +46,7 @@ class ChatControllerRegistry {
   adopt(controller: AcpChatController, remoteId: string): void {
     const stale = this.controllers.get(remoteId);
     if (stale && stale !== controller) {
+      releaseTranscriptViewModels(stale);
       stale.dispose();
       this.controllers.delete(remoteId);
     }
