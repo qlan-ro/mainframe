@@ -26,6 +26,9 @@ pub struct PageOptions {
     pub previews: bool,
     pub compressed: bool,
     pub lazy_tool_images: bool,
+    /// Send the compressed batches as binary frames (`batch_frames`) rather
+    /// than base64 `batches`; takes precedence over `compressed`.
+    pub binary: bool,
 }
 
 /// Serve a page from the chat's list in place. `inspect` sees the same
@@ -185,7 +188,10 @@ pub(crate) fn render(
             }
         }
     }
-    if options.compressed {
+    if options.binary {
+        page.result.frames = crate::replay_batch::replay_batch_frames(session_id, &updates);
+        page.result.batch_frames = Some(page.result.frames.len());
+    } else if options.compressed {
         page.result.batches = Some(batch_params(session_id, &updates));
     } else {
         page.result.updates = Some(updates);
@@ -277,6 +283,58 @@ mod tests {
     }
 
     #[test]
+    fn binary_pages_carry_the_same_updates_as_compressed_batches() {
+        let messages: Vec<DisplayMessage> = (0..300)
+            .map(|index| {
+                serde_json::from_value(json!({"id":format!("m{index}"),"chatId":"chat",
+                    "type":"user","timestamp":"now","content":[{"type":"text","text":format!("t{index}")}]}))
+                .unwrap()
+            })
+            .collect();
+        let params = HistoryPageParams {
+            session_id: "chat".into(),
+            before: "message:299:top:m299".into(),
+            containers: Some(200),
+            items: None,
+            until_item_id: None,
+        };
+        let compressed = prepare(
+            &messages,
+            &params,
+            PageOptions {
+                compressed: true,
+                ..Default::default()
+            },
+        );
+        let binary = prepare(
+            &messages,
+            &params,
+            PageOptions {
+                compressed: true,
+                binary: true,
+                ..Default::default()
+            },
+        );
+        assert!(binary.result.batches.is_none() && binary.result.updates.is_none());
+        let frames = &binary.result.frames;
+        assert_eq!(binary.result.batch_frames, Some(frames.len()));
+        assert!(!frames.is_empty());
+        let mut updates = Vec::<Value>::new();
+        for frame in frames {
+            let mut text = String::new();
+            flate2::read::ZlibDecoder::new(frame.bytes.as_slice())
+                .read_to_string(&mut text)
+                .unwrap();
+            let batch: Vec<Value> = serde_json::from_str(&text).unwrap();
+            assert_eq!(batch.len(), frame.count);
+            updates.extend(batch);
+        }
+        assert_eq!(Value::Array(updates), decode(compressed.result));
+        let wire = serde_json::to_value(&binary.result).unwrap();
+        assert!(wire.get("frames").is_none() && wire["batchFrames"] == frames.len());
+    }
+
+    #[test]
     fn subagent_pages_preview_old_results_and_reference_images_in_the_child() {
         let long = "x".repeat(4 * replay_previews::PREVIEW_BYTES);
         let mut messages: Vec<DisplayMessage> =
@@ -306,6 +364,7 @@ mod tests {
             previews: true,
             lazy_tool_images: true,
             compressed: true,
+            ..Default::default()
         };
         let updates = decode(subagent_page(&messages, request, options));
         let tool = updates

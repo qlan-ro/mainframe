@@ -20,11 +20,12 @@ use crate::rpc;
 use crate::session_state::SessionState;
 
 pub mod persisted;
+mod seed_copy;
+pub use seed_copy::SeedCopy;
 mod revision;
 mod windowed;
 
 pub use mainframe_types::BoxFuture;
-
 /// The cursor `ResumeSessionRequest.replayFrom` carries — an opaque `Value` on
 /// the vendored wire type, so the scheme is defined here. `Start` always
 /// full-replays; `Item` resumes after the named stable item; `Revision` names a
@@ -74,6 +75,8 @@ pub struct ResumeReplay {
     /// connection opted in. The caller seeds its live diff state with the same
     /// set so later revisions of those items stay trimmed on this connection.
     pub preview_ids: HashSet<String>,
+    /// The reply's own transcript, when the log was left unseeded (`seed_copy.rs`).
+    pub seed_copy: Option<SeedCopy>,
 }
 
 /// Per-connection choices a `session/resume` honors.
@@ -84,6 +87,9 @@ pub struct ResumeOptions {
     /// [`replay_previews::FULL_RESULT_CONTAINERS`] containers as previews.
     pub result_previews: bool,
     pub windowed_history: bool,
+    /// A windowed first replay skips seeding the revision log and hands back a
+    /// `SeedCopy`; a revision-cursor resume still seeds, its plan reads the log.
+    pub defer_log_seed: bool,
 }
 
 pub async fn dispatch_resume(
@@ -151,6 +157,7 @@ pub async fn dispatch_resume_with(
             items,
             containers,
             preview_ids,
+            seed_copy: None,
         },
     )
 }
@@ -172,6 +179,7 @@ fn empty_replay() -> ResumeReplay {
         items: Vec::new(),
         containers: Vec::new(),
         preview_ids: HashSet::new(),
+        seed_copy: None,
     }
 }
 

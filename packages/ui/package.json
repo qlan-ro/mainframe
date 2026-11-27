@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p benchmarks/transcript-list/tsconfig.json",
+    "lint": "eslint src benchmarks/transcript-list",
     "test": "vitest run",
     "test:chips": "MF_TEST_CHIP_COMPOSER=1 vitest run src/features/chat/composer src/components/trigger-engine",
     "test:watch": "vitest",
@@ -89,7 +89,9 @@
   "devDependencies": {
     "@assistant-ui/core": "0.3.38",
     "@babel/core": "^8.1.2",
+    "@legendapp/list": "3.7.2",
     "@rolldown/plugin-babel": "^0.3.1",
+    "@shadcn/react": "0.3.1",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.12",

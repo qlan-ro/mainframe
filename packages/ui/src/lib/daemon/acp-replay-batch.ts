@@ -41,14 +41,23 @@ export function decodeReplayBatch(params: ReplayBatchParams): SessionUpdate[] | 
     console.warn('[acp-client] dropped a replay batch that did not decode to an array');
     return undefined;
   }
+  return validateBatchUpdates(raw, params.count);
+}
+
+/**
+ * Checks each entry against the tagged `SessionUpdateSchema`, dropping (and
+ * logging) the malformed ones; the caller compares the length with `count`.
+ * Shared by the base64 batches and the binary frames, so both reject the same input.
+ */
+export function validateBatchUpdates(raw: unknown[], count: number): SessionUpdate[] {
   const updates: SessionUpdate[] = [];
   for (const entry of raw) {
     const parsed = SessionUpdateSchema.safeParse(entry);
     if (parsed.success) updates.push(parsed.data);
     else console.warn('[acp-client] dropped a malformed update inside a replay batch', entry);
   }
-  if (updates.length !== params.count) {
-    console.warn(`[acp-client] replay batch carried ${updates.length} usable updates, expected ${params.count}`);
+  if (updates.length !== count) {
+    console.warn(`[acp-client] replay batch carried ${updates.length} usable updates, expected ${count}`);
   }
   return updates;
 }

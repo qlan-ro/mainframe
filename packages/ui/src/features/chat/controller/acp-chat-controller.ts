@@ -205,6 +205,10 @@ export class AcpChatController {
   public setActive(active: boolean): void {
     this.activation.setActive(active);
   }
+  /** Another view (the main thread, a workspace tab, a task row) still has this chat attached or subscribed. */
+  public isInUse(): boolean {
+    return this.activation.isActive || this.liveSub.isSubscribed;
+  }
   public holdActive(): () => void {
     return this.activation.hold();
   }

@@ -41,6 +41,7 @@ async fn window(
         ResumeOptions {
             windowed_history: true,
             result_previews: true,
+            ..Default::default()
         },
     )
     .await

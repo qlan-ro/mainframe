@@ -1,3 +1,4 @@
+import { handOverBootPrewarm } from './boot-chat-prewarm';
 import type { AcpChatController } from '../../chat/controller/acp-chat-controller';
 
 type Controller = Pick<AcpChatController, 'hasRemoteId' | 'subscribeLive' | 'holdActive'>;
@@ -32,6 +33,8 @@ export function subscribeSelectedChat(source: ThreadSource, find: (id: string) =
     previousRelease?.();
     if (!next || version !== generation) return;
     const stop = holdController(next);
+    // The boot guess (if it was this chat) steps aside only after the selection holds the chat.
+    handOverBootPrewarm(next);
     if (version !== generation) stop();
     else release = stop;
   };

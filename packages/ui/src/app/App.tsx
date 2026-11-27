@@ -26,6 +26,7 @@ import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
 import { AppShell } from './AppShell';
+import { reseedOnReconnect } from './reseed-on-reconnect';
 import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
 import { OverlayScrollbars } from './OverlayScrollbars';
@@ -72,16 +73,16 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   // Transparent reconnect (same-port daemon restart): reseed off the WS reconnect signal —
   // the exact analogue of desktop's loadData-on-subscribeConnection. The [activePort] effect
   // ALONE misses this because useConnectionState's port is set once and never reset on
-  // disconnect, and disposeDaemonSession only runs on a user-initiated switch.
+  // disconnect, and disposeDaemonSession only runs on a user-initiated switch. The boot
+  // connect is not a reconnect (see reseedOnReconnect): the effect above already seeded.
   useEffect(
     () =>
-      daemonWs.subscribeConnection(() => {
-        if (daemonWs.connected && activePort > 0) {
-          seedAdaptersFor(activePort);
-          seedQuota(activePort);
-          seedProviderCliStatusesFor(activePort);
-          seedPortTunnels(activePort);
-        }
+      reseedOnReconnect(daemonWs, () => {
+        if (activePort <= 0) return;
+        seedAdaptersFor(activePort);
+        seedQuota(activePort);
+        seedProviderCliStatusesFor(activePort);
+        seedPortTunnels(activePort);
       }),
     [activePort],
   );

@@ -1,5 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { subscribeSelectedChat } from '../selected-chat-activation';
+import { chatControllerRegistry } from '../chat-controller-registry';
+import { resetBootPrewarm, startBootChatPrewarm } from '../boot-chat-prewarm';
 
 function fixture() {
   let mainThreadId = 'first';
@@ -109,4 +111,35 @@ it('releases both controllers when selection changes during acquisition', () => 
     'first:unsubscribe',
     'second:unsubscribe',
   ]);
+});
+
+it('releases the boot guess only after the selection holds the same chat', () => {
+  const state = fixture();
+  const order: string[] = [];
+  const first = controller('first', order);
+  const spy = vi.spyOn(chatControllerRegistry, 'getOrCreate').mockReturnValue(first as never);
+  startBootChatPrewarm(1, 'first');
+  expect(order).toEqual(['first:subscribe', 'first:hold']);
+  order.length = 0;
+  const stop = subscribeSelectedChat(state.source, () => first);
+  // Two acquisitions: the selection's own, then the guess steps aside.
+  expect(order).toEqual(['first:subscribe', 'first:hold', 'first:unsubscribe', 'first:release']);
+  stop();
+  spy.mockRestore();
+  resetBootPrewarm();
+});
+
+it('leaves the boot guess alone while a different chat is selected', () => {
+  const state = fixture();
+  const order: string[] = [];
+  const guessed = controller('guessed', order);
+  const other = controller('other', order);
+  const spy = vi.spyOn(chatControllerRegistry, 'getOrCreate').mockReturnValue(guessed as never);
+  startBootChatPrewarm(1, 'guessed');
+  order.length = 0;
+  const stop = subscribeSelectedChat(state.source, () => other);
+  expect(order).toEqual(['other:subscribe', 'other:hold']);
+  stop();
+  spy.mockRestore();
+  resetBootPrewarm();
 });

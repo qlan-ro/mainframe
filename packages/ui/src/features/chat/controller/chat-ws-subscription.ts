@@ -30,6 +30,12 @@ export class ChatWsSubscription {
   private unsubscribeFromWs: (() => void) | null = null;
   private unsubscribeFromConn: (() => void) | null = null;
   private warm: Promise<void> = Promise.resolve();
+  /** The last warm-up request failed, so the next open of the socket asks again. */
+  private warmFailed = false;
+  /** The failed warm-up was already retried on an open socket. */
+  private retried = false;
+  /** The socket was seen down since the last subscribe. */
+  private sawDrop = false;
 
   constructor(private readonly host: ChatWsHost) {}
 
@@ -54,9 +60,16 @@ export class ChatWsSubscription {
 
     this.subscribeAndWarm();
 
+    // A subscription made before the socket first opens needs nothing on that open: its frame is
+    // buffered until then and the warm-up request has already gone out (boot attaches the
+    // remembered chat that way). Subscribe again only after a drop, or if the warm-up failed.
     this.unsubscribeFromConn = ws.subscribeConnection(() => {
-      if (this.host.isDisposed() || !ws.connected) return;
-      this.subscribeAndWarm();
+      if (this.host.isDisposed()) return;
+      if (!ws.connected) {
+        this.sawDrop = true;
+        return;
+      }
+      if (this.sawDrop || this.warmFailed) this.subscribeAndWarm();
     });
   }
 
@@ -69,9 +82,27 @@ export class ChatWsSubscription {
   }
 
   private subscribeAndWarm(): void {
+    this.sawDrop = false;
+    this.retried = false;
     this.host.ws.subscribe(this.host.chatId);
+    this.warmUp();
+  }
+
+  /**
+   * The history request. One that fails after the socket is already open has no later open to
+   * retry on, so it is retried once here; one that fails before it retries on the first open.
+   */
+  private warmUp(): void {
+    this.warmFailed = false;
     this.warm = resumeChat(this.host.port, this.host.chatId, { waitFor: 'transcript', initialWindow: true }).catch(
-      (err: unknown) => console.warn('[chat-ws] resumeChat failed', err),
+      (err: unknown) => {
+        this.warmFailed = true;
+        console.warn('[chat-ws] resumeChat failed', err);
+        if (this.host.ws.connected && !this.retried && !this.host.isDisposed()) {
+          this.retried = true;
+          this.warmUp();
+        }
+      },
     );
   }
 }

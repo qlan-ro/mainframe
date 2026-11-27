@@ -70,7 +70,9 @@ impl FacadeHub {
         }
         let catch_up = drain_into(&mut stream, buffered, connection, None);
         sessions.insert(chat_id.to_string(), SessionSlot::Live(stream));
-        connection.send_json(&rpc::success_response(id, serde_json::json!(page.result)));
+        let mut result = page.result;
+        let frames = std::mem::take(&mut result.frames);
+        connection.send_result(id, serde_json::json!(result), frames);
         for frame in catch_up {
             connection.send_throttled(chat_id, frame);
         }

@@ -112,22 +112,29 @@ export const UsageUpdateSchema = z
 export type UsageUpdate = z.infer<typeof UsageUpdateSchema>;
 
 /**
- * Tagged on `sessionUpdate`. A plain `z.union` rather than
- * `z.discriminatedUnion`: three options here (the `state_update` family)
- * share the `state_update` discriminator value and are told apart by the
- * nested `state` tag instead, which a single-level discriminated union can't
- * express.
+ * The `state_update` family: three shapes behind one `sessionUpdate` value,
+ * told apart by the nested `state` tag.
  */
-export const SessionUpdateSchema = z.union([
+const StateUpdateSchema = z.discriminatedUnion('state', [
+  StateRunningSchema.extend({ sessionUpdate: z.literal('state_update') }),
+  StateIdleSchema.extend({ sessionUpdate: z.literal('state_update') }),
+  StateRequiresActionSchema.extend({ sessionUpdate: z.literal('state_update') }),
+]);
+
+/**
+ * A tagged union on `sessionUpdate` (nested on `state` for `state_update`):
+ * validation looks the tag up and checks that one shape, instead of trying
+ * the twelve alternatives of a plain `z.union` in turn for every update. The
+ * accepted set is the same, and an unknown or missing tag is rejected.
+ */
+export const SessionUpdateSchema = z.discriminatedUnion('sessionUpdate', [
   ContentChunkSchema.extend({ sessionUpdate: z.literal('user_message_chunk') }),
   MessageUpsertSchema.extend({ sessionUpdate: z.literal('user_message') }),
   ContentChunkSchema.extend({ sessionUpdate: z.literal('agent_message_chunk') }),
   MessageUpsertSchema.extend({ sessionUpdate: z.literal('agent_message') }),
   ContentChunkSchema.extend({ sessionUpdate: z.literal('agent_thought_chunk') }),
   MessageUpsertSchema.extend({ sessionUpdate: z.literal('agent_thought') }),
-  StateRunningSchema.extend({ sessionUpdate: z.literal('state_update') }),
-  StateIdleSchema.extend({ sessionUpdate: z.literal('state_update') }),
-  StateRequiresActionSchema.extend({ sessionUpdate: z.literal('state_update') }),
+  StateUpdateSchema,
   ToolCallContentChunkSchema.extend({ sessionUpdate: z.literal('tool_call_content_chunk') }),
   ToolCallUpdateSchema.extend({ sessionUpdate: z.literal('tool_call_update') }),
   UsageUpdateSchema.extend({ sessionUpdate: z.literal('usage_update') }),

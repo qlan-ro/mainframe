@@ -1,0 +1,497 @@
+{
+ "engines": "chromium",
+ "synthetic": false,
+ "load": [
+  16.40966796875,
+  12.9404296875,
+  10.70556640625
+ ],
+ "results": [
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 312.2,
+    "firstVisibleMs": 312.2,
+    "mountMs": 312.2,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 293.1,
+    "firstVisibleMs": 293.1,
+    "mountMs": 293.1,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 275.8,
+    "firstVisibleMs": 275.8,
+    "mountMs": 275.8,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 276,
+    "firstVisibleMs": 276,
+    "mountMs": 276,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 282.9,
+    "firstVisibleMs": 282.9,
+    "mountMs": 282.9,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 287.9,
+    "firstVisibleMs": 287.9,
+    "mountMs": 287.9,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 40
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 292,
+    "firstVisibleMs": 292,
+    "mountMs": 292,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 40
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 313.4,
+    "firstVisibleMs": 313.4,
+    "mountMs": 313.4,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 30
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 337.2,
+    "firstVisibleMs": 337.2,
+    "mountMs": 337.2,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": false,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 40
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 304.7,
+    "firstVisibleMs": 304.7,
+    "mountMs": 304.7,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 66
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 317.6,
+    "firstVisibleMs": 317.6,
+    "mountMs": 317.6,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "dy": -120,
+    "stayedReleased": false,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 36
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 291.1,
+    "firstVisibleMs": 291.1,
+    "mountMs": 291.1,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 310.6,
+    "firstVisibleMs": 310.6,
+    "mountMs": 310.6,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 313.2,
+    "firstVisibleMs": 313.2,
+    "mountMs": 313.2,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 2,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 324.4,
+    "firstVisibleMs": 324.4,
+    "mountMs": 324.4,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 3,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 322.5,
+    "firstVisibleMs": 322.5,
+    "mountMs": 322.5,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 4,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 294.6,
+    "firstVisibleMs": 294.6,
+    "mountMs": 294.6,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "chromium",
+   "case": "P4-wheel-up",
+   "rep": 5,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 283.5,
+    "firstVisibleMs": 283.5,
+    "mountMs": 283.5,
+    "firstFrameScrollTop": 68324,
+    "firstFrameGap": 0
+   }
+  }
+ ]
+}

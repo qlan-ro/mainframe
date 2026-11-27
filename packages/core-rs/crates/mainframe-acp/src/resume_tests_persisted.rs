@@ -13,6 +13,7 @@ async fn prepared(port: &FakePort, containers: usize) -> (JsonRpcResponse, Resum
         ResumeOptions {
             result_previews: true,
             windowed_history: true,
+            ..Default::default()
         },
     )
     .await

@@ -44,7 +44,7 @@ Dependencies added, exact: `@assistant-ui/react-lexical` 0.2.25 and `lexical`, `
 
 ## 3. How it was measured
 
-`packages/ui/benchmarks/lexical-chips/` is a Vite fixture with a Playwright runner, in the same pattern as `benchmarks/transcript-scroll`. It mounts the real trigger engine, formatters, popover, chip field and plugins over a synthetic external-store runtime with an image attachment adapter. There is no daemon and no provider. `?textarea` mounts `ComposerPrimitive.Input` with the same engine, for a before/after comparison.
+`packages/ui/benchmarks/lexical-chips/` is a Vite fixture with a Playwright runner, in the same pattern as the transcript list rig (`benchmarks/transcript-list`). It mounts the real trigger engine, formatters, popover, chip field and plugins over a synthetic external-store runtime with an image attachment adapter. There is no daemon and no provider. `?textarea` mounts `ComposerPrimitive.Input` with the same engine, for a before/after comparison.
 
 ```sh
 node packages/ui/benchmarks/lexical-chips/run.mjs              # WebKit, Lexical field

@@ -48,6 +48,14 @@ pub struct HistoryPageResult {
     pub updates: Option<Vec<SessionUpdate>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batches: Option<Vec<ReplayBatchParams>>,
+    /// How many binary frames carry this result's updates, for a connection
+    /// that opted into binary history frames. Present instead of `updates` and
+    /// `batches`; `0` means the page has no updates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_frames: Option<usize>,
+    /// The frames behind `batch_frames`, in order; never part of the JSON.
+    #[serde(skip)]
+    pub frames: Vec<super::BatchFrame>,
     #[serde(flatten)]
     pub history: HistoryState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -80,6 +88,12 @@ pub struct HistoryAroundResult {
     pub updates: Option<Vec<SessionUpdate>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batches: Option<Vec<ReplayBatchParams>>,
+    /// Binary frame count, as on [`HistoryPageResult::batch_frames`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_frames: Option<usize>,
+    /// The frames behind `batch_frames`; never part of the JSON.
+    #[serde(skip)]
+    pub frames: Vec<super::BatchFrame>,
     /// Whether the transcript holds items before `firstItemId`.
     pub has_before: bool,
     /// Whether the transcript holds items after `lastItemId`.
