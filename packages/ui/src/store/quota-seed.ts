@@ -1,6 +1,6 @@
 import { getQuota } from '@/lib/api/quota';
 import { QUOTA_PROVIDERS } from '@/features/quota/quota-format';
-import { applyProviderQuota } from './quota';
+import { applyProviderQuota, markQuotaSeeded } from './quota';
 
 let seedGeneration = 0;
 
@@ -13,11 +13,16 @@ let seedGeneration = 0;
  */
 export function seedQuota(port: number): void {
   const gen = ++seedGeneration;
-  for (const { id } of QUOTA_PROVIDERS) {
+  const answers = QUOTA_PROVIDERS.map(({ id }) =>
     getQuota(id, port)
       .then((quota) => {
         if (gen === seedGeneration && quota) applyProviderQuota(id, quota);
       })
-      .catch((err: unknown) => console.warn(`[store/quota] seed failed for ${id}`, err));
-  }
+      .catch((err: unknown) => console.warn(`[store/quota] seed failed for ${id}`, err)),
+  );
+  // Seeded once every provider has answered, whatever the answer: only then does an empty
+  // store mean "unknown" rather than "not asked yet".
+  void Promise.all(answers).then(() => {
+    if (gen === seedGeneration) markQuotaSeeded();
+  });
 }

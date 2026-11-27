@@ -17,9 +17,15 @@ import { daemonWs } from '@/lib/daemon/ws-client';
 
 interface QuotaState {
   byId: Record<string, ProviderQuota>;
+  /**
+   * Whether the first seed of this connection has answered for every provider
+   * (a quota, none known, or a failure). Until then an empty `byId` means "not
+   * asked yet", not "unknown": the capsule draws nothing instead of saying so.
+   */
+  seeded: boolean;
 }
 
-export const useQuotaStore = create<QuotaState>(() => ({ byId: {} }));
+export const useQuotaStore = create<QuotaState>(() => ({ byId: {}, seeded: false }));
 
 /** The latest known quota for a provider, or `undefined` when none is known. */
 export function useProviderQuota(adapterId: string): ProviderQuota | undefined {
@@ -37,7 +43,12 @@ export function applyProviderQuota(adapterId: string, quota: ProviderQuota): voi
 
 /** Hard clear — reserved for a genuine daemon SWITCH (disposeDaemonSession). */
 export function resetQuota(): void {
-  useQuotaStore.setState({ byId: {} });
+  useQuotaStore.setState({ byId: {}, seeded: false });
+}
+
+/** The seed has answered for every provider; "quota unknown" is now a fact. */
+export function markQuotaSeeded(): void {
+  useQuotaStore.setState((s) => (s.seeded ? s : { seeded: true }));
 }
 
 /** Register the single always-on `provider.quota.updated` subscriber. Mount once at the app root. */

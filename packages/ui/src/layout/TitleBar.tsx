@@ -25,6 +25,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { USAGE_CAPSULE_WIDTH, UsageCapsule } from '@/features/quota/UsageCapsule';
 import { SessionTabs } from '@/features/session-tabs/SessionTabs';
 import { cn } from '@/lib/utils';
+import { useBootRestoring } from '@/features/sessions/runtime/boot-restore';
 import { isSurfaceLit, useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useColumnEdges } from './column-edges';
@@ -102,9 +103,16 @@ export function TitleBar() {
   // chat actions belong to the chat surface.
   const chats = useUiPrefs((s) => s.sidebarView) === 'chats';
   const workspaceLit = useLayoutStore((s) => isSurfaceLit(s.layout, 'workspace'));
+  // Until the last chat is back the tabs and the chat actions would show a layout built for a draft.
+  const restoring = useBootRestoring();
 
   return (
-    <div data-testid="title-bar" data-drag-region className="flex h-12 shrink-0 items-center bg-sidebar">
+    <div
+      data-testid="title-bar"
+      data-drag-region
+      data-boot-restoring={restoring ? '' : undefined}
+      className={cn('flex h-12 shrink-0 items-center bg-sidebar', restoring && '[&_[data-boot-held]]:invisible')}
+    >
       <SidebarSegment open={open} separator={chats} />
 
       {/* No padding of its own: it would hold 4px when the columns leave this segment none. */}
@@ -124,20 +132,26 @@ export function TitleBar() {
               </Button>
             </Hint>
           )}
-          {chats && <SessionTabs />}
+          {chats && (
+            <div data-boot-held className="contents">
+              <SessionTabs />
+            </div>
+          )}
         </div>
       </div>
 
       {chats && (
         <TrailingSegment workspaceLit={workspaceLit}>
-          {workspaceLit && (
-            <>
-              <TitleBarSeparator testId="title-bar-separator-workspace" />
-              <TitleBarWorkspace />
-              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[23rem]/trailing:mx-1" />
-            </>
-          )}
-          <TitleBarActions />
+          <div data-boot-held className="contents">
+            {workspaceLit && (
+              <>
+                <TitleBarSeparator testId="title-bar-separator-workspace" />
+                <TitleBarWorkspace />
+                <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[23rem]/trailing:mx-1" />
+              </>
+            )}
+            <TitleBarActions />
+          </div>
         </TrailingSegment>
       )}
     </div>

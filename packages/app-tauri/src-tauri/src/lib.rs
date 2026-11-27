@@ -154,6 +154,15 @@ pub fn run() {
                 .build()
                 .expect("failed to create main window");
 
+            // The config colour is the light ground (`--sidebar`, `#f5f5f8`). On a dark system
+            // the window takes the dark ground (`#262626`) before it is shown, so neither theme
+            // starts with a white or mismatched frame. The page repaints both from its own CSS.
+            if matches!(main_window.theme(), Ok(tauri::Theme::Dark)) {
+                if let Err(e) = main_window.set_background_color(Some(tauri::window::Color(38, 38, 38, 255))) {
+                    tracing::warn!(err = %e, "failed to set dark window background");
+                }
+            }
+
             // Manually created windows are not auto-restored by the plugin —
             // reapply the saved geometry explicitly (no-op on first launch).
             {

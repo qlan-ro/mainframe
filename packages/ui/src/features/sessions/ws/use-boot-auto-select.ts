@@ -12,12 +12,15 @@
  * switching then reads as abandoning the draft and destroys the new chat.
  *
  * Boot also attaches the remembered chat before this runs (`boot-chat-prewarm`).
- * Whatever this decides, the prewarm is told so it can keep or drop its guess.
+ * Whatever this decides, the prewarm is told so it can keep or drop its guess,
+ * and so is the boot hold (`boot-restore`), which keeps the shell's session
+ * surfaces unpainted until the chosen chat's history is in.
  */
 import { useEffect, useRef } from 'react';
 import type { useAui } from '@assistant-ui/react';
 import { useLastSessionStore } from '../../../store/last-session';
 import { settleBootPrewarm } from '../runtime/boot-chat-prewarm';
+import { decideBootRestore } from '../runtime/boot-restore';
 import { useSessionListLoadState } from '../runtime/list-load-state';
 import { isCreateInFlight } from '../runtime/new-thread-coordinator';
 import { isCarriedDraft } from '../new-thread/draft-carry';
@@ -55,11 +58,13 @@ export function useBootAutoSelect(
       (mainThreadId != null && isCreateInFlight(mainThreadId))
     ) {
       settleBootPrewarm(opened(mainThreadId), listedChatIds(items));
+      decideBootRestore(opened(mainThreadId));
       return;
     }
 
     const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
     settleBootPrewarm(opened(target), listedChatIds(items));
+    decideBootRestore(opened(target));
     if (target != null && target !== mainThreadId) {
       threads.switchToThread(target);
     }
@@ -73,6 +78,8 @@ export function useBootAutoSelect(
   const listFailed = useSessionListLoadState((s) => s.failed);
   useEffect(() => {
     if (listLoading || items.length > 0) return;
-    if (listLoaded || listFailed) settleBootPrewarm(null, new Set());
+    if (!listLoaded && !listFailed) return;
+    settleBootPrewarm(null, new Set());
+    decideBootRestore(null);
   }, [listLoading, listLoaded, listFailed, items.length]);
 }

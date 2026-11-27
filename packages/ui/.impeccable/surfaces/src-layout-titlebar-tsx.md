@@ -31,5 +31,8 @@ Opening the workspace adds a third segment whose separator lands exactly on the 
 
 The usage capsule is capped at 224 px and shrinks with a narrow sidebar. The open-sidebar segment no longer adds fixed right padding before its separator. Separators use the stronger hairline.
 
+## Boot
+The first frame is the ground (`sidebar` token, `#f5f5f8` light, `#262626` dark): the window's `backgroundColor`, the `index.html` background and the stored theme (`public/boot-theme.js`) all agree, so nothing paints white. The "Starting up" card is part of the wait only after 200 ms and stays at least 300 ms once shown. Once the shell is up it holds one stable frame: the rail, the empty content card and the title bar with an empty usage capsule. The session tabs, the Chat / Workspace actions and everything inside the card are mounted but not painted until the remembered chat's first history window is in and its transcript has stopped moving, or 2.5 s have passed (`features/sessions/runtime/boot-restore.ts`). The New Session welcome, a "New Session" tab, "No sessions yet" and "quota unknown" are never shown as a guess; the welcome appears only once the list says there is nothing to restore. The capsule reads "quota unknown" only after the first quota seed has answered.
+
 ## Unresolved
 None.

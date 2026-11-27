@@ -105,6 +105,7 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
   const ticking = useNow();
   const effectiveNow = now ?? ticking;
   const byId = useQuotaStore((s) => s.byId);
+  const seeded = useQuotaStore((s) => s.seeded);
   const items = useMemo(() => deriveCapsuleItems(byId, effectiveNow), [byId, effectiveNow]);
   const pinnedIndex = pinnedCapsuleIndex(items);
 
@@ -127,7 +128,7 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
           type="button"
           data-testid="usage-capsule"
           data-pinned={pinnedIndex == null ? undefined : ''}
-          aria-label={capsuleAriaLabel(items[shown], effectiveNow)}
+          aria-label={seeded || items.length > 0 ? capsuleAriaLabel(items[shown], effectiveNow) : 'Usage: loading'}
           aria-haspopup="dialog"
           aria-expanded={hover.open}
           onClick={hover.togglePin}
@@ -142,7 +143,10 @@ export function UsageCapsule({ now, width = USAGE_CAPSULE_WIDTH }: { now?: numbe
         >
           <span className="block h-5 min-w-0 flex-1 overflow-hidden">
             {items.length === 0 ? (
-              <span className="flex h-5 items-center text-xs text-muted-foreground italic">quota unknown</span>
+              // Before the first seed answers nothing is known to be unknown: draw the empty chip.
+              seeded && (
+                <span className="flex h-5 items-center text-xs text-muted-foreground italic">quota unknown</span>
+              )
             ) : (
               <span
                 className="flex flex-col transition-transform duration-320 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
