@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useUiPrefs } from '@/store/ui-prefs';
+import { beginBootRestore, decideBootRestore, resetBootRestore } from '@/features/sessions/runtime/boot-restore';
 import { useSessionPanelState } from '../use-session-panel-state';
 import { installPanelHarness, renderPanelState, setWidth, type PanelHarness } from './panel-state-harness';
 
@@ -19,6 +20,7 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+  resetBootRestore();
 });
 
 describe('useSessionPanelState — mode', () => {
@@ -122,6 +124,33 @@ describe('useSessionPanelState — panel open state (D8: one bit for the whole p
     act(() => useUiPrefs.setState({ sessionPanelOpen: false }));
     const { result } = renderPanelState();
     setWidth(1600);
+    expect(result.current.isPanelOpen()).toBe(true);
+  });
+
+  // The column is first measured in a layout built for a draft, wide enough for the panel; the
+  // restored chat's own layout (a side chat beside it) then takes the room back. Opening on the
+  // first verdict showed the panel for a moment and closed it again.
+  it('does not read the room until the boot restore has decided: the first width is a draft’s', () => {
+    act(() => useUiPrefs.setState({ sessionPanelOpen: false }));
+    beginBootRestore();
+    const { result } = renderPanelState();
+    setWidth(1600);
+    expect(result.current.isPanelOpen()).toBe(false);
+
+    // The restored layout is narrow: the verdict is taken on that, and nothing opens.
+    setWidth(700);
+    act(() => decideBootRestore(null));
+    expect(result.current.isPanelOpen()).toBe(false);
+    expect(result.current.isPanelVisible()).toBe(false);
+  });
+
+  it('opens on the restored layout’s width when it has room, as the hold ends', () => {
+    act(() => useUiPrefs.setState({ sessionPanelOpen: false }));
+    beginBootRestore();
+    const { result } = renderPanelState();
+    setWidth(1600);
+    expect(result.current.isPanelOpen()).toBe(false);
+    act(() => decideBootRestore(null));
     expect(result.current.isPanelOpen()).toBe(true);
   });
 

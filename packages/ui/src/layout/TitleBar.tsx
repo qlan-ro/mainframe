@@ -78,7 +78,16 @@ function SidebarSegment({ open, separator }: { open: boolean; separator: boolean
  * Children arrive as elements so an edge moving under a drag re-renders this
  * frame and nothing inside it.
  */
-function TrailingSegment({ workspaceLit, children }: { workspaceLit: boolean; children: ReactNode }) {
+function TrailingSegment({
+  workspaceLit,
+  hidden,
+  children,
+}: {
+  workspaceLit: boolean;
+  /** Mounted and laid out, not painted: the boot hold. */
+  hidden: boolean;
+  children: ReactNode;
+}) {
   const edge = useColumnEdges((s) => s.workspace);
   const aligned = workspaceLit && edge != null;
   return (
@@ -86,6 +95,7 @@ function TrailingSegment({ workspaceLit, children }: { workspaceLit: boolean; ch
       data-testid="title-bar-trailing"
       className={cn(
         'flex h-full items-center pr-3',
+        hidden && 'invisible',
         // Over a narrow panel the gaps inside tighten, so the tabs get the room.
         aligned && '@container/trailing',
         aligned || !workspaceLit ? 'shrink-0' : 'max-w-1/2 min-w-0 flex-initial',
@@ -141,17 +151,15 @@ export function TitleBar() {
       </div>
 
       {chats && (
-        <TrailingSegment workspaceLit={workspaceLit}>
-          <div data-boot-held className="contents">
-            {workspaceLit && (
-              <>
-                <TitleBarSeparator testId="title-bar-separator-workspace" />
-                <TitleBarWorkspace />
-                <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[23rem]/trailing:mx-1" />
-              </>
-            )}
-            <TitleBarActions />
-          </div>
+        <TrailingSegment workspaceLit={workspaceLit} hidden={restoring}>
+          {workspaceLit && (
+            <>
+              <TitleBarSeparator testId="title-bar-separator-workspace" />
+              <TitleBarWorkspace />
+              <TitleBarSeparator testId="title-bar-separator-actions" className="mx-2 @max-[23rem]/trailing:mx-1" />
+            </>
+          )}
+          <TitleBarActions />
         </TrailingSegment>
       )}
     </div>

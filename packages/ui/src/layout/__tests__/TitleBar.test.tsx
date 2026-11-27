@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLayoutStore, type WorkspaceLayout } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
+import { beginBootRestore, resetBootRestore, decideBootRestore } from '@/features/sessions/runtime/boot-restore';
 import { useColumnEdges } from '../column-edges';
 
 vi.mock('@/features/session-tabs/SessionTabs', () => ({ SessionTabs: () => <div data-testid="session-tabs-stub" /> }));
@@ -30,6 +31,7 @@ function renderBar(open = true) {
 }
 
 beforeEach(() => {
+  resetBootRestore();
   place(['chat']);
   useColumnEdges.setState({ content: 316, workspace: null });
   useUiPrefs.setState({ sidebarView: 'chats' });
@@ -158,5 +160,23 @@ describe('TitleBar — chat column', () => {
   it('leads with the show-sidebar button while the sidebar is collapsed', () => {
     renderBar(false);
     expect(screen.getByTestId('title-bar-chat-column')).toContainElement(screen.getByTestId('show-sidebar-button'));
+  });
+});
+
+describe('TitleBar — boot restore hold', () => {
+  it('keeps the session tabs and the trailing actions unpainted until the last chat is back', () => {
+    beginBootRestore();
+    renderBar();
+    expect(screen.getByTestId('title-bar')).toHaveAttribute('data-boot-restoring');
+    expect(screen.getByTestId('session-tabs-stub').parentElement).toHaveClass('contents');
+    expect(screen.getByTestId('title-bar').className).toContain('[&_[data-boot-held]]:invisible');
+    expect(screen.getByTestId('title-bar-trailing')).toHaveClass('invisible');
+    // The frame itself stays: the capsule is drawn (empty until the quota is known).
+    expect(screen.getByTestId('usage-capsule')).toBeInTheDocument();
+
+    act(() => decideBootRestore(null));
+    expect(screen.getByTestId('title-bar')).not.toHaveAttribute('data-boot-restoring');
+    expect(screen.getByTestId('title-bar').className).not.toContain('invisible');
+    expect(screen.getByTestId('title-bar-trailing')).not.toHaveClass('invisible');
   });
 });
