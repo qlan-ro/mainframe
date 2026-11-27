@@ -8,7 +8,7 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
 
 import { usePrependAnchor } from './use-prepend-anchor';
-import { useDelayedVisible } from './use-delayed-visible';
+import { useDelayedVisible } from '@/lib/use-delayed-visible';
 export { HISTORY_PREPEND_EVENT } from './use-prepend-anchor';
 
 const SCROLL_GESTURES = ['wheel', 'touchmove', 'keydown', SCROLLBAR_DRAG_EVENT];
