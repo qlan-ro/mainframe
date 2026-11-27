@@ -11,6 +11,7 @@ import { waitForMessage } from '../find/daemon-highlights';
 import { TimeMarker } from './TimeMarker';
 import { TurnStatusRow } from './TurnStatusRow';
 import { statusAnchorId } from './turn-phase';
+import { markFirstTranscriptShown } from '@/lib/after-first-paint';
 
 type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
 const FIRST_INDEX = 1_000_000_000;
@@ -122,6 +123,10 @@ export function VirtualMessages({ components }: { components: MessageComponents 
   const scrollSeek = useScrollSeek(scroll, viewport);
   const [ready, setReady] = useState(-1);
   const legacyFind = useFindInChatStore((s) => s.isOpen && !s.daemon);
+  const revealed = ready === range.generation;
+  useEffect(() => {
+    if (revealed) markFirstTranscriptShown();
+  }, [revealed]);
   return (
     <DisclosureStateProvider>
       <div
