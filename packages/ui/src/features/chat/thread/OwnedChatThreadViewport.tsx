@@ -7,6 +7,7 @@ import { useUiPrefs } from '@/store/ui-prefs';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { TurnTranscript } from '../messages/turn/TurnTranscript';
 import { useChatExtras } from '../runtime/chat-extras';
+import { useAwayFromTail } from '../runtime/use-away-from-tail';
 import { ContextNotPreservedNotice } from './ContextNotPreservedNotice';
 import { TranscriptEdgeFades } from './TranscriptEdgeFades';
 import { ThreadFooter } from './ThreadFooter';
@@ -46,7 +47,7 @@ export function OwnedChatThreadViewport({
   const threadId = useSideAwareThreadId();
   const extras = useChatExtras();
   const chatId = extras?.state.chatId;
-  const away = extras?.state.historyWindow?.detached != null;
+  const away = useAwayFromTail();
   // Find searches the focused main chat only; the plain list reveals every row for it (use-tail-first-rows.ts).
   const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
   const owner = useScrollOwner(threadId, chatId, { findOwner: focused && variant === 'main', away });

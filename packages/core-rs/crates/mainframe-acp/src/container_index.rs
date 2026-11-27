@@ -22,6 +22,23 @@ impl ContainerIndex {
             .position(|items| items.iter().any(|item| item == id))
     }
 
+    /// `(container, index within it)` of an item: the order a floor moves in.
+    pub(crate) fn offset(&self, id: &str) -> Option<(usize, usize)> {
+        self.0
+            .iter()
+            .enumerate()
+            .find_map(|(pos, items)| items.iter().position(|item| item == id).map(|i| (pos, i)))
+    }
+
+    /// Empties every container before `pos` and returns the item ids that were in them.
+    pub(crate) fn forget_before(&mut self, pos: usize) -> Vec<String> {
+        self.0
+            .iter_mut()
+            .take(pos)
+            .flat_map(std::mem::take)
+            .collect()
+    }
+
     pub(crate) fn ids_from(&self, floor: usize) -> HashSet<&str> {
         self.0
             .iter()

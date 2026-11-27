@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
 import { useLiveMessages } from '@/features/chat/runtime/use-live-messages';
@@ -45,8 +46,10 @@ function mergedTasks(
   return [...byId.values()];
 }
 
+const identity = (messages: readonly ThreadMessage[]) => messages;
+
 export function useActivityEntries() {
-  const messages = useLiveMessages();
+  const messages = useLiveMessages(identity);
   const extras = useChatExtras();
   const sessionItems = useSessionItems();
   const chatId = extras?.state.chatId;

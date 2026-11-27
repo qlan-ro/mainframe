@@ -56,4 +56,21 @@ describe('trimming when the reader returns to the tail', () => {
     owner.set(true);
     expect(trim).toHaveBeenCalledTimes(2);
   });
+
+  it('trims when the reader leaves a window around a jump target while already pinned', () => {
+    const owner = pin(true);
+    const trim = vi.fn();
+    const { rerender } = renderHook(({ away }) => useTrimAtTail(owner, trim, away), { initialProps: { away: true } });
+    expect(trim).not.toHaveBeenCalled();
+    rerender({ away: false });
+    expect(trim).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not trim on leaving a window when the reader is not at the bottom', () => {
+    const owner = pin(false);
+    const trim = vi.fn();
+    const { rerender } = renderHook(({ away }) => useTrimAtTail(owner, trim, away), { initialProps: { away: true } });
+    rerender({ away: false });
+    expect(trim).not.toHaveBeenCalled();
+  });
 });

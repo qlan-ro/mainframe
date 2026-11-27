@@ -52,8 +52,7 @@ export function useGateQueue(): GateQueue {
   const permissions = extras?.permissions;
   const pending = permissions != null && Object.keys(permissions).length > 0;
   // Read the transcript only while something waits: naming the sub-agent needs it.
-  const live = useLiveMessages();
-  const messages = pending ? live : NO_MESSAGES;
+  const messages = useLiveMessages((all) => (pending ? all : NO_MESSAGES));
   const chatId = extras?.state.chatId;
   const adapterId = extras?.state.chatConfig?.adapterId;
   const mode = extras?.state.chatConfig?.permissionMode;

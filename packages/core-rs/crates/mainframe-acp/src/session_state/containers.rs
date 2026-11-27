@@ -24,6 +24,18 @@ impl SessionState {
         self.containers.position(id)
     }
 
+    pub(crate) fn item_offset(&self, id: &str) -> Option<(usize, usize)> {
+        self.containers.offset(id)
+    }
+
+    /// Forgets the items of every container before `pos`: a floor moved above them, and a page
+    /// that later brings them back must replace them, not find them already held.
+    pub(crate) fn forget_before(&mut self, pos: usize) {
+        for id in self.containers.forget_before(pos) {
+            self.items.remove(&id);
+        }
+    }
+
     pub fn prepend_containers(
         &mut self,
         start: usize,

@@ -111,6 +111,7 @@ export class AroundWindow {
       await this.host.trimLive().catch(() => false);
       if (moved() || epoch !== this.epoch) return false;
       this.state = next;
+      this.epoch += 1;
       this.host.show(result);
       return true;
     } catch (error) {
@@ -142,6 +143,8 @@ export class AroundWindow {
       }
       this.host.extendShown(result, side);
       this.state = this.continued(held, result, side);
+      // A refresh that measured the window before these rows came is out of date.
+      this.epoch += 1;
       return true;
     } catch (error) {
       this.host.fail(generation, error);

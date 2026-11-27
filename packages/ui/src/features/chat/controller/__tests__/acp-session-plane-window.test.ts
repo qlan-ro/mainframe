@@ -228,6 +228,32 @@ describe('trim when the reader returns to the tail', () => {
     expect(h.history()).toMatchObject({ floorItemId: 'divider' });
   });
 
+  it('applies a trim the daemon accepted even when a reload came before its reply', async () => {
+    const h = await harness(grown);
+    let reply!: (value: object) => void;
+    h.historyTrim.mockImplementationOnce(() => new Promise((resolve) => (reply = resolve)));
+    const trimming = h.plane.history.trim();
+    // A send or a resync bumps the generation while the request is out.
+    h.plane.history.reset({ hasMore: true, floorItemId: 'u1' });
+    h.daemon.floor = 'u5';
+    reply({ hasMore: true, floorItemId: 'u5' });
+    expect(await trimming).toBe(true);
+    expect(h.liveIds()).toEqual(['u5', 'a5', 'u6', 'a6']);
+    expect(await h.plane.history.load()).toBe(true);
+    expect(h.history().error).toBeUndefined();
+    expect(h.liveIds()).toEqual(['u3', 'a3', 'u4', 'a4', 'u5', 'a5', 'u6', 'a6']);
+  });
+
+  it('follows the floor a stale page carries when the daemon is ahead of the client', async () => {
+    const h = await harness({ live: [3, 4, 5, 6] });
+    h.plane.history.reset({ hasMore: true, floorItemId: 'u3' });
+    h.daemon.floor = 'u5';
+    expect(await h.plane.history.load()).toBe(true);
+    expect(h.historyPage.mock.calls.map(([params]) => params.before)).toEqual(['u3', 'u5']);
+    expect(h.liveIds()).toEqual(['u3', 'a3', 'u4', 'a4', 'u5', 'a5', 'u6', 'a6']);
+    expect(h.history()).toMatchObject({ floorItemId: 'u3' });
+  });
+
   it('ignores a late update to a trimmed item instead of asking for a resync', async () => {
     const h = await harness(grown);
     await h.plane.history.trim();
@@ -521,6 +547,28 @@ describe('a window is a snapshot', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(windowText(h)).not.toContain('rewritten');
     expect(h.windowIds()).toEqual(['u1', 'a1']);
+  });
+
+  it('measures again when a step landed rows while it was being fetched', async () => {
+    const h = await harness();
+    await away(h);
+    let releaseStep!: (value: HistoryAroundResult) => void;
+    h.historyAround.mockImplementationOnce(() => new Promise((resolve) => (releaseStep = resolve)));
+    const stepping = h.plane.history.load();
+    await vi.waitFor(() => expect(h.historyAround).toHaveBeenCalledTimes(1));
+    let releaseRefresh!: (value: HistoryAroundResult) => void;
+    h.historyAround.mockImplementationOnce(() => new Promise((resolve) => (releaseRefresh = resolve)));
+    h.plane.history.resnapshot();
+    await vi.waitFor(() => expect(h.historyAround).toHaveBeenCalledTimes(2));
+    releaseStep(around([1, 2], { hasBefore: false, hasAfter: true }));
+    await stepping;
+    expect(h.windowIds()).toEqual(['u1', 'a1', 'u2', 'a2', 'u3', 'a3']);
+    // The refresh measured before those rows came: its answer is dropped, and it asks again over the new span.
+    h.historyAround.mockResolvedValueOnce(around([1, 2, 3], { hasBefore: false, hasAfter: true }, 'a2'));
+    releaseRefresh(around([2, 3], { hasBefore: true, hasAfter: true }, 'a2'));
+    await vi.waitFor(() => expect(h.historyAround).toHaveBeenCalledTimes(3));
+    expect(h.historyAround.mock.calls[2]![0]).toMatchObject({ itemId: 'a2', before: 3, after: 2 });
+    expect(h.windowIds()).toEqual(['u1', 'a1', 'u2', 'a2', 'u3', 'a3']);
   });
 
   it('does not touch a window that is not open', async () => {

@@ -17,6 +17,7 @@ import {
   HistoryPageParamsSchema,
   HistoryPageResultSchema,
   HistoryAroundParamsSchema,
+  HistoryTrimParamsSchema,
   HistoryAroundResultSchema,
   HistorySearchParamsSchema,
   HistorySearchResultSchema,
@@ -76,6 +77,7 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'history-window.json' || name === 'history-window.turns.json') return HistoryWindowSchema;
   if (name === 'history-state.json') return HistoryStateSchema;
   if (name === 'history-page.params.json' || name === 'history-page-turns.params.json') return HistoryPageParamsSchema;
+  if (name === 'history-trim.params.json') return HistoryTrimParamsSchema;
   if (name.startsWith('history-page.')) return HistoryPageResultSchema;
   if (name === 'history-around.params.json') return HistoryAroundParamsSchema;
   if (name.startsWith('history-around.')) return HistoryAroundResultSchema;

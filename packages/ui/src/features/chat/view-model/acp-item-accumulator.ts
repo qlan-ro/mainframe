@@ -73,7 +73,7 @@ const DROPPED_CAP = 2000;
 export class AcpItemAccumulator {
   private readonly items = new Map<string, AccumulatedItem>();
   private order: string[] = [];
-  /** Ids a trim removed. The daemon's connection still sends changes to them (its floor never rises), so they are dropped here instead of asking for a resync. */
+  /** Ids a trim removed. The daemon's connection still sends changes to them (its floor only rises when the client asks, and never for these), so they are dropped here instead of asking for a resync. */
   private readonly dropped = new Set<string>();
   private turnState: AcpTurnState | null = null;
   private usage: UsageUpdate | null = null;

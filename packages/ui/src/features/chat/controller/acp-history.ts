@@ -234,16 +234,28 @@ export class AcpHistory {
     const start = this.host.newestPageStart(useUiPrefs.getState().historyTurns);
     if (!start) return false;
     const client = this.host.client();
-    const generation = this.generation;
     const connection = client.connectionGeneration;
     const reply = await client.historyTrim!({ sessionId: this.host.chatId(), floorItemId: start });
-    const moved =
-      generation !== this.generation || client !== this.host.client() || connection !== client.connectionGeneration;
-    if (reply.stale || moved) return false;
+    // The daemon's floor cannot be put back. A reload or a send that came meanwhile (the generation)
+    // does not undo it, so the cut is made unless the connection itself changed (a new connection
+    // starts from its own floor) or the window no longer holds that item.
+    if (reply.stale || client !== this.host.client() || connection !== client.connectionGeneration) return false;
+    if (!this.host.hasItem(start)) return false;
     this.host.trimTo(start, refresh);
     this.state = { hasMore: true, floorItemId: start, loading: false };
     this.host.changed(this.view());
     return true;
+  }
+
+  /**
+   * A stale page carries the daemon's own floor. When it is a later item the window holds (a trim
+   * the daemon accepted and the client did not apply), cut the window there so the retry asks `before` it.
+   */
+  private adoptFloor(page: HistoryPageResult): void {
+    const id = page.floorItemId;
+    if (!id || id === this.state.floorItemId || !this.host.hasItem(id, this.state.floorItemId)) return;
+    this.host.trimTo(id, true);
+    this.state = { ...this.state, hasMore: page.hasMore, floorItemId: id };
   }
 
   /** Pages the live window whatever the reader is looking at: export and the sub-agent fallback read it, not a jump window. */
@@ -287,7 +299,10 @@ export class AcpHistory {
           )
             return;
           stale = page.stale === true;
-          if (stale) return;
+          if (stale) {
+            this.adoptFloor(page);
+            return;
+          }
           this.host.prepend(page);
           this.update({
             hasMore: page.hasMore,
