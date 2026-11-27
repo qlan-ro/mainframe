@@ -73,8 +73,14 @@ async fn search(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
             return;
         }
     };
-    let result =
-        mainframe_acp::history_search::search_chat(port, &params.session_id, &params.query).await;
+    // A scan encodes every container, so it runs on a copy off the cache
+    // lock; the lock is shared by every chat's live emissions.
+    let snapshot = port.resume_snapshot(&params.session_id).await;
+    let result = tokio::task::spawn_blocking(move || {
+        mainframe_acp::history_search::search(&snapshot.messages, &params.query)
+    })
+    .await
+    .ok();
     reply(connection, request.id, result, "history search");
 }
 
@@ -110,6 +116,34 @@ fn reply<T: serde::Serialize>(
     });
 }
 
+/// A bounded page borrows the list under the cache lock. A load-through page
+/// (`untilItemId`) or one that must seed the revision log first is unbounded,
+/// so it works on a copy off the lock.
+async fn compute_page(
+    port: Arc<dyn ResumePort>,
+    hub: Arc<crate::acp_ws::hub::FacadeHub>,
+    params: HistoryPageParams,
+    options: mainframe_acp::history_page::PageOptions,
+) -> Option<mainframe_acp::history_page::PreparedPage> {
+    if params.until_item_id.is_none() && !hub.history_seed_pending(&params.session_id) {
+        let chat_id = params.session_id.clone();
+        return mainframe_acp::history_page::prepare_chat(
+            port.as_ref(),
+            &params,
+            options,
+            |messages| hub.seed_history_snapshot(&chat_id, messages),
+        )
+        .await;
+    }
+    let snapshot = port.resume_snapshot(&params.session_id).await;
+    tokio::task::spawn_blocking(move || {
+        hub.seed_history_snapshot(&params.session_id, &snapshot.messages);
+        mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
+    })
+    .await
+    .ok()
+}
+
 async fn page(
     request: JsonRpcRequest,
     ctx: &AppCtx,
@@ -136,15 +170,8 @@ async fn page(
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
     };
-    let seed_hub = Arc::clone(&ctx.chat.facade_hub);
-    let result = tokio::spawn(async move {
-        let chat_id = params.session_id.clone();
-        mainframe_acp::history_page::prepare_chat(port.as_ref(), &params, options, |messages| {
-            seed_hub.seed_history_snapshot(&chat_id, messages);
-        })
-        .await
-    })
-    .await;
+    let hub_for_work = Arc::clone(&ctx.chat.facade_hub);
+    let result = tokio::spawn(compute_page(port, hub_for_work, params, options)).await;
     match result {
         Ok(Some(page)) => hub.finish_history_page(connection, &chat_id, request.id, stream, page),
         other => {
@@ -158,3 +185,7 @@ async fn page(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod tests;

@@ -151,13 +151,15 @@ fn a_tool_use_id_and_a_container_id_resolve_to_their_item() {
 
 #[test]
 fn counts_default_clamp_and_may_be_zero() {
-    let messages = transcript(40);
+    let messages = transcript(300);
     let ids = flat_ids(&messages);
+    assert_eq!(ids.len(), 1200);
     let mid = ids.len() / 2;
     let defaults = around(&messages, &ids[mid], None, None);
     assert_eq!(update_item_ids(&defaults).len(), 41);
     let huge = around(&messages, &ids[mid], Some(9_999), Some(9_999));
-    assert_eq!(update_item_ids(&huge).len(), 401.min(ids.len()));
+    assert_eq!(update_item_ids(&huge).len(), 401);
+    assert_eq!(update_item_ids(&huge), ids[mid - 200..=mid + 200]);
     let only = around(&messages, &ids[mid], Some(-4), Some(0));
     assert_eq!(update_item_ids(&only), ids[mid..=mid]);
 }
@@ -234,11 +236,9 @@ async fn with_messages_lends_the_stored_list_instead_of_cloning_it() {
 }
 
 #[tokio::test]
-async fn search_around_and_page_serve_from_the_lent_list() {
-    // `resume_snapshot` panics on this port, so none of these may clone.
+async fn around_and_page_serve_from_the_lent_list() {
+    // `resume_snapshot` panics on this port, so neither may clone.
     let port = Lending(transcript(5));
-    let found = crate::history_search::search_chat(&port, "c", "answer 3").await;
-    assert_eq!(found.unwrap().total, 1);
     let ids = flat_ids(&port.0);
     let params = HistoryAroundParams {
         session_id: "c".into(),
@@ -263,4 +263,30 @@ async fn search_around_and_page_serve_from_the_lent_list() {
     .unwrap();
     assert_eq!(inspected, 10);
     assert!(!page.containers.is_empty());
+}
+
+#[tokio::test]
+async fn a_panicking_reader_is_contained_and_reported_as_no_result() {
+    let port = Lending(transcript(2));
+    let lost = with_messages(&port, "c", |_| -> usize { panic!("reader bug") }).await;
+    assert_eq!(lost, None);
+    // The port is still usable afterwards.
+    assert_eq!(with_messages(&port, "c", |m| m.len()).await, Some(4));
+}
+
+#[test]
+fn a_queued_container_is_valid_but_empty_and_windows_skip_it() {
+    let mut messages = transcript(3);
+    messages[3].metadata = Some(std::collections::HashMap::from([(
+        "queued".to_owned(),
+        json!(true),
+    )]));
+    let empty = around(&messages, "a1", Some(2), Some(2));
+    assert_eq!(empty.stale, None);
+    assert!(empty.updates.is_none() && empty.first_item_id.is_none());
+    assert!(empty.has_before && empty.has_after);
+    // A window that skips the queued container still reports exact items.
+    let ids = flat_ids(&messages);
+    let result = around(&messages, &ids[ids.len() - 1], Some(3), Some(0));
+    assert_eq!(update_item_ids(&result), ids[ids.len() - 4..]);
 }

@@ -54,15 +54,23 @@ pub trait ResumePort: Send + Sync {
 }
 
 /// Run `read` over the chat's display list and return its result, or `None`
-/// if the port never ran it. The closure runs while the list is borrowed, so
-/// keep it to a bounded scan or page.
+/// if the port never ran it or `read` panicked. The closure runs while the
+/// list is borrowed, typically under the chat cache lock shared by every
+/// chat's live emissions, so keep it to a bounded page. A panic is contained
+/// here so it cannot unwind through the port while it holds that lock or a
+/// pending projection delta.
 pub async fn with_messages<T: Send>(
     port: &dyn ResumePort,
     session_id: &str,
     read: impl FnOnce(&[DisplayMessage]) -> T + Send,
 ) -> Option<T> {
     let mut out = None;
-    port.read_messages(session_id, Box::new(|messages| out = Some(read(messages))))
-        .await;
+    port.read_messages(
+        session_id,
+        Box::new(|messages| {
+            out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(messages))).ok();
+        }),
+    )
+    .await;
     out
 }

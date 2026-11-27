@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::expect_used, reason = "test fixtures")]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::too_many_lines,
+    reason = "test fixtures and a manual report"
+)]
 
 //! Manual timing of a page, a page around an item and a search, comparing the
 //! old path (clone the list, then serve) with the new one (serve the borrowed
@@ -104,5 +109,35 @@ fn page_and_search_timing_with_and_without_the_clone() {
                 messages.len()
             );
         }
+        // Lock hold: what runs while the chat cache lock is held. The first
+        // column is the all-borrowed design (`until` loads through to the
+        // transcript start, the worst case), the second what ships (a copy
+        // under the lock, the scan off it). Bounded pages and `around` stay
+        // borrowed in both.
+        let mut until = page.clone();
+        until.until_item_id = Some(messages[10].id.clone());
+        let holds = [
+            (
+                "search",
+                median_ms(|| drop(history_search::search(&messages, "answer 7"))),
+            ),
+            (
+                "until",
+                median_ms(|| drop(prepare(&messages, &until, opts))),
+            ),
+        ];
+        let copy = median_ms(|| drop(messages.to_vec()));
+        for (name, borrowed) in holds {
+            println!(
+                "containers={} hold {name:<6} borrowed-scan={borrowed:8.2} ms  copy-only={copy:8.2} ms",
+                messages.len()
+            );
+        }
+        println!(
+            "containers={} hold page   borrowed={:8.2} ms  around={:8.2} ms",
+            messages.len(),
+            median_ms(|| drop(prepare(&messages, &page, opts))),
+            median_ms(|| drop(history_around::prepare(&messages, &around, opts))),
+        );
     }
 }

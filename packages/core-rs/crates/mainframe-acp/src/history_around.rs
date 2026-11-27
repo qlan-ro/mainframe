@@ -94,6 +94,8 @@ struct Cut {
     context: Vec<String>,
     first: Option<String>,
     last: Option<String>,
+    /// Containers dropped before the first kept one.
+    leading: usize,
 }
 
 /// Keep flat item positions `start..end`; the first kept container also
@@ -104,6 +106,7 @@ fn cut(block: VecDeque<Vec<EncodedItem>>, start: usize, end: usize) -> Cut {
         context: Vec::new(),
         first: None,
         last: None,
+        leading: 0,
     };
     let mut position = 0;
     for items in block {
@@ -111,11 +114,19 @@ fn cut(block: VecDeque<Vec<EncodedItem>>, start: usize, end: usize) -> Cut {
         let to = end.saturating_sub(position).min(items.len());
         position += items.len();
         if from >= to {
+            // Later empties stay, so a container's index is its position
+            // from the first kept one (the preview cutoff counts on it).
+            if out.first.is_some() {
+                out.containers.push(Vec::new());
+            } else {
+                out.leading += 1;
+            }
             continue;
         }
+        let opening = out.first.is_none();
         out.first.get_or_insert_with(|| items[from].id().to_owned());
         out.last = Some(items[to - 1].id().to_owned());
-        if out.containers.is_empty() {
+        if opening {
             let kept = item_window::with_ancestors(&items, from, to);
             let context = kept.len() - (to - from);
             out.context = kept[..context].iter().map(|i| i.id().to_owned()).collect();
@@ -137,6 +148,14 @@ pub fn prepare(
     };
     let home = history_window::encode_range(messages, None, index, index + 1).remove(0);
     let Some(offset) = locate(&messages[index], &home, &params.item_id) else {
+        if home.is_empty() && messages[index].id == params.item_id {
+            // A queued container exists but has no items yet: valid, empty.
+            return HistoryAroundResult {
+                has_before: index > 0,
+                has_after: index + 1 < messages.len(),
+                ..HistoryAroundResult::default()
+            };
+        }
         return stale();
     };
     let wanted = (count(params.before), count(params.after));
@@ -146,6 +165,7 @@ pub fn prepare(
     let start = block.target - wanted.0.min(block.target);
     let end = (block.target + 1 + wanted.1).min(total);
     let cut = cut(block.containers, start, end);
+    let leading = cut.leading;
     let (containers, context_ids, first_id, last_id) =
         (cut.containers, cut.context, cut.first, cut.last);
     let target_id = containers
@@ -156,7 +176,7 @@ pub fn prepare(
     let mut page = PreparedPage {
         result: Default::default(),
         containers,
-        start: block.lo,
+        start: block.lo + leading,
         len: messages.len(),
         previews: Default::default(),
     };
