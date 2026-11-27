@@ -18,12 +18,12 @@ export function RigRuntime({ children }: { children: ReactNode }) {
     const base = createChatThreadState(CHAT_ID);
     const chat = {
       ...base,
-      historyWindow: { hasMore, loading: false },
+      historyWindow: { hasMore, loading: state.loading },
       runState: state.running ? ({ type: 'running' } as const) : base.runState,
     };
     // `loadEarlier` stays undefined: scenarios land pages themselves, at known times.
     return { ...buildChatExtras(controller, 0, chat), loadEarlier: undefined };
-  }, [hasMore, state.running]);
+  }, [hasMore, state.running, state.loading]);
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: state.messages,
     isRunning: state.running,

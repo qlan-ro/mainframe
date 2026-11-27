@@ -111,5 +111,22 @@ describe('ChatPane — turns to load at a time', () => {
 
     expect(useUiPrefs.getState().historyTurns).toBe(10);
     expect(field).toHaveValue(10);
+
+describe('ChatPane — plain transcript list', () => {
+  beforeEach(() => useUiPrefs.setState({ plainTranscript: false }));
+
+  it('is off by default, keeping today’s list', () => {
+    render(<ChatPane />);
+
+    expect(screen.getByTestId('settings-chat-plain-transcript')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('turning it on saves the preference', () => {
+    render(<ChatPane />);
+
+    fireEvent.click(screen.getByTestId('settings-chat-plain-transcript'));
+
+    expect(useUiPrefs.getState().plainTranscript).toBe(true);
+    expect(screen.getByTestId('settings-chat-plain-transcript')).toHaveAttribute('aria-checked', 'true');
   });
 });

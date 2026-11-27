@@ -4,7 +4,9 @@ import { SCROLLBAR_DRAG_EVENT } from '@/lib/overlay-scrollbars/thumb';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import { onUserSent } from '../controller/user-sent';
 
-export const HISTORY_PREPEND_EVENT = 'mainframe:history-prepend';
+import { HISTORY_PREPEND_EVENT } from './history-prepend-event';
+
+export { HISTORY_PREPEND_EVENT };
 
 const ITEM_ANCHORS = '[data-history-item-id], [data-search-item-id]';
 
@@ -124,7 +126,10 @@ export function usePrependAnchor(firstId: string | undefined, chatId: string | u
   const [anchoring, setAnchoring] = useState(false);
   const pending = useRef<null | { apply: () => (() => void) | undefined; cancel: () => void }>(null);
   const settling = useRef<null | (() => void)>(null);
+  const owned = scroll?.owned === true;
   useEffect(() => {
+    // The plain list's owner records and corrects the prepend itself (`use-scroll-owner.ts`).
+    if (owned) return undefined;
     const beforePrepend = (event: Event) => {
       if ((event as CustomEvent<string>).detail !== chatId) return;
       const viewport = scroll?.viewportElement.current;
@@ -157,7 +162,7 @@ export function usePrependAnchor(firstId: string | undefined, chatId: string | u
       stopUserSent?.();
       cancel();
     };
-  }, [chatId, scroll]);
+  }, [chatId, scroll, owned]);
   useLayoutEffect(() => {
     settling.current?.();
     settling.current = pending.current?.apply() ?? null;

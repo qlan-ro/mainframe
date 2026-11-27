@@ -29,6 +29,8 @@ export function installOlderPageLoader(
   const load = async () => {
     loader.loads++;
     hooks.onRequest?.();
+    // The app's boundary row shows its loading state while the page is in flight.
+    if (params.variant === 'app') store.set({ loading: true });
     if (params.pageDelay > 0) {
       const wait = params.pageDelay * (0.7 + Math.random() * 0.6);
       await new Promise((resolve) => setTimeout(resolve, wait));

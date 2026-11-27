@@ -122,6 +122,9 @@ interface UiPrefsState {
    *  It only changes what is requested, so the next open or page picks it up. */
   historyTurns: number;
   setHistoryTurns: (turns: number) => void;
+  /** The transcript is plain rows with one scroll owner and no virtualizer (todo #461). Off by default for one release. */
+  plainTranscript: boolean;
+  setPlainTranscript: (on: boolean) => void;
   /** The composer's activity strip shows only its first row (K5). */
   activityStripCollapsed: boolean;
   setActivityStripCollapsed: (collapsed: boolean) => void;
@@ -168,6 +171,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     enterWhileRunning: s.enterWhileRunning,
     chipComposer: s.chipComposer,
     historyTurns: s.historyTurns,
+    plainTranscript: s.plainTranscript,
     activityStripCollapsed: s.activityStripCollapsed,
     transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
@@ -223,6 +227,7 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
     enterWhileRunning: state.enterWhileRunning === 'steer' ? 'steer' : 'queue',
     chipComposer: state.chipComposer === true,
     historyTurns: clampHistoryTurns(state.historyTurns),
+    plainTranscript: state.plainTranscript === true,
     activityStripCollapsed: state.activityStripCollapsed === true,
     transcriptWidth:
       typeof state.transcriptWidth === 'number'
@@ -281,6 +286,8 @@ export const useUiPrefs = create<UiPrefsState>()(
       setChipComposer: (chipComposer) => set({ chipComposer }),
       historyTurns: HISTORY_TURNS_DEFAULT,
       setHistoryTurns: (turns) => set({ historyTurns: clampHistoryTurns(turns) }),
+      plainTranscript: false,
+      setPlainTranscript: (plainTranscript) => set({ plainTranscript }),
       activityStripCollapsed: false,
       setActivityStripCollapsed: (activityStripCollapsed) => set({ activityStripCollapsed }),
       transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,

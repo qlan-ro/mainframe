@@ -11,6 +11,7 @@ const savedPreferences = {
   enterWhileRunning: 'queue' as const,
   chipComposer: false,
   historyTurns: 10,
+  plainTranscript: false,
   activityStripCollapsed: false,
   sessionPanelOpen: true,
   sessionPanelSections: { plan: true, context: false },
@@ -26,6 +27,7 @@ const legacyPreferences = (() => {
     activityStripCollapsed: _b,
     chipComposer: _c,
     historyTurns: _d,
+    plainTranscript: _e,
     ...rest
   } = savedPreferences;
   return { ...rest, dontConfirmProviderSwitch: true };

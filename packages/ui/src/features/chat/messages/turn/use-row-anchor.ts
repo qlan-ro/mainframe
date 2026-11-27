@@ -20,6 +20,8 @@ export function useRowAnchor(open: boolean) {
   const pending = useRef<{ viewport: HTMLElement; offset: number; release?: () => void } | null>(null);
   const cleanup = useRef<(() => void) | null>(null);
   const beforeToggle = (automatic = false) => {
+    // The plain list's browser anchoring holds the row; the owner stops following when the reader opens one.
+    if (controller?.owned) return;
     cleanup.current?.();
     const row = rowRef.current;
     const viewport = row && (scrollParent(row) ?? controller?.viewportElement.current);

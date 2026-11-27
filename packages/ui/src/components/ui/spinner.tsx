@@ -1,0 +1,17 @@
+import { Loader2Icon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+/** shadcn's Spinner (`npx shadcn add spinner`), with the repo's import and quote style. */
+function Spinner({ className, ...props }: React.ComponentProps<'svg'>) {
+  return (
+    <Loader2Icon
+      data-slot="spinner"
+      role="status"
+      aria-label="Loading"
+      className={cn('size-4 animate-spin motion-reduce:animate-none', className)}
+      {...props}
+    />
+  );
+}
+
+export { Spinner };

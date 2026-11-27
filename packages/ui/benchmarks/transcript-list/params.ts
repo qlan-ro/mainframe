@@ -1,8 +1,8 @@
 declare const __RIG_REACT__: 'plain' | 'profiling';
 
 /** Query parameters: `?v=v0|v1|v1s|v2&groups=40&total=160&hold=31&live=1`. */
-export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2';
-const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2'];
+export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2' | 'app';
+const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2', 'app'];
 
 const query = new URLSearchParams(location.search);
 const number = (name: string, fallback: number) => {
@@ -42,8 +42,11 @@ export const params = {
    */
   shape: query.get('shape') === 'real' ? ('real' as const) : ('default' as const),
   pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
-  /** Manual mode: the app's overlay scrollbar thumb, as in the app (it shows while scrolling or hovered). Off with `scrollbar=0`. */
-  scrollbar: query.get('scrollbar') !== '0',
+  /**
+   * Manual mode: the overlay scrollbar thumb. Off by default, as the app's transcript has none (it jumped and
+   * resized as older pages landed); `scrollbar=1` brings it back for a comparison.
+   */
+  scrollbar: query.get('scrollbar') === '1',
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */

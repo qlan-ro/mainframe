@@ -28,6 +28,7 @@ function PlainRows({ components }: { components: MessageComponents }) {
 export function VirtualMessages({ components }: { components: MessageComponents }) {
   switch (params.variant) {
     case 'v0':
+    case 'app':
       return <Virtualized components={components} />;
     case 'v1':
       return <PlainRows components={components} />;
