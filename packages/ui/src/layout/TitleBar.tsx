@@ -25,6 +25,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { USAGE_CAPSULE_WIDTH, UsageCapsule } from '@/features/quota/UsageCapsule';
 import { SessionTabs } from '@/features/session-tabs/SessionTabs';
 import { cn } from '@/lib/utils';
+import { useBootRestoring } from '@/features/sessions/runtime/boot-restore';
 import { isSurfaceLit, useLayoutStore } from '@/store/layout';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { useColumnEdges } from './column-edges';
@@ -77,7 +78,16 @@ function SidebarSegment({ open, separator }: { open: boolean; separator: boolean
  * Children arrive as elements so an edge moving under a drag re-renders this
  * frame and nothing inside it.
  */
-function TrailingSegment({ workspaceLit, children }: { workspaceLit: boolean; children: ReactNode }) {
+function TrailingSegment({
+  workspaceLit,
+  hidden,
+  children,
+}: {
+  workspaceLit: boolean;
+  /** Mounted and laid out, not painted: the boot hold. */
+  hidden: boolean;
+  children: ReactNode;
+}) {
   const edge = useColumnEdges((s) => s.workspace);
   const aligned = workspaceLit && edge != null;
   return (
@@ -85,6 +95,7 @@ function TrailingSegment({ workspaceLit, children }: { workspaceLit: boolean; ch
       data-testid="title-bar-trailing"
       className={cn(
         'flex h-full items-center pr-3',
+        hidden && 'invisible',
         // Over a narrow panel the gaps inside tighten, so the tabs get the room.
         aligned && '@container/trailing',
         aligned || !workspaceLit ? 'shrink-0' : 'max-w-1/2 min-w-0 flex-initial',
@@ -102,9 +113,16 @@ export function TitleBar() {
   // chat actions belong to the chat surface.
   const chats = useUiPrefs((s) => s.sidebarView) === 'chats';
   const workspaceLit = useLayoutStore((s) => isSurfaceLit(s.layout, 'workspace'));
+  // Until the last chat is back the tabs and the chat actions would show a layout built for a draft.
+  const restoring = useBootRestoring();
 
   return (
-    <div data-testid="title-bar" data-drag-region className="flex h-12 shrink-0 items-center bg-sidebar">
+    <div
+      data-testid="title-bar"
+      data-drag-region
+      data-boot-restoring={restoring ? '' : undefined}
+      className={cn('flex h-12 shrink-0 items-center bg-sidebar', restoring && '[&_[data-boot-held]]:invisible')}
+    >
       <SidebarSegment open={open} separator={chats} />
 
       {/* No padding of its own: it would hold 4px when the columns leave this segment none. */}
@@ -124,12 +142,16 @@ export function TitleBar() {
               </Button>
             </Hint>
           )}
-          {chats && <SessionTabs />}
+          {chats && (
+            <div data-boot-held className="contents">
+              <SessionTabs />
+            </div>
+          )}
         </div>
       </div>
 
       {chats && (
-        <TrailingSegment workspaceLit={workspaceLit}>
+        <TrailingSegment workspaceLit={workspaceLit} hidden={restoring}>
           {workspaceLit && (
             <>
               <TitleBarSeparator testId="title-bar-separator-workspace" />

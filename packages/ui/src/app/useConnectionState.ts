@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { getHost } from '../lib/host';
 import { getActiveDaemon, setActiveDaemon } from '../lib/daemon/active-daemon';
 import { startBootChatPrewarm } from '../features/sessions/runtime/boot-chat-prewarm';
+import { beginBootRestore } from '../features/sessions/runtime/boot-restore';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -99,6 +100,9 @@ export function useConnectionState(): {
           // The earliest the daemon is known to answer: ask for the remembered chat now, not after
           // the shell has mounted, loaded the session list and picked a chat to open.
           startBootChatPrewarm(currentPort);
+          // From here until the restore is decided the shell does not paint its session surfaces.
+          // Begun in the same tick as `ready`, so the shell never renders a frame before the hold.
+          beginBootRestore();
         }
       }
       pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);

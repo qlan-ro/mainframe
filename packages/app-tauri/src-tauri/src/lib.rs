@@ -58,6 +58,53 @@ fn external_daemon() -> bool {
     )
 }
 
+/// Whether the system appearance is dark, asked before any window exists. macOS only: `defaults`
+/// exits non-zero when the appearance is light (the key is absent). Called by absolute path and
+/// given a short deadline, so a stuck `cfprefsd` can delay startup by at most that long.
+fn system_prefers_dark() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::io::Read;
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+
+        const DEADLINE: Duration = Duration::from_millis(250);
+        let Ok(mut child) = Command::new("/usr/bin/defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return false;
+        };
+        let started = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let mut out = String::new();
+                    if status.success() {
+                        if let Some(mut stdout) = child.stdout.take() {
+                            let _ = stdout.read_to_string(&mut out);
+                        }
+                    }
+                    return out.trim().eq_ignore_ascii_case("dark");
+                }
+                Ok(None) if started.elapsed() < DEADLINE => std::thread::sleep(Duration::from_millis(5)),
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return false;
+                }
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Daily-rotating JSON log sink (renderer + host logs) — held for app lifetime.
@@ -143,8 +190,17 @@ pub fn run() {
             // doesn't invalidate it. `no-store` forces every asset request to hit the
             // current bundle, at effectively zero cost since these are local reads.
             let window_config = app.config().app.windows[0].clone();
-            let main_window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
-                .expect("invalid main window config")
+            // The config colour is the light ground (`--sidebar`, `#f5f5f8`); on a dark system the
+            // window is created with the dark ground (`#262626`) instead, so it never starts with
+            // a mismatched frame. The persisted app theme lives in the webview's localStorage, which
+            // the shell cannot read before the page loads: an app set to light on a dark system
+            // still starts dark for the frames before `public/boot-theme.js` repaints the page.
+            let mut window_builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_config)
+                .expect("invalid main window config");
+            if system_prefers_dark() {
+                window_builder = window_builder.background_color(tauri::window::Color(38, 38, 38, 255));
+            }
+            let main_window = window_builder
                 .on_web_resource_request(|_request, response| {
                     response.headers_mut().insert(
                         tauri::http::header::CACHE_CONTROL,

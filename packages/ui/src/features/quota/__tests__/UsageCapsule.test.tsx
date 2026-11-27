@@ -14,7 +14,7 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 function seed(byId: Record<string, ProviderQuota>) {
-  useQuotaStore.setState({ byId });
+  useQuotaStore.setState({ byId, seeded: true });
 }
 
 const claude = (session: number): ProviderQuota => ({
@@ -85,9 +85,19 @@ describe('UsageCapsule — cycle', () => {
   });
 
   it('reads as unknown, with no dots, when no provider reports a trusted window', () => {
+    seed({});
     render(<UsageCapsule now={NOW} />);
     expect(capsule()).toHaveAttribute('aria-label', 'Usage: quota unknown');
+    expect(screen.getByText('quota unknown')).toBeInTheDocument();
     expect(screen.queryByTestId('usage-capsule-dots')).toBeNull();
+  });
+
+  it('says nothing while the first seed has not answered: not asked yet is not unknown', () => {
+    useQuotaStore.setState({ byId: {}, seeded: false });
+    render(<UsageCapsule now={NOW} />);
+    expect(screen.queryByText('quota unknown')).toBeNull();
+    expect(capsule()).toHaveAttribute('aria-label', 'Usage: loading');
+    expect(capsule().textContent).toBe('');
   });
 });
 

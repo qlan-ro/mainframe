@@ -1,12 +1,13 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useBootAutoSelect } from '../use-boot-auto-select';
 import { useLastSessionStore } from '../../../../store/last-session';
 import { resetSessionListLoadState, useSessionListLoadState } from '../../runtime/list-load-state';
 import type { SessionItem } from '../../view-model/chat-to-thread-custom';
 
-const { settle } = vi.hoisted(() => ({ settle: vi.fn() }));
+const { settle, decide } = vi.hoisted(() => ({ settle: vi.fn(), decide: vi.fn() }));
 vi.mock('../../runtime/boot-chat-prewarm', () => ({ settleBootPrewarm: settle }));
+vi.mock('../../runtime/boot-restore', () => ({ decideBootRestore: decide }));
 vi.mock('../../runtime/new-thread-coordinator', () => ({ isCreateInFlight: () => false }));
 
 function item(id: string, updatedAt: number, status = 'regular', projectId = 'p1'): SessionItem {
@@ -26,6 +27,7 @@ function boot(items: SessionItem[], main: string | null = '__LOCALID_boot', pend
 
 beforeEach(() => {
   settle.mockClear();
+  decide.mockClear();
   switchToThread.mockClear();
   resetSessionListLoadState();
   useLastSessionStore.setState({ lastSessionId: null });
@@ -112,4 +114,44 @@ it('decides once: a later list change does not settle or switch again', () => {
   view.rerender({ items: [item('a', 1), item('b', 9)], loading: false });
   expect(switchToThread).toHaveBeenCalledTimes(1);
   expect(settle).toHaveBeenCalledTimes(1);
+});
+
+describe('boot hold decisions', () => {
+  it('names the remembered chat, so the app waits for it instead of showing the welcome', () => {
+    useLastSessionStore.setState({ lastSessionId: 'old' });
+    boot([item('old', 1), item('new', 9)]);
+    expect(decide).toHaveBeenCalledExactlyOnceWith('old');
+  });
+
+  it('names the most recent chat when the remembered one is gone', () => {
+    useLastSessionStore.setState({ lastSessionId: 'gone' });
+    boot([item('a', 1), item('b', 5)]);
+    expect(decide).toHaveBeenCalledExactlyOnceWith('b');
+  });
+
+  it('names nothing when every chat is archived: the welcome is the right screen', () => {
+    boot([item('arch', 9, 'archived')]);
+    expect(decide).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it('names the chat the user is already on when boot yields to them', () => {
+    boot([item('old', 1), item('mine', 5)], 'mine');
+    expect(decide).toHaveBeenCalledExactlyOnceWith('mine');
+  });
+
+  it('names nothing for a pending New switch', () => {
+    boot([item('old', 1)], '__LOCALID_boot', true);
+    expect(decide).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it('does not decide while the list is still empty and unloaded', () => {
+    boot([]);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('names nothing once an empty list has loaded (first run), or when the list failed', () => {
+    boot([]);
+    act(() => useSessionListLoadState.getState().markLoaded());
+    expect(decide).toHaveBeenCalledExactlyOnceWith(null);
+  });
 });

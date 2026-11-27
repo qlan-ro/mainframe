@@ -29,6 +29,7 @@ import { AppShell } from './AppShell';
 import { reseedOnReconnect } from './reseed-on-reconnect';
 import { ConnectionStatusProvider, useConnectionStatus } from './ConnectionStatusContext';
 import { ConnectionOverlay } from './ConnectionOverlay';
+import { useDelayedVisible } from '@/lib/use-delayed-visible';
 import { OverlayScrollbars } from './OverlayScrollbars';
 import { ThemeEffect } from './ThemeEffect';
 import { MfErrorBoundary } from '@/features/shared/MfErrorBoundary';
@@ -95,8 +96,17 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   );
 }
 
+/** The startup card shows only when the daemon takes longer than this, so a quick connect never flashes it. */
+export const STARTUP_CARD_DELAY_MS = 200;
+/** Once shown, it stays this long, so a connect landing just after the delay does not flicker it. */
+export const STARTUP_CARD_MIN_VISIBLE_MS = 300;
+
 export function App() {
   const { state, daemonStatus, port, ready } = useConnectionState();
+  const showStartupCard = useDelayedVisible(!(ready && port != null), {
+    delay: STARTUP_CARD_DELAY_MS,
+    minVisible: STARTUP_CARD_MIN_VISIBLE_MS,
+  });
 
   // Wire the WS client to the port once available (AppShell's router subscribes).
   // The port useEffect handles the initial local boot connection; switchTo handles
@@ -134,7 +144,7 @@ export function App() {
 
   return (
     <MfErrorBoundary>
-      <div className="flex h-screen flex-col bg-background text-foreground font-sans">
+      <div className="flex h-screen flex-col bg-sidebar text-foreground font-sans">
         <ThemeEffect />
         <OverlayScrollbars />
         <ConnectionStatusProvider value={{ state, daemonStatus }}>
@@ -147,17 +157,18 @@ export function App() {
               <DaemonGatedShell fallbackPort={port} />
             </ActiveDaemonProvider>
           ) : (
-            <div className="relative flex-1 bg-background">
-              <ConnectionOverlay
-                open
-                embedded
-                testId="app-waiting-daemon"
-                title="Starting up…"
-                subtitle="Connecting to the daemon. This only takes a moment."
-              />
-            </div>
+            // The window ground until the shell exists.
+            <div className="flex-1 bg-sidebar" />
           )}
         </ConnectionStatusProvider>
+        {/* Over the ground, and over the shell once it mounts, until its minimum has passed:
+            shown only when the wait outlasts the delay, so a quick connect never draws it. */}
+        <ConnectionOverlay
+          open={showStartupCard}
+          testId="app-waiting-daemon"
+          title="Starting up…"
+          subtitle="Connecting to the daemon. This only takes a moment."
+        />
         {/* Top-right: errors persist until dismissed, and bottom-right parked
             them over the composer's Send corner. 48px clears the title bar. */}
         <Toaster position="top-center" offset={{ top: 56 }} gap={9} visibleToasts={5} expand />

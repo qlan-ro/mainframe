@@ -31,5 +31,8 @@ Opening the workspace adds a third segment whose separator lands exactly on the 
 
 The usage capsule is capped at 224 px and shrinks with a narrow sidebar. The open-sidebar segment no longer adds fixed right padding before its separator. Separators use the stronger hairline.
 
+## Boot
+The first frame is the ground (`sidebar` token, `#f5f5f8` light, `#262626` dark): the window's `backgroundColor`, the `index.html` background and the stored theme (`public/boot-theme.js`) all agree, so nothing paints white. The "Starting up" card is part of the wait only after 200 ms and stays at least 300 ms once shown. Once the shell is up it holds one stable frame: the rail, the content card under an opaque cover, and the title bar with an empty usage capsule. The session tabs and the Chat / Workspace actions are mounted but not painted. Everything under the cover stays mounted, laid out and focusable (never `visibility:hidden`, which makes WebKit drop the composer's autofocus), and the cover is marked as a preview overlay so a native preview webview steps aside. A spinner appears on the cover only after 400 ms. The cover lifts when the remembered chat's history is in, its transcript is mounted in the chat column and the first pin has landed at its tail, or after 1.5 s (`features/sessions/runtime/boot-restore.ts`); the keyboard then goes to the composer unless something has it. The New Session welcome, a "New Session" tab, "No sessions yet" and "quota unknown" are never shown as a guess; the welcome appears only once the list says there is nothing to restore. The capsule reads "quota unknown" only after the first quota seed has answered.
+
 ## Unresolved
 None.

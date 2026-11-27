@@ -153,9 +153,13 @@ export function ChatSurface() {
       >
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ChatColumnHeader />
-          {/* The thread is h-full: it needs a box that is "the rest", not the column. */}
+          {/* The thread is h-full: it needs a box that is "the rest", not the column. The
+              box is a column of its own and the thread FLEXES to fill it: `h-full` alone is
+              a percentage of a flex item, which WebKit can resolve to auto on an early layout
+              pass, collapsing the transcript viewport to nothing and drawing the composer
+              (the viewport's sticky footer) right under the header. */}
           <PanelColumnContext.Provider value="main">
-            <div className="min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 flex-col *:min-h-0 *:flex-1">
               <ChatThread emptyState={welcome} />
             </div>
           </PanelColumnContext.Provider>

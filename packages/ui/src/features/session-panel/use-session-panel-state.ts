@@ -9,8 +9,9 @@
  * drives the same panel this hook renders. The hook measures the column and
  * publishes its `fits` verdict to that store for the toggle to read.
  */
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useUiPrefs, isSessionPanelSectionOpen, type SessionPanelOpenSectionId } from '@/store/ui-prefs';
+import { useBootRestoring } from '@/features/sessions/runtime/boot-restore';
 import { columnFitsPanel, derivePanelMode, type PanelMode } from './panel-mode';
 import { selectOverlayOpen, usePanelControl, usePanelOpen, type PanelColumnId } from './panel-control-store';
 
@@ -108,12 +109,17 @@ export function useSessionPanelState(columnId: PanelColumnId = 'main'): SessionP
   // The panel is on by default whenever there is room: the first time the
   // column fits after boot, it opens — even over a persisted close from a
   // previous run. Closing it stays honoured within the run (the ref arms once).
+  // The verdict waits for the boot restore: until the last chat is back the
+  // column is measured in a layout built for a draft (no side chat, no workspace
+  // beside it), so it fits, opens the panel, and the real layout then takes the
+  // room back. A layout effect, so the open lands before the first painted frame.
+  const restoring = useBootRestoring();
   const bootOpened = useRef(false);
-  useEffect(() => {
-    if (bootOpened.current || !gutterFits) return;
+  useLayoutEffect(() => {
+    if (bootOpened.current || restoring || !gutterFits) return;
     bootOpened.current = true;
     setPanelOpen(columnId, true);
-  }, [gutterFits, setPanelOpen, columnId]);
+  }, [gutterFits, restoring, setPanelOpen, columnId]);
 
   // Light dismiss — Escape, or a pointer outside both the panel and any portal.
   useEffect(() => {

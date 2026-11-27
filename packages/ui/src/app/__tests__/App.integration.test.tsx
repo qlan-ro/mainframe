@@ -22,7 +22,7 @@
  *  - Behavior 8: vi.mocked(useConnectionState).mockReturnValueOnce overrides for that one test.
  */
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
@@ -160,7 +160,7 @@ vi.mock('@/components/ui/sonner', () => ({
 // ---------------------------------------------------------------------------
 
 import { useConnectionState } from '../useConnectionState';
-import { App } from '../App';
+import { App, STARTUP_CARD_DELAY_MS } from '../App';
 
 // ---------------------------------------------------------------------------
 // Reset per-test
@@ -286,8 +286,10 @@ describe('App integration — provides the daemon port to the runtime layer', ()
 // ---------------------------------------------------------------------------
 
 describe('App integration — waits for daemon when port is null', () => {
+  beforeEach(() => void vi.useFakeTimers());
+  afterEach(() => void vi.useRealTimers());
   it('app-waiting-daemon is present and sessions-sidebar is null', async () => {
-    vi.mocked(useConnectionState).mockReturnValueOnce({
+    vi.mocked(useConnectionState).mockReturnValue({
       state: 'connecting',
       daemonStatus: 'initializing',
       port: null,
@@ -298,6 +300,12 @@ describe('App integration — waits for daemon when port is null', () => {
       render(<App />);
     });
 
+    // The card waits out the delay (a quick connect never shows it); the shell stays gated meanwhile.
+    expect(screen.queryByTestId('app-waiting-daemon')).toBeNull();
+    expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STARTUP_CARD_DELAY_MS);
+    });
     expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
   });
@@ -308,12 +316,14 @@ describe('App integration — waits for daemon when port is null', () => {
 // ---------------------------------------------------------------------------
 
 describe('App integration — waits for the daemon when the port is known but not yet ready', () => {
+  beforeEach(() => void vi.useFakeTimers());
+  afterEach(() => void vi.useRealTimers());
   it('does NOT mount the data shell until /health passes (ready=false)', async () => {
     // The sidecar opens its port before it accepts requests: the port is known
     // but the daemon is not reachable yet (ready=false). Gating only on the port
     // would mount the sidebar and fire the initial REST loads against a dead
     // daemon — the boot race. The shell must stay gated until ready latches true.
-    vi.mocked(useConnectionState).mockReturnValueOnce({
+    vi.mocked(useConnectionState).mockReturnValue({
       state: 'connecting',
       daemonStatus: 'initializing',
       port: 31415,
@@ -324,6 +334,12 @@ describe('App integration — waits for the daemon when the port is known but no
       render(<App />);
     });
 
+    // The card waits out the delay (a quick connect never shows it); the shell stays gated meanwhile.
+    expect(screen.queryByTestId('app-waiting-daemon')).toBeNull();
+    expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(STARTUP_CARD_DELAY_MS);
+    });
     expect(screen.getByTestId('app-waiting-daemon')).toBeDefined();
     expect(screen.queryByTestId('sessions-sidebar')).toBeNull();
   });

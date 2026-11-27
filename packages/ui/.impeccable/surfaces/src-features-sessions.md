@@ -16,6 +16,8 @@ Find the session that needs attention, or the one to resume, in a list of dozens
 ## Constraints
 Rows stay one line and 28 px tall. Virtualised list. Status must stay readable at a glance without colour alone. Branch, PR, tags, provider, lineage and missing-checkout warnings live in the row hover card. Pick a new session's project and branch in the composer strip. Its welcome screen uses that selection to show the checkout, recent sessions and open tasks. Choosing the active daemon again keeps a pending sidebar refresh in flight. A refresh started before a daemon switch cannot populate the new sidebar.
 
+At boot the sidebar, its empty state ("No sessions yet", "0 projects") and the new-session welcome are not painted until the remembered chat is restored (`boot-restore`); they show the final list at once, and the welcome only when there is nothing to restore.
+
 ## Direction contract
 THESIS: the project always leads and status replaces the time. This replaces a status glyph that pushed the project out.
 OWN-WORLD: project letter tile, title, then one trailing value: a spinner, "needs you" in amber, or the time. No counts, no badges, no Unattended mark on rows.
