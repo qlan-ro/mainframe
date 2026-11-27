@@ -68,6 +68,12 @@ describe('mergeSteps', () => {
     expect([0, 1, 2, 3].map((index) => sourceOf(merged!, index))).toEqual(['src-s1', 'src-s2', 'src-t1', 'src-s3']);
   });
 
+  it('puts older stream steps before the fetched ones when the fetch was cut to the newest', () => {
+    const fetched = steps([call('s3'), call('s4')]);
+    const live = steps([call('s1'), call('s2'), call('s3'), call('s4'), call('s5')]);
+    expect(keys(mergeSteps([fetched], [live])[0])).toEqual(['s1#call', 's2#call', 's3#call', 's4#call', 's5#call']);
+  });
+
   it('keeps every block of a text, image, text sequence once', () => {
     const fetched = steps([text('a', 0, 'first'), image('a', 1), text('a', 2, 'last')]);
     const live = steps([image('a', 1), text('a', 2, 'last, longer'), text('b', 0, 'next')]);

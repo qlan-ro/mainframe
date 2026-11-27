@@ -492,6 +492,8 @@ describe('a copy outside the window and the run in progress', () => {
   it('is not running when the run began after a message the window holds', async () => {
     world.live = [{ id: 'u-late', role: 'user', content: [], metadata: { custom: {} } }];
     running({ after: 'u-late', confirmed: true });
+    // Dated after the turn's start, so only the window check can say "not running".
+    controller.subagentHistory.around.mockResolvedValue(around({ at: '2026-01-01T00:00:12Z' }));
     render(tab());
     await settle();
     expect(status()).not.toBe('running');
