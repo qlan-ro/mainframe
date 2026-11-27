@@ -16,7 +16,7 @@ import { useRetainedValue } from './disclosure-state';
 import { ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const BLOCK_CEILING = 'has-[pre,table]:max-h-[calc(var(--read-more-lines)*(1lh+2rem))]';
+const BLOCK_CEILING = 'has-[pre]:max-h-[calc(var(--read-more-lines)*(1lh+2rem))]';
 
 export interface ReadMoreProps {
   children: ReactNode;
@@ -55,11 +55,12 @@ export function ReadMore({
   const needsToggle = measureText.length > threshold;
   const collapsed = needsToggle && !expanded;
 
-  // `line-clamp` counts lines of text only. WebKit also clips a block child such as a code
-  // block or a table; Chromium does not and shows it at full height. So when the content
-  // holds one, `max-height` is the ceiling that makes both clip: the clamped lines plus 2rem
-  // per line for the gaps between blocks. Text-only content keeps the pure line clamp, whose
-  // ellipsis and line boundary a ceiling would cut into.
+  // `line-clamp` counts lines of text only. WebKit also clips a code block; Chromium does not
+  // and shows it at full height. So when the content holds a `pre`, `max-height` is the
+  // ceiling that makes both clip: the clamped lines plus 2rem per line for the gaps between
+  // blocks. Text-only content keeps the pure line clamp, whose ellipsis and line boundary a
+  // ceiling would cut into. Tables are left alone: the ceiling shrinks a table's wrapper to
+  // 40 px in WebKit, the shipped engine, where main leaves it unclamped.
   const clampStyle = collapsed
     ? ({
         display: '-webkit-box',
