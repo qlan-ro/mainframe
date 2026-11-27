@@ -35,6 +35,7 @@ import { Message, MessageContent } from '@/components/ui/message';
 import { Bubble, BubbleContent } from '@/components/ui/bubble';
 import { Badge } from '@/components/ui/badge';
 import { urlTransform, remarkAppLinks } from '../parts/markdown-url-transform';
+import { withParseCache } from '../parts/markdown-parse-cache';
 import { useMainframeMeta } from '../view-model/message-meta';
 import { MessageFooter } from './MessageFooter';
 import { useIsNestedTranscript } from './nested-transcript-context';
@@ -55,7 +56,8 @@ import { parseAgentText } from '../markers/agent-message';
 // Remark plugin set (stable reference — never define inline)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const REMARK_PLUGINS = [remarkGfm, remarkAppLinks, remarkBreaks];
+// A sent message's text is settled, so its parse is kept for the next mount (`markdown-parse-cache.ts`).
+const REMARK_PLUGINS = withParseCache([remarkGfm, remarkAppLinks, remarkBreaks]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Bubble shell
