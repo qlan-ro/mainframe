@@ -24,6 +24,17 @@ impl ChatManager {
     /// the live view. `None` when the chat is busy, not cacheable, or its
     /// files changed during the read.
     pub async fn refresh_history_cache(&self, chat_id: &str) -> Option<RefreshedHistory> {
+        self.refresh_history_cache_as(chat_id, false).await
+    }
+
+    /// [`refresh_history_cache`](Self::refresh_history_cache); `background`
+    /// (the turn-end refresh) reads with a capped parse budget so a chat the
+    /// user opens meanwhile keeps its workers.
+    pub async fn refresh_history_cache_as(
+        &self,
+        chat_id: &str,
+        background: bool,
+    ) -> Option<RefreshedHistory> {
         if !self.idle_history_eligible(chat_id) {
             return None;
         }
@@ -31,7 +42,7 @@ impl ChatManager {
         let session = build_history_session(&self.shared.deps, &chat, chat_id)?;
         let (raw, mut validation) = self
             .shared
-            .refresh_cached_history(chat_id, session.as_ref())
+            .refresh_cached_history(chat_id, session.as_ref(), background)
             .await?;
         let mut restored = PermissionManager::default();
         restored.restore_pending_permission(chat_id, &raw);

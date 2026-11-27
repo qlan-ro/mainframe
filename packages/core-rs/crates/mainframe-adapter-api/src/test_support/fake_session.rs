@@ -51,6 +51,9 @@ pub struct FakeSession {
     /// When set, every `load_history` call bumps it — how a test proves a
     /// path loads the transcript once rather than twice.
     pub history_loads: Option<Arc<AtomicUsize>>,
+    /// When set, every `load_history_background` call bumps it (and also
+    /// counts in `history_loads`).
+    pub background_loads: Option<Arc<AtomicUsize>>,
     /// `AdapterSession::history_sources` — empty by default (matching the
     /// trait's "do not cache" default), so only a test that opts in by
     /// setting real, stat-able paths here ever exercises the history
@@ -227,6 +230,12 @@ impl AdapterSession for FakeSession {
             }
             Ok(history)
         })
+    }
+    fn load_history_background(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        if let Some(loads) = &self.background_loads {
+            loads.fetch_add(1, Ordering::SeqCst);
+        }
+        self.load_history()
     }
     fn load_history_window<'a>(
         &'a self,

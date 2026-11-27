@@ -163,7 +163,7 @@ impl FacadeHub {
             // Behind any refresh already running; none starts after this.
             let _turn = refresher.running.lock().await;
             for chat_id in &pending {
-                refresher.refresh(chat_id, store).await;
+                refresher.refresh(chat_id, store, false).await;
             }
         })
         .await;
@@ -183,11 +183,12 @@ impl HistoryRefresher {
         if self.closing.load(Ordering::Acquire) {
             return;
         }
-        self.refresh(chat_id, store).await;
+        self.refresh(chat_id, store, true).await;
     }
 
     /// One refresh of `chat_id`; the caller holds the `running` slot.
-    async fn refresh(&self, chat_id: &str, store: Option<&TailStore>) {
+    /// `background` caps its parse workers; the shutdown flush does not.
+    async fn refresh(&self, chat_id: &str, store: Option<&TailStore>, background: bool) {
         let Some(ticket) = self.stale.get(chat_id).map(|t| *t) else {
             return;
         };
@@ -195,7 +196,7 @@ impl HistoryRefresher {
             return;
         };
         self.started.insert(chat_id.to_owned(), Instant::now());
-        let refreshed = manager.refresh_history_cache(chat_id).await;
+        let refreshed = manager.refresh_history_cache_as(chat_id, background).await;
         if refreshed.is_none() && manager.is_chat_working(chat_id) {
             // A new turn started; its own end schedules the next refresh.
             return;

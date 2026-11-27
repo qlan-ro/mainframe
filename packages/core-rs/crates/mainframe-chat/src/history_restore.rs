@@ -24,11 +24,12 @@ impl ChatShared {
         &self,
         chat_id: &str,
         session: &dyn AdapterSession,
+        background: bool,
     ) -> Option<(Vec<ChatMessage>, crate::HistoryValidation)> {
         let context = self.history_context(chat_id);
         let parsed = self
             .history_cache
-            .refresh(chat_id, session, context.as_deref())
+            .refresh(chat_id, session, context.as_deref(), background)
             .await?;
         let messages = remap_history_for(parsed.messages, chat_id);
         let messages = self.preview_idle_history(chat_id, messages).ok()?;
