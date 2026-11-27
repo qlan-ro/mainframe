@@ -1,11 +1,10 @@
 import { SubagentFind } from './SubagentFind';
 import { ProseBlock, TextBlock } from './SubagentTextBlocks';
 import { ConversationExportButton } from './ConversationExportButton';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
-import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
@@ -35,44 +34,13 @@ import {
   stoppableTask,
 } from './agent-status';
 import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
-import { findSubagentCall, type SubagentCall } from './find-subagent-call';
+import type { SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
+import { useSubagentCall } from './use-subagent-call';
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-function useLoadCall(
-  controller: AcpChatController,
-  state: ChatThreadState,
-  messages: readonly ThreadMessage[],
-  call: SubagentCall | null,
-  target: { toolCallId: string; messageId?: string; nested: boolean },
-): string | null {
-  const [error, setError] = useState<string | null>(null);
-  const { toolCallId, messageId } = target;
-  const partial = controller.isHistoryContext(toolCallId);
-  const ready = state.loadState?.type === 'ready';
-  const hasMore = state.historyWindow?.hasMore ?? false;
-  const needed = !target.nested && ready && (call == null || partial);
-  const exhausted = !hasMore || (!partial && messages.some((message) => message.id === messageId));
-  useEffect(() => {
-    if (!needed || exhausted) return undefined;
-    let cancelled = false;
-    void controller.loadEarlier(toolCallId).then(
-      (found) => {
-        if (!cancelled && !found) setError('Not in this transcript');
-      },
-      (cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load the transcript');
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [controller, needed, exhausted, messages, toolCallId]);
-  return needed && exhausted ? 'Not in this transcript' : error;
-}
-
 interface Place {
   pending: ReadonlySet<string>;
   partLive: boolean;
@@ -84,10 +52,15 @@ function usePlace(
   messages: readonly ThreadMessage[],
   state: ChatThreadState,
   world: AgentWorld,
+  /** The parent's window, when the call is a copy from outside it. */
+  window: readonly ThreadMessage[] | null,
 ): Place | null {
   const cache = useMemo(() => new TurnCache(), []);
   const pending = useMemo(() => pendingCalls(state), [state]);
-  const turns = useMemo(() => chatTurns(messages, state, cache), [messages, state, cache]);
+  const turns = useMemo(
+    () => chatTurns(messages, state, cache, window && call ? { window, messageId: call.messageId } : null),
+    [messages, state, cache, window, call],
+  );
   return useMemo(() => {
     if (call === null) return null;
     const partLive = holderLive(turns, call, pending, world);
@@ -101,12 +74,15 @@ function Steps({
   result,
   chatId,
   nativeAgentId,
+  omitted,
 }: {
   call: SubagentCall;
   work: AgentWork;
   result: string;
   chatId: string;
   nativeAgentId?: string | null;
+  /** The oldest steps were left out of the copy (it is over the daemon's cap). */
+  omitted: boolean;
 }) {
   const steps = call.part.messages ?? [];
   const fact = subagentFact(call.part);
@@ -114,17 +90,28 @@ function Steps({
   if (!historical && steps.length === 0) return null;
   const Content = historical ? HistoricalAgentSteps : AgentSteps;
   return (
-    <Content
-      chatId={chatId}
-      bare
-      messages={steps}
-      messageId={call.messageId}
-      toolCallId={call.part.toolCallId}
-      {...(historical ? { nativeAgentId } : {})}
-      outcome={work.outcome}
-      prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
-      result={result}
-    />
+    <>
+      {omitted && !historical && (
+        <p
+          role="note"
+          data-testid={`workspace-agent-steps-omitted-${call.part.toolCallId}`}
+          className="text-xs text-muted-foreground"
+        >
+          Earlier steps are not shown.
+        </p>
+      )}
+      <Content
+        chatId={chatId}
+        bare
+        messages={steps}
+        messageId={call.messageId}
+        toolCallId={call.part.toolCallId}
+        {...(historical ? { nativeAgentId } : {})}
+        outcome={work.outcome}
+        prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
+        result={result}
+      />
+    </>
   );
 }
 
@@ -182,21 +169,34 @@ export function SubagentTabBody({
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const call = useMemo(
-    () =>
-      savedNestedCall
-        ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
-        : findSubagentCall(messages, toolCallId),
-    [messages, toolCallId, messageId, savedNestedCall],
-  );
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedCall });
+  const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
+  // Null until the daemon has listed tasks, so the list arriving is not taken for a task moving.
+  const taskKey =
+    listed === null
+      ? null
+      : (ownTasks(listed, toolCallId) ?? []).map((task) => `${task.id}:${task.status}:${task.endedAt}`).join();
+  const {
+    call,
+    messages: callMessages,
+    detached,
+    omitted,
+    error,
+  } = useSubagentCall({
+    controller,
+    state,
+    messages,
+    toolCallId,
+    messageId,
+    savedNestedCall,
+    taskKey,
+    active,
+  });
   const historical = call ? subagentFact(call.part) : undefined;
   const nativeAgentId = savedNestedCall ? (historical?.nativeAgentId ?? null) : historical?.nativeAgentId;
-  const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
   const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
-  const place = usePlace(call, messages, state, world);
+  const place = usePlace(call, callMessages, state, world, detached ? messages : null);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;
@@ -270,6 +270,7 @@ export function SubagentTabBody({
               work={place.work}
               result={agent?.result ?? ''}
               nativeAgentId={nativeAgentId}
+              omitted={omitted}
             />
             <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {

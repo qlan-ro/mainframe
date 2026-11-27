@@ -63,6 +63,7 @@ fn around_params(messages: &[DisplayMessage]) -> HistoryAroundParams {
         item_id: messages[messages.len() / 2].id.clone(),
         before: Some(40),
         after: Some(40),
+        include_descendants: None,
     }
 }
 
