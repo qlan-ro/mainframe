@@ -37,6 +37,11 @@ Object.defineProperty(globalThis, 'localStorage', {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import '@testing-library/jest-dom/vitest';
+import { openAfterFirstPaintForTests } from '../lib/after-first-paint';
+
+// Boot defers git reads until the first paint; a test renders its hook and expects the read, so
+// every file starts on a page that has already painted. `after-first-paint.test.tsx` resets it.
+openAfterFirstPaintForTests();
 
 class ResizeObserverStub {
   observe() {}

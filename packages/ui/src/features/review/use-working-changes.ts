@@ -20,6 +20,7 @@ import { getBranchDiffs, getGitBranch, getGitStatus, getWorkingStat } from '@/li
 import { getSessionFiles } from '@/lib/api/files';
 import { gitStatusKind } from '@/lib/git-status-kind';
 import { daemonWs } from '@/lib/daemon/ws-client';
+import { useAfterFirstPaint } from '@/lib/after-first-paint';
 import { gitStatusToFiles, type ReviewFile } from './git-status-to-files';
 
 export type ChangeScope = 'session' | 'uncommitted' | 'branch';
@@ -149,7 +150,9 @@ export function useWorkingChanges({
   const refetch = useCallback(() => setRefreshKey((key) => key + 1), []);
 
   // Every scope reads git through the project; `session` also needs the chat.
-  const canFetch = enabled && !noProject && Boolean(projectId) && (scope !== 'session' || Boolean(chatId));
+  // Git work waits for the first paint, so it does not compete with the chat being opened.
+  const painted = useAfterFirstPaint();
+  const canFetch = painted && enabled && !noProject && Boolean(projectId) && (scope !== 'session' || Boolean(chatId));
 
   useEffect(() => {
     if (!canFetch) {

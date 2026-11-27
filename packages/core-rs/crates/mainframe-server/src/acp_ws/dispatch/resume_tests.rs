@@ -3,3 +3,6 @@
 
 include!("resume_tests_part_1.rs");
 include!("resume_tests_part_2.rs");
+
+#[path = "resume_tests_deferred_seed.rs"]
+mod deferred_seed;

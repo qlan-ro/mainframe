@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getGitBranch } from '@/lib/api/git';
+import { useAfterFirstPaint } from '@/lib/after-first-paint';
 
 export interface UseDisplayBranchOptions {
   port: number;
@@ -34,7 +35,8 @@ export function useDisplayBranch({
   hasRecordedBase = false,
   visible = true,
 }: UseDisplayBranchOptions): DisplayBranch {
-  const canRead = !hasRecordedBase || visible;
+  const painted = useAfterFirstPaint();
+  const canRead = painted && (!hasRecordedBase || visible);
   const boundPath = hasRecordedBase ? worktreePath : undefined;
   const [revision, setRevision] = useState(0);
   const request = useMemo(

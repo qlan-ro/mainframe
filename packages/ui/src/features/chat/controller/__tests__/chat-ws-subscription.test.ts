@@ -25,6 +25,7 @@ interface FakeWs {
   fakeClient: DaemonWsClient;
   pushEvent: (event: DaemonEvent) => void;
   fireConnectionListener: () => void;
+  fireDisconnect: () => void;
   subscribeCalls: string[];
   unsubscribeCalls: string[];
 }
@@ -75,6 +76,11 @@ function makeFakeWs(initiallyConnected = true): FakeWs {
     },
     fireConnectionListener() {
       isConnected = true;
+      if (!connListener) throw new Error('connection listener not registered — call attach() first');
+      connListener();
+    },
+    fireDisconnect() {
+      isConnected = false;
       if (!connListener) throw new Error('connection listener not registered — call attach() first');
       connListener();
     },
@@ -168,17 +174,61 @@ describe('ChatWsSubscription — event routing', () => {
 });
 
 describe('ChatWsSubscription — reconnect', () => {
-  it('re-subscribes and re-warms when the connection listener fires while connected', () => {
+  it('re-subscribes and re-warms when the socket opens again after a drop', () => {
     const ws = makeFakeWs();
     const sub = new ChatWsSubscription(makeHost(ws));
     sub.attach();
     vi.mocked(resumeChat).mockClear();
     ws.subscribeCalls.length = 0;
 
+    ws.fireDisconnect();
+    expect(ws.subscribeCalls).toEqual([]);
     ws.fireConnectionListener();
 
     expect(ws.subscribeCalls).toEqual([CHAT_ID]);
     expect(resumeChat).toHaveBeenCalledWith(PORT, CHAT_ID, { waitFor: 'transcript', initialWindow: true });
+  });
+
+  it('does nothing on the first open of a socket it subscribed before', async () => {
+    const ws = makeFakeWs(false);
+    const sub = new ChatWsSubscription(makeHost(ws));
+    sub.attach();
+    await sub.whenTranscriptReady();
+    vi.mocked(resumeChat).mockClear();
+    ws.subscribeCalls.length = 0;
+
+    ws.fireConnectionListener();
+
+    expect(ws.subscribeCalls).toEqual([]);
+    expect(resumeChat).not.toHaveBeenCalled();
+  });
+
+  it('asks again on that first open if the warm-up request failed', async () => {
+    vi.mocked(resumeChat).mockRejectedValueOnce(new Error('daemon not up yet'));
+    const ws = makeFakeWs(false);
+    const sub = new ChatWsSubscription(makeHost(ws));
+    sub.attach();
+    await sub.whenTranscriptReady();
+    vi.mocked(resumeChat).mockClear();
+    ws.subscribeCalls.length = 0;
+
+    ws.fireConnectionListener();
+
+    expect(ws.subscribeCalls).toEqual([CHAT_ID]);
+    expect(resumeChat).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ChatWsSubscription — warm-up failure on an open socket', () => {
+  it('retries once, and stops after that', async () => {
+    vi.mocked(resumeChat).mockReset().mockRejectedValue(new Error('daemon busy'));
+    const ws = makeFakeWs(true);
+    const sub = new ChatWsSubscription(makeHost(ws));
+    sub.attach();
+    await sub.whenTranscriptReady();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(resumeChat).toHaveBeenCalledTimes(2);
+    vi.mocked(resumeChat).mockReset().mockResolvedValue(undefined);
   });
 });
 

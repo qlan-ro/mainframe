@@ -67,11 +67,24 @@ fn prepare(
     log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     options: ResumeOptions,
 ) -> (JsonRpcResponse, ResumeReplay) {
-    seed_log(
-        log.as_ref().map(|(log, _)| *log),
-        &snapshot,
-        &resume.session_id,
-    );
+    let deferred = defers_seed(&resume, options);
+    if !deferred {
+        seed_log(
+            log.as_ref().map(|(log, _)| *log),
+            &snapshot,
+            &resume.session_id,
+        );
+    }
+    // Copied here, inside the read the reply is built from, so the caller's
+    // later seed describes exactly what this reply sent.
+    let seed_copy = (deferred
+        && log
+            .as_ref()
+            .is_some_and(|(log, _)| !log.lock_recover().is_seeded()))
+    .then(|| super::SeedCopy {
+        messages: snapshot.messages.to_vec(),
+        streaming: snapshot.streaming,
+    });
     let started = std::time::Instant::now();
     let selection = Selection::new(
         &snapshot,
@@ -83,6 +96,7 @@ fn prepare(
     let fallback = selection.fallback;
     let floor_position = selection.start;
     let mut replay = prepare_replay(selection, pending, options);
+    replay.seed_copy = seed_copy;
     let mut meta = super::resume_meta(
         replay.updates.len(),
         fallback,
@@ -103,6 +117,21 @@ fn prepare(
         "prepared transcript window"
     );
     (response, replay)
+}
+
+/// Only a resume that never reads the log can leave it unseeded: a revision
+/// cursor is planned against the log's items and container positions.
+fn defers_seed(resume: &ResumeSessionRequest, options: ResumeOptions) -> bool {
+    options.defer_log_seed
+        && !matches!(
+            resume
+                .replay_from
+                .as_ref()
+                .and_then(
+                    |value| serde_json::from_value::<super::ReplayCursor>(value.clone()).ok()
+                ),
+            Some(super::ReplayCursor::Revision { .. })
+        )
 }
 
 fn seed_log(log: Option<&Mutex<RevisionLog>>, snapshot: &SnapshotView<'_>, chat_id: &str) {
@@ -157,6 +186,7 @@ fn prepare_replay(
         preview_ids,
         pending_permission_request: None,
         pending_gate: pending,
+        seed_copy: None,
     }
 }
 
