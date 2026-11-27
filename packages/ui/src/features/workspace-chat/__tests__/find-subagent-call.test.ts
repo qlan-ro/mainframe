@@ -39,3 +39,13 @@ describe('findSubagentCall', () => {
 it('lists the calls an agent made, at any depth', () => {
   expect(toolCallIdsOf([inner])).toEqual(['bash-1', 'agent-2', 'bash-2']);
 });
+
+it('returns the same object for the same call while another part of the transcript changes', () => {
+  const part = { type: 'tool-call', toolCallId: 'call-1', toolName: 'Task', args: {} };
+  const message = (id: string, content: unknown[]) => ({ id, role: 'assistant', content }) as unknown as ThreadMessage;
+  const first = findSubagentCall([message('m-1', [part])], 'call-1');
+  const later = findSubagentCall([message('m-1', [part]), message('m-2', [])], 'call-1');
+  expect(later).toBe(first);
+  const changed = findSubagentCall([message('m-1', [{ ...part }])], 'call-1');
+  expect(changed).not.toBe(first);
+});

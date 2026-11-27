@@ -52,12 +52,12 @@ function usePlace(
   messages: readonly ThreadMessage[],
   state: ChatThreadState,
   world: AgentWorld,
-  /** The parent's window, when the call is a copy outside it. */
-  window: readonly ThreadMessage[] | null,
+  /** The call is a copy from outside the parent's window. */
+  detached: boolean,
 ): Place | null {
   const cache = useMemo(() => new TurnCache(), []);
   const pending = useMemo(() => pendingCalls(state), [state]);
-  const turns = useMemo(() => chatTurns(messages, state, cache, window), [messages, state, cache, window]);
+  const turns = useMemo(() => chatTurns(messages, state, cache, detached), [messages, state, cache, detached]);
   return useMemo(() => {
     if (call === null) return null;
     const partLive = holderLive(turns, call, pending, world);
@@ -71,12 +71,15 @@ function Steps({
   result,
   chatId,
   nativeAgentId,
+  omitted,
 }: {
   call: SubagentCall;
   work: AgentWork;
   result: string;
   chatId: string;
   nativeAgentId?: string | null;
+  /** The oldest steps were left out of the copy (it is over the daemon's cap). */
+  omitted: boolean;
 }) {
   const steps = call.part.messages ?? [];
   const fact = subagentFact(call.part);
@@ -84,17 +87,28 @@ function Steps({
   if (!historical && steps.length === 0) return null;
   const Content = historical ? HistoricalAgentSteps : AgentSteps;
   return (
-    <Content
-      chatId={chatId}
-      bare
-      messages={steps}
-      messageId={call.messageId}
-      toolCallId={call.part.toolCallId}
-      {...(historical ? { nativeAgentId } : {})}
-      outcome={work.outcome}
-      prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
-      result={result}
-    />
+    <>
+      {omitted && !historical && (
+        <p
+          role="note"
+          data-testid={`workspace-agent-steps-omitted-${call.part.toolCallId}`}
+          className="text-xs text-muted-foreground"
+        >
+          Earlier steps are not shown.
+        </p>
+      )}
+      <Content
+        chatId={chatId}
+        bare
+        messages={steps}
+        messageId={call.messageId}
+        toolCallId={call.part.toolCallId}
+        {...(historical ? { nativeAgentId } : {})}
+        outcome={work.outcome}
+        prompt={text((call.part.args as Record<string, unknown>)['prompt'])}
+        result={result}
+      />
+    </>
   );
 }
 
@@ -153,13 +167,16 @@ export function SubagentTabBody({
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
-  const taskKey = (ownTasks(listed, toolCallId) ?? [])
-    .map((task) => `${task.id}:${task.status}:${task.endedAt}`)
-    .join();
+  // Null until the daemon has listed tasks, so the list arriving is not taken for a task moving.
+  const taskKey =
+    listed === null
+      ? null
+      : (ownTasks(listed, toolCallId) ?? []).map((task) => `${task.id}:${task.status}:${task.endedAt}`).join();
   const {
     call,
     messages: callMessages,
     detached,
+    omitted,
     error,
   } = useSubagentCall({
     controller,
@@ -176,7 +193,7 @@ export function SubagentTabBody({
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
   const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
-  const place = usePlace(call, callMessages, state, world, detached ? messages : null);
+  const place = usePlace(call, callMessages, state, world, detached);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;
@@ -250,6 +267,7 @@ export function SubagentTabBody({
               work={place.work}
               result={agent?.result ?? ''}
               nativeAgentId={nativeAgentId}
+              omitted={omitted}
             />
             <ResultBlock label="Result" testId={`workspace-agent-result-${toolCallId}`} source={agent?.result ?? ''} />
             {agent?.reports.map(({ source, text: report }, i) => {

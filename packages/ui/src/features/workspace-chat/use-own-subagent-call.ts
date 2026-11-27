@@ -34,7 +34,7 @@ export type OwnCall =
   | { kind: 'unsupported' }
   | { kind: 'missing' }
   | { kind: 'error'; message: string }
-  | { kind: 'call'; call: SubagentCall; messages: readonly ThreadMessage[] };
+  | { kind: 'call'; call: SubagentCall; messages: readonly ThreadMessage[]; omitted: boolean };
 
 const PENDING: OwnCall = { kind: 'pending' };
 
@@ -42,7 +42,7 @@ const PENDING: OwnCall = { kind: 'pending' };
 function useRefetchVersion(
   controller: AcpChatController,
   state: ChatThreadState,
-  taskKey: string,
+  taskKey: string | null,
   active: boolean,
 ): number {
   const [version, bump] = useReducer((n: number) => n + 1, 0);
@@ -55,8 +55,8 @@ function useRefetchVersion(
     const turnEnded = before.running && !running;
     const compacted = before.compacting && !state.compacting;
     const reloaded = before.generation !== generation;
-    // The list arriving is not a change of the call: only a task already seen moving is.
-    const taskMoved = before.taskKey !== '' && before.taskKey !== taskKey;
+    // The list arriving is not a change of the call; a task appearing or moving once it has is.
+    const taskMoved = before.taskKey !== null && before.taskKey !== taskKey;
     const shown = !before.active && active;
     if (turnEnded || compacted || reloaded || taskMoved || shown) bump();
   }, [running, state.compacting, generation, taskKey, active]);
@@ -69,8 +69,8 @@ export function useOwnSubagentCall(options: {
   toolCallId: string;
   /** False while nothing is missing: a saved nested call, the parent not loaded yet, or the live window holding the call whole. */
   enabled: boolean;
-  /** The daemon's tasks for this call, as one comparable string. */
-  taskKey: string;
+  /** The daemon's tasks for this call as one comparable string; null until the daemon has listed any. */
+  taskKey: string | null;
   active: boolean;
 }): OwnCall {
   const { controller, state, toolCallId, enabled, taskKey, active } = options;
@@ -96,7 +96,9 @@ export function useOwnSubagentCall(options: {
           .convert(accumulator.itemsInOrder, () => new Date(0))
           .map(normalizeNativeMessage);
         const call = result.stale ? null : findSubagentCall(messages, toolCallId);
-        setHeld(call ? { kind: 'call', call, messages } : { kind: 'missing' });
+        setHeld(
+          call ? { kind: 'call', call, messages, omitted: result.hasMoreDescendants === true } : { kind: 'missing' },
+        );
       },
       (cause: unknown) => {
         if (cancelled) return;

@@ -19,20 +19,18 @@ export function chatTurnScope(state: Pick<ChatThreadState, 'interactions' | 'run
 }
 
 /**
- * `window`: the chat's own messages, given when `messages` is a call's copy from outside them. That
- * copy is older than the whole window, so it is in the current run only when the run began before
- * the window did; a copy alone would otherwise count as the run's last message.
+ * `detached`: `messages` is a call's copy from outside the chat's own window, an earlier turn. The
+ * run cannot be placed in it, so it is taken as not running; what keeps it open is a pending request
+ * or a task, which do not depend on the run.
  */
 export function chatTurns(
   messages: readonly ThreadMessage[],
   state: ChatThreadState,
   cache: TurnCache,
-  window: readonly ThreadMessage[] | null = null,
+  detached = false,
 ): TurnModel {
   const scope = chatTurnScope(state);
-  const after = scope.runAfter;
-  const olderThanRun = window != null && typeof after === 'string' && window.some(({ id }) => id === after);
-  return buildTurns(messages, olderThanRun ? { ...scope, isRunning: false } : scope, cache);
+  return buildTurns(messages, detached ? { ...scope, isRunning: false } : scope, cache);
 }
 
 /** The calls of parts that can't be going. */

@@ -36,26 +36,27 @@ fn locate(message: &DisplayMessage, items: &[EncodedItem], id: &str) -> Option<u
         .or_else(|| (message.id == id && !items.is_empty()).then_some(0))
 }
 
-/// Where the target's descendants end in its container, and whether the cap cut them short.
+/// The span of the target's descendants in its container: where the newest `MAX_DESCENDANTS` of
+/// them begin when there are more (`None` while all fit), where they end, and whether any were cut.
 ///
 /// A sub-agent's steps are items of the container that holds its call, each naming its parent
 /// by `parentToolCallId`; a step's own steps (a nested agent) name that step. So the family
-/// grows as the scan goes, and a descendant always follows its parent.
-fn descendants_end(items: &[EncodedItem], target: usize) -> (usize, bool) {
+/// grows as the scan goes, and a descendant always follows its parent. The newest are kept: the
+/// final answer is at the end.
+fn descendants_span(items: &[EncodedItem], target: usize) -> (Option<usize>, usize, bool) {
     let mut family = HashSet::from([items[target].id()]);
-    let (mut last, mut found) = (target, 0);
+    let mut positions = Vec::new();
     for (at, item) in items.iter().enumerate().skip(target + 1) {
-        if !item_window::parent(item).is_some_and(|parent| family.contains(parent)) {
-            continue;
+        if item_window::parent(item).is_some_and(|parent| family.contains(parent)) {
+            family.insert(item.id());
+            positions.push(at);
         }
-        if found == MAX_DESCENDANTS {
-            return (last, true);
-        }
-        found += 1;
-        family.insert(item.id());
-        last = at;
     }
-    (last, false)
+    let last = positions.last().copied().unwrap_or(target);
+    match positions.len().checked_sub(MAX_DESCENDANTS) {
+        Some(cut) if cut > 0 => (Some(positions[cut]), last, true),
+        _ => (None, last, false),
+    }
 }
 
 /// Serve the window from the chat's list in place; `None` if the port could
@@ -162,22 +163,26 @@ fn cut(block: VecDeque<Vec<EncodedItem>>, start: usize, end: usize) -> Cut {
     out
 }
 
-/// The flat position the window stops at: `after` items past the target, or past the
-/// target's last step when the request asks for them.
-fn window_end(
+/// The flat positions the window spans: `before` and `after` items around the target, widened
+/// to the target's newest steps when the request asks for them. The last value says whether the
+/// cap cut the oldest steps.
+fn window_span(
     block: &Block,
     index: usize,
     offset: usize,
-    after: usize,
+    wanted: (usize, usize),
     params: &HistoryAroundParams,
     total: usize,
-) -> (usize, bool) {
-    let end = (block.target + 1 + after).min(total);
+) -> (usize, usize, bool) {
+    let start = block.target - wanted.0.min(block.target);
+    let end = (block.target + 1 + wanted.1).min(total);
     if params.include_descendants != Some(true) {
-        return (end, false);
+        return (start, end, false);
     }
-    let (last, more) = descendants_end(&block.containers[index - block.lo], offset);
-    (end.max(block.target - offset + last + 1), more)
+    let home_start = block.target - offset;
+    let (first, last, more) = descendants_span(&block.containers[index - block.lo], offset);
+    let end = end.max(home_start + last + 1);
+    (first.map_or(start, |first| home_start + first), end, more)
 }
 
 pub fn prepare(
@@ -201,20 +206,15 @@ pub fn prepare(
         return stale();
     };
     let wanted = (count(params.before), count(params.after));
+    let target_id = home[offset].id().to_owned();
     let block = grow(messages, index, home, offset, wanted);
 
     let total: usize = block.containers.iter().map(Vec::len).sum();
-    let start = block.target - wanted.0.min(block.target);
-    let (end, more_descendants) = window_end(&block, index, offset, wanted.1, params, total);
+    let (start, end, more_descendants) = window_span(&block, index, offset, wanted, params, total);
     let cut = cut(block.containers, start, end);
     let leading = cut.leading;
     let (containers, context_ids, first_id, last_id) =
         (cut.containers, cut.context, cut.first, cut.last);
-    let target_id = containers
-        .iter()
-        .flatten()
-        .nth(context_ids.len() + (block.target - start))
-        .map(|item| item.id().to_owned());
     let mut page = PreparedPage {
         result: Default::default(),
         containers,
@@ -230,7 +230,7 @@ pub fn prepare(
         has_after: block.hi + 1 < messages.len() || end < total,
         first_item_id: first_id,
         last_item_id: last_id,
-        target_item_id: target_id,
+        target_item_id: Some(target_id),
         context_item_ids: (!context_ids.is_empty()).then_some(context_ids),
         has_more_descendants: more_descendants.then_some(true),
         stale: None,

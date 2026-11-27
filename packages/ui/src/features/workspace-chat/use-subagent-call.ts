@@ -11,57 +11,9 @@ import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { findSubagentCall, type SubagentCall } from './find-subagent-call';
+import { mergeSteps } from './merge-steps';
 import { useLoadParentCall } from './use-load-parent-call';
 import { useOwnSubagentCall } from './use-own-subagent-call';
-
-type Part = ThreadMessage['content'][number];
-
-/** What names a part across copies: a tool call by its id, anything else by the item it came from. */
-function partKey(part: Part): string | null {
-  if (part.type === 'tool-call') return `call:${part.toolCallId}`;
-  const itemId = (part as { providerMetadata?: { mainframe?: { itemId?: string } } }).providerMetadata?.mainframe
-    ?.itemId;
-  return itemId ? `item:${itemId}` : null;
-}
-
-/** The parts of both copies of one message: the stream's where it has a part, the fetched one's for the rest. */
-function mergeParts(fetched: readonly Part[], live: readonly Part[]): Part[] {
-  const liveByKey = new Map(
-    live.flatMap((part) => {
-      const key = partKey(part);
-      return key ? [[key, part] as const] : [];
-    }),
-  );
-  const known = new Set(fetched.flatMap((part) => partKey(part) ?? []));
-  return [
-    ...fetched.map((part) => liveByKey.get(partKey(part) ?? '') ?? part),
-    ...live.filter((part) => {
-      const key = partKey(part);
-      return key !== null && !known.has(key);
-    }),
-  ];
-}
-
-/**
- * The steps of both copies. A sub-agent's steps are one message whose parts are the steps, so the
- * copies are merged part by part: what the stream has wins, the fetched copy adds what lies above
- * the floor.
- */
-export function mergeSteps(
-  fetched: readonly ThreadMessage[] = [],
-  live: readonly ThreadMessage[] = [],
-): readonly ThreadMessage[] {
-  if (fetched.length === 0) return live;
-  if (live.length === 0) return fetched;
-  const liveById = new Map(live.map((step) => [step.id, step]));
-  const known = new Set(fetched.map((step) => step.id));
-  const merged = fetched.map((step) => {
-    const current = liveById.get(step.id);
-    if (!current) return step;
-    return { ...current, content: mergeParts(step.content, current.content) } as ThreadMessage;
-  });
-  return [...merged, ...live.filter((step) => !known.has(step.id))];
-}
 
 export interface ResolvedCall {
   call: SubagentCall | null;
@@ -69,6 +21,8 @@ export interface ResolvedCall {
   messages: readonly ThreadMessage[];
   /** The copy is the tab's own, outside the parent's window: older than everything in it. */
   detached: boolean;
+  /** The daemon cut the oldest steps of the fetched copy short (`hasMoreDescendants`). */
+  omitted: boolean;
   error: string | null;
 }
 
@@ -79,7 +33,7 @@ interface Options {
   toolCallId: string;
   messageId?: string;
   savedNestedCall?: ToolCallMessagePart;
-  taskKey: string;
+  taskKey: string | null;
   active: boolean;
 }
 
@@ -113,7 +67,8 @@ export function useSubagentCall(options: Options): ResolvedCall {
   }, [savedNestedCall, messageId, toolCallId, liveCall, partial, ownCall, lastLive]);
 
   const detached = !nested && !liveCall && ownCall != null;
-  const fallbackError = useLoadParentCall(controller, state, messages, call, {
+  // The paging fallback looks for the call in the window itself, so it runs again when the call leaves it.
+  const fallbackError = useLoadParentCall(controller, state, messages, liveCall, {
     toolCallId,
     messageId,
     nested,
@@ -127,6 +82,7 @@ export function useSubagentCall(options: Options): ResolvedCall {
     call,
     messages: detached ? ownCall.messages : !liveCall && lastLive ? lastLive.messages : messages,
     detached,
+    omitted: ownCall?.omitted ?? false,
     error,
   };
 }

@@ -85,12 +85,15 @@ interface Shape {
   steps?: string[];
   facts?: boolean;
   title?: string;
+  /** The daemon cut the oldest steps short. */
+  more?: boolean;
 }
 function around({
   done = false,
   steps = ['s1', 's2'],
   facts = false,
   title = 'Agent',
+  more = false,
 }: Shape = {}): HistoryAroundResult {
   const subagentFacts = facts
     ? { 'call-1': { status: 'completed', summary: 'Found two races.', nativeAgentId: 'a1', title: 'Review the diff' } }
@@ -124,6 +127,7 @@ function around({
     hasBefore: true,
     hasAfter: true,
     targetItemId: 'item-1',
+    ...(more && { hasMoreDescendants: true }),
   };
 }
 
@@ -156,7 +160,8 @@ describe('a call below the history floor', () => {
     expect(controller.loadEarlier).not.toHaveBeenCalled();
     expect(screen.getByTestId('workspace-agent-brief-call-1')).toHaveTextContent('Look for races.');
     expect(screen.getByTestId('workspace-agent-header-call-1')).toHaveTextContent('Review the diff');
-    expect(status()).toBe('running');
+    // An earlier turn's copy: a running turn after it does not make it running.
+    expect(status()).not.toBe('running');
   });
 
   it('reads a finished agent from its facts: status, title, summary and its saved steps', async () => {
@@ -318,6 +323,7 @@ describe('a call that is a context item in the live window', () => {
             {
               id: 'item-1:transcript',
               role: 'assistant',
+              metadata: { custom: { mainframe: { partKeys: over.steps.map((id) => `${id}#call`) } } },
               content: over.steps.map((id) => ({ type: 'tool-call', toolCallId: id, toolName: 'Read', args: {} })),
             },
           ],
@@ -414,6 +420,62 @@ describe('a call that left the window, or sits outside it', () => {
   it('is not running because an unrelated later turn is', async () => {
     world.live = [{ id: 'u-late', role: 'user', content: [], metadata: { custom: {} } }];
     world.state = state({ runState: { type: 'running' }, run: { after: 'u-late' } });
+    render(tab());
+    await settle();
+    expect(status()).not.toBe('running');
+  });
+});
+
+describe('steps over the daemon’s cap', () => {
+  it('says the earliest steps are left out of a running agent’s copy', async () => {
+    controller.subagentHistory.around.mockResolvedValue(around({ more: true }));
+    render(tab());
+    await settle();
+    expect(screen.getByTestId('workspace-agent-steps-omitted-call-1')).toHaveTextContent(
+      'Earlier steps are not shown.',
+    );
+    expect(steps()).toBe('s1,s2');
+  });
+
+  it('says nothing when the copy is whole, or when the saved steps are paged in', async () => {
+    controller.subagentHistory.around.mockResolvedValue(around());
+    const view = render(tab());
+    await settle();
+    expect(screen.queryByTestId('workspace-agent-steps-omitted-call-1')).toBeNull();
+    view.unmount();
+    controller.subagentHistory.around.mockResolvedValue(around({ done: true, facts: true, more: true }));
+    render(tab());
+    await settle();
+    expect(screen.queryByTestId('workspace-agent-steps-omitted-call-1')).toBeNull();
+    expect(steps()).toBe('history');
+  });
+});
+
+describe('a daemon without history_around, once the call leaves the window', () => {
+  it('pages the parent back to it again', async () => {
+    controller.subagentHistory.around.mockResolvedValue(null);
+    world.live = [
+      {
+        id: 'm-1',
+        role: 'assistant',
+        status: { type: 'complete', reason: 'stop' },
+        metadata: { custom: {} },
+        content: [{ type: 'tool-call', toolCallId: 'call-1', toolName: 'Task', args: { prompt: 'Live.' } }],
+      },
+    ];
+    const view = render(tab());
+    await settle();
+    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    world.live = [];
+    view.rerender(tab());
+    await settle();
+    expect(controller.loadEarlier).toHaveBeenCalledWith('call-1');
+  });
+});
+
+describe('a copy from an earlier turn', () => {
+  it('is not running while a later turn runs, even when the run cannot be placed', async () => {
+    world.state = state({ runState: { type: 'running' }, run: null });
     render(tab());
     await settle();
     expect(status()).not.toBe('running');

@@ -114,7 +114,7 @@ function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>,
     likes.push({ role: 'user', id: `${task.id}:prompt`, content: [{ type: 'text', text: prompt }] });
   }
 
-  const { parts, mainframe } = assistantParts(children.get(task.id) ?? [], children);
+  const { parts, mainframe } = assistantParts(children.get(task.id) ?? [], children, true);
   likes.push({
     role: 'assistant',
     id: `${task.id}:transcript`,
@@ -128,14 +128,17 @@ function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>,
 function assistantParts(
   items: readonly ParsedItem[],
   children: ChildrenMap,
+  /** Name every part (`partKeys`), so two copies of a sub-agent's steps can be told apart and joined. */
+  keyed = false,
 ): {
   parts: ContentPart[];
-  mainframe: Pick<MainframeMessageMeta, 'partSources'> | undefined;
+  mainframe: Pick<MainframeMessageMeta, 'partSources' | 'partKeys'> | undefined;
   /** True when any part in this container is the one the overlay is currently streaming (D6) — the container's own `ThreadMessageLike.status`. */
   streaming: boolean;
 } {
   const partSources = mapPresentationSources(items);
   const parts: ContentPart[] = [];
+  const keys: string[] = [];
   let streaming = false;
 
   for (const parsed of items) {
@@ -143,19 +146,29 @@ function assistantParts(
     if (item.kind === 'message') {
       const status = partStatus(parsed);
       if (status?.type === 'running') streaming = true;
-      parts.push(...messageParts(item.content, status, item.id));
+      const added = messageParts(item.content, status, item.id);
+      parts.push(...added);
+      // One per block: an item's blocks (text, image, text) never share a key.
+      keys.push(...added.map((_, block) => `${item.id}#${block}`));
       continue;
     }
     if (item.kind === 'thought') {
       const status = partStatus(parsed);
       if (status?.type === 'running') streaming = true;
       parts.push({ type: 'reasoning', text: textOf(item.content), ...(status && { status }) });
+      keys.push(`${item.id}#thought`);
       continue;
     }
-    parts.push(toolPart(parsed, children));
+    const tool = toolPart(parsed, children);
+    parts.push(tool);
+    keys.push(`${item.id}#call`);
   }
 
-  return { parts, mainframe: partSources ? { partSources } : undefined, streaming };
+  const mainframe = {
+    ...(partSources && { partSources }),
+    ...(keyed && parts.length > 0 && { partKeys: keys }),
+  };
+  return { parts, mainframe: Object.keys(mainframe).length ? mainframe : undefined, streaming };
 }
 
 function assistantContainer(
