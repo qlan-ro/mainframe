@@ -44,6 +44,8 @@ pub(crate) struct StubAdapter {
     /// Set by [`StubAdapter::live`]: sessions stay spawned, keep their sink so
     /// a test can raise session events, and record permission answers.
     pub(crate) live: Option<Arc<LiveStub>>,
+    /// What every session's `load_subagent_history` returns; `None` fails it.
+    pub(crate) subagent_rows: Option<Arc<Vec<ChatMessage>>>,
 }
 
 /// What a live stub's sessions share with the test driving them.
@@ -75,6 +77,7 @@ impl StubAdapter {
             conflicts: Vec::new(),
             kills: Arc::new(AtomicUsize::new(0)),
             live: None,
+            subagent_rows: None,
         })
     }
 
@@ -87,6 +90,7 @@ impl StubAdapter {
             conflicts: Vec::new(),
             kills: Arc::new(AtomicUsize::new(0)),
             live: Some(Arc::default()),
+            subagent_rows: None,
         })
     }
 }
@@ -150,6 +154,7 @@ impl Adapter for StubAdapter {
             kills: self.kills.clone(),
             live: self.live.clone(),
             spawned: AtomicBool::new(false),
+            subagent_rows: self.subagent_rows.clone(),
         })
     }
     fn kill_all(&self) {}
@@ -163,6 +168,7 @@ struct StubSession {
     kills: Arc<AtomicUsize>,
     live: Option<Arc<LiveStub>>,
     spawned: AtomicBool,
+    subagent_rows: Option<Arc<Vec<ChatMessage>>>,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -260,6 +266,13 @@ impl AdapterSession for StubSession {
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    fn load_subagent_history(
+        &self,
+        _agent_id: String,
+    ) -> BoxFuture<'_, Result<Arc<Vec<ChatMessage>>, AdapterError>> {
+        let rows = self.subagent_rows.clone();
+        Box::pin(async move { rows.ok_or(AdapterError::Unavailable("no sub-agent rows")) })
     }
     fn extract_plan_files(&self) -> BoxFuture<'_, Result<Vec<String>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })

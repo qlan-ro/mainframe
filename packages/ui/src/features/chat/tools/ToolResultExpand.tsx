@@ -35,6 +35,8 @@ function fmtBytes(n: number): string {
 export interface ToolResultExpandProps {
   chatId: string;
   toolUseId: string;
+  /** The saved sub-agent whose transcript holds the call, when it is not the chat's own. */
+  agentId?: string;
   truncatedContent: string;
   fullBytes: number;
   renderPreview?: (content: string) => ReactNode;
@@ -45,6 +47,7 @@ type FetchState = 'idle' | 'loading' | 'error';
 export function ToolResultExpand({
   chatId,
   toolUseId,
+  agentId,
   truncatedContent,
   fullBytes,
   renderPreview,
@@ -67,7 +70,7 @@ export function ToolResultExpand({
     if (port == null) return;
     setFetchState('loading');
     try {
-      const content = await getToolResultContent(port, chatId, toolUseId);
+      const content = await getToolResultContent(port, chatId, toolUseId, agentId);
       setFull(content);
       setFetchState('idle');
     } catch (err: unknown) {

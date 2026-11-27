@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as http from '../http';
-import { cancelQueuedMessage, chatExists, discardChat, listChats, resumeChat, trustWorkspace } from '../chats';
+import {
+  cancelQueuedMessage,
+  chatExists,
+  discardChat,
+  getToolResultContent,
+  listChats,
+  resumeChat,
+  trustWorkspace,
+} from '../chats';
 
 describe('resumeChat readiness contract', () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -114,5 +122,19 @@ describe('cancelQueuedMessage', () => {
   it.each([undefined, {}])('reads an older daemon’s answer (%o) as taken back', async (data) => {
     answered(data);
     expect(await cancelQueuedMessage(0, 'chat-1', 'm1')).toBe(true);
+  });
+});
+
+describe('getToolResultContent', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(http, 'apiBase').mockReturnValue('http://d');
+  });
+  it("reads the chat's own transcript by default and a sub-agent's when named", async () => {
+    const spy = vi.spyOn(http, 'request').mockResolvedValue({ content: 'full' });
+    expect(await getToolResultContent(0, 'chat-1', 'tool_1')).toBe('full');
+    expect(spy).toHaveBeenLastCalledWith('GET', 'http://d/api/chats/chat-1/tool-result/tool_1');
+    await getToolResultContent(0, 'chat-1', 'tool_1', 'worker');
+    expect(spy).toHaveBeenLastCalledWith('GET', 'http://d/api/chats/chat-1/tool-result/tool_1?agent=worker');
   });
 });

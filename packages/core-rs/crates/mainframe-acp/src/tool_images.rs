@@ -3,6 +3,16 @@ use mainframe_types::acp::{content::ContentBlock, tool_call::ToolCallContent};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 pub fn reference_images(chat_id: &str, update: &mut SessionUpdate) {
+    reference(chat_id, None, update);
+}
+
+/// Like [`reference_images`] for a sub-agent's page: the reference names the
+/// agent whose transcript holds the image, so the lookup reads that child.
+pub fn reference_subagent_images(chat_id: &str, agent_id: &str, update: &mut SessionUpdate) {
+    reference(chat_id, Some(agent_id), update);
+}
+
+fn reference(chat_id: &str, agent_id: Option<&str>, update: &mut SessionUpdate) {
     let SessionUpdate::ToolCallUpdate(tool) = update else {
         return;
     };
@@ -16,9 +26,11 @@ pub fn reference_images(chat_id: &str, update: &mut SessionUpdate) {
         .unwrap_or(&tool.tool_call_id);
     if !mainframe_types::ids::is_safe_identifier(chat_id)
         || !mainframe_types::ids::is_safe_identifier(source_id)
+        || agent_id.is_some_and(|agent| !mainframe_types::ids::is_safe_identifier(agent))
     {
         return;
     }
+    let agent = agent_id.map_or_else(String::new, |agent| format!("&agent={agent}"));
     let Some(Some(content)) = &mut tool.content else {
         return;
     };
@@ -32,7 +44,7 @@ pub fn reference_images(chat_id: &str, update: &mut SessionUpdate) {
                 let mut hash = DefaultHasher::new();
                 data.hash(&mut hash);
                 *uri = Some(format!(
-                    "/api/chats/{chat_id}/tool-result/{}/images/{index}?v={:016x}",
+                    "/api/chats/{chat_id}/tool-result/{}/images/{index}?v={:016x}{agent}",
                     source_id,
                     hash.finish()
                 ));
@@ -86,6 +98,20 @@ mod tests {
         reference_images("chat_1", &mut changed);
         assert_eq!(one, same);
         assert_ne!(one, changed);
+    }
+
+    #[test]
+    fn subagent_references_name_the_agent_and_skip_unsafe_agent_ids() {
+        let mut value = update("AAAA");
+        reference_subagent_images("chat_1", "agent_7", &mut value);
+        let uri = serde_json::to_value(&value).unwrap()["content"][1]["content"]["uri"].clone();
+        let uri = uri.as_str().unwrap();
+        assert!(uri.starts_with("/api/chats/chat_1/tool-result/tool_1/images/0?v="));
+        assert!(uri.ends_with("&agent=agent_7"));
+        let mut value = update("AAAA");
+        let original = value.clone();
+        reference_subagent_images("chat_1", "../agent", &mut value);
+        assert_eq!(value, original);
     }
 
     #[test]
