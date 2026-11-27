@@ -84,6 +84,11 @@ async fn a_first_window_answers_the_same_and_leaves_the_log_unseeded() {
     assert_eq!(replay.items, eager_replay.items);
     assert_eq!(replay.containers, eager_replay.containers);
     assert_eq!(replay.updates.len(), eager_replay.updates.len());
+    assert!(eager_replay.seed_copy.is_none());
+    let copy = replay
+        .seed_copy
+        .expect("the reply's own transcript, copied in its read");
+    assert_eq!(copy.messages.len(), 120);
 }
 
 #[tokio::test]

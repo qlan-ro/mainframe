@@ -238,8 +238,8 @@ async fn deliver_resume(
     }
     // A cache hit leaves the log unseeded on purpose; only a resume that read
     // the transcript has the work to do.
-    if !from_cache && let Some(log) = log.log {
-        seed::seed_after_reply(log, Arc::clone(ports), session_id.clone());
+    if !from_cache && let (Some(log), Some(copy)) = (log.log, replay.seed_copy.take()) {
+        seed::seed_after_reply(log, copy, session_id.clone());
     }
     if !from_cache {
         ctx.chat.facade_hub.persist_resume(

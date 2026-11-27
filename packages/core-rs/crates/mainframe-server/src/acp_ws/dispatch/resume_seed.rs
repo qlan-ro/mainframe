@@ -14,47 +14,37 @@
 //! - an epoch reset swaps in a new, unseeded log, and this seed stays on the
 //!   old one it was handed.
 //!
-//! The log is only ever seeded while it has recorded nothing, so a snapshot
-//! read here can never overwrite a revision a live delta recorded.
+//! The log is only ever seeded while it has recorded nothing, so the copy can
+//! never overwrite a revision a live delta recorded; and the copy is the one
+//! the reply was built from, so the baseline is what that reply sent.
 
 use std::sync::{Arc, Mutex};
 
 use mainframe_acp::EncodedItem;
 use mainframe_acp::encoder::encode_containers;
-use mainframe_acp::resume::ResumePort;
+use mainframe_acp::resume::SeedCopy;
 use mainframe_acp::revision_log::RevisionLog;
 use mainframe_types::sync::LockExt as _;
-use tracing::{info, warn};
+use tracing::info;
 
-/// Seed `log` from a copy of the chat's transcript, off the reply path and off
-/// the chat cache lock. A no-op when the log is already seeded.
-pub(super) fn seed_after_reply(
-    log: Arc<Mutex<RevisionLog>>,
-    ports: Arc<dyn ResumePort>,
-    chat_id: String,
-) {
+/// Seed `log` from the copy the reply was planned against, off the reply path
+/// and off the chat cache lock. A no-op when the log is already seeded. The
+/// copy is the reply's own snapshot, never a second read: a message cached
+/// since then but not yet emitted must reach the log as a revision, not slip
+/// into the baseline at revision 0 where a reconnect would never see it.
+pub(super) fn seed_after_reply(log: Arc<Mutex<RevisionLog>>, copy: SeedCopy, chat_id: String) {
     if log.lock_recover().is_seeded() {
         return;
     }
-    tokio::spawn(async move {
-        let snapshot = ports.resume_snapshot(&chat_id).await;
-        let task_chat = chat_id.clone();
-        let seeded = tokio::task::spawn_blocking(move || {
-            let started = std::time::Instant::now();
-            let seeded = seed_unseeded(&log, || {
-                encode_containers(&snapshot.messages, snapshot.streaming)
-            });
-            if seeded {
-                info!(
-                    chat_id = task_chat,
-                    seed_ms = started.elapsed().as_secs_f64() * 1000.0,
-                    "seeded transcript revision log after the reply"
-                );
-            }
-        })
-        .await;
-        if let Err(error) = seeded {
-            warn!(chat_id, error = %error, "seeding the revision log failed");
+    tokio::task::spawn_blocking(move || {
+        let started = std::time::Instant::now();
+        let seeded = seed_unseeded(&log, || encode_containers(&copy.messages, copy.streaming));
+        if seeded {
+            info!(
+                chat_id,
+                seed_ms = started.elapsed().as_secs_f64() * 1000.0,
+                "seeded transcript revision log after the reply"
+            );
         }
     });
 }

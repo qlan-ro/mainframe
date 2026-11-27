@@ -72,6 +72,7 @@ impl PreparedHistoryTail {
                 preview_ids: self.preview_ids,
                 pending_gate: None,
                 pending_permission_request: None,
+                seed_copy: None,
             },
         )
     }

@@ -6,40 +6,41 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
 use mainframe_chat::chat_surface::{ChatSurface as _, ChatSurfaceEvent};
 use mainframe_types::display::{DisplayContent, DisplayMessage, DisplayMessageType};
-use tokio::sync::Notify;
 
 use super::*;
 
-/// The first snapshot read (the resume itself) answers at once; every later one
-/// (the seed behind the reply) waits until the test lets it through.
-struct HeldSeedPort {
-    messages: Vec<DisplayMessage>,
+/// Answers the resume's one snapshot read with `first`; any later read gets
+/// `later`, as when messages are cached after the reply was planned.
+struct TwoStatePort {
+    first: Vec<DisplayMessage>,
+    later: Vec<DisplayMessage>,
     reads: AtomicUsize,
-    seed_reads_done: AtomicUsize,
-    release: Notify,
 }
 
-impl HeldSeedPort {
-    fn new(messages: Vec<DisplayMessage>) -> Arc<Self> {
+impl TwoStatePort {
+    fn new(first: Vec<DisplayMessage>, later: Vec<DisplayMessage>) -> Arc<Self> {
         Arc::new(Self {
-            messages,
+            first,
+            later,
             reads: AtomicUsize::new(0),
-            seed_reads_done: AtomicUsize::new(0),
-            release: Notify::new(),
         })
+    }
+
+    fn same(messages: Vec<DisplayMessage>) -> Arc<Self> {
+        Self::new(messages.clone(), messages)
     }
 }
 
-impl ResumePort for HeldSeedPort {
+impl ResumePort for TwoStatePort {
     fn resume_snapshot<'a>(&'a self, _session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
         Box::pin(async move {
             let read = self.reads.fetch_add(1, SeqCst);
-            if read > 0 {
-                self.release.notified().await;
-                self.seed_reads_done.fetch_add(1, SeqCst);
-            }
             ResumeSnapshot {
-                messages: self.messages.clone(),
+                messages: if read == 0 {
+                    self.first.clone()
+                } else {
+                    self.later.clone()
+                },
                 streaming: None,
                 pending: None,
             }
@@ -112,17 +113,15 @@ async fn windowed_connection(
     (connection, rx)
 }
 
-async fn settle_seed(port: &HeldSeedPort) {
-    port.release.notify_one();
+async fn settle_seed(ctx: &AppCtx) {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        while port.seed_reads_done.load(SeqCst) == 0 {
+        while ctx.chat.facade_hub.history_seed_pending("chat-1") {
             tokio::task::yield_now().await;
         }
     })
     .await
-    .expect("the seed read the transcript");
-    // The encode and install run on a blocking thread after the read, and a seed that finds the
-    // log already filled leaves nothing to observe, so wait past it: a late write would show.
+    .expect("the log was seeded");
+    // A seed that finds the log already filled leaves nothing to observe, so wait past it.
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 }
 
@@ -130,7 +129,7 @@ async fn settle_seed(port: &HeldSeedPort) {
 async fn the_reply_goes_out_before_the_log_is_seeded_and_the_seed_follows() {
     let ctx = AppCtx::test_ctx();
     let (connection, mut rx) = windowed_connection(&ctx).await;
-    let port = HeldSeedPort::new(transcript("hello"));
+    let port = TwoStatePort::same(transcript("hello"));
 
     start_resume(
         windowed_request(1, json!({"type":"start"}), None),
@@ -148,20 +147,50 @@ async fn the_reply_goes_out_before_the_log_is_seeded_and_the_seed_follows() {
         reply["result"]["_meta"]["_mainframe.dev"]["cursor"]["revision"],
         json!(0)
     );
-    assert!(
-        ctx.chat.facade_hub.history_seed_pending("chat-1"),
-        "the seed is still waiting on its snapshot, and the reply is already out"
-    );
 
-    settle_seed(&port).await;
+    settle_seed(&ctx).await;
     assert!(!ctx.chat.facade_hub.history_seed_pending("chat-1"));
+    assert_eq!(
+        port.reads.load(SeqCst),
+        1,
+        "the seed reuses the reply's own snapshot, with no second read"
+    );
+}
+
+#[tokio::test]
+async fn the_seed_describes_what_the_reply_sent_not_a_later_transcript() {
+    let ctx = AppCtx::test_ctx();
+    let (connection, mut rx) = windowed_connection(&ctx).await;
+    // A message cached after the reply's snapshot, not yet emitted.
+    let mut later = transcript("hello");
+    later[119] = message("m119", "appended after the reply was planned");
+    let port = TwoStatePort::new(transcript("hello"), later.clone());
+    start_resume(
+        windowed_request(1, json!({"type":"start"}), None),
+        &ctx,
+        &connection,
+        port.clone(),
+    );
+    drain(&mut rx).await;
+    settle_seed(&ctx).await;
+
+    // The emit that carries it must register as a change against the baseline the reply sent.
+    ctx.chat
+        .facade_hub
+        .on_chat_surface_event(revision_event(later));
+    drain(&mut rx).await;
+    assert_eq!(
+        revision_of(&ctx),
+        1,
+        "a baseline read after the reply would absorb the message at revision 0"
+    );
 }
 
 #[tokio::test]
 async fn a_live_revision_during_seeding_keeps_its_cursor_and_the_late_seed_changes_nothing() {
     let ctx = AppCtx::test_ctx();
     let (connection, mut rx) = windowed_connection(&ctx).await;
-    let port = HeldSeedPort::new(transcript("hello"));
+    let port = TwoStatePort::same(transcript("hello"));
     start_resume(
         windowed_request(1, json!({"type":"start"}), None),
         &ctx,
@@ -177,7 +206,7 @@ async fn a_live_revision_during_seeding_keeps_its_cursor_and_the_late_seed_chang
     assert_eq!(revision_of(&ctx), 1);
 
     // The seed, working from the older transcript, must not touch a log a live revision already filled.
-    settle_seed(&port).await;
+    settle_seed(&ctx).await;
     ctx.chat
         .facade_hub
         .on_chat_surface_event(revision_event(transcript("edited again")));
@@ -190,7 +219,7 @@ async fn a_history_page_seeding_first_leaves_the_late_seed_a_no_op() {
     let ctx = AppCtx::test_ctx();
     let (connection, mut rx) = windowed_connection(&ctx).await;
     let messages = transcript("hello");
-    let port = HeldSeedPort::new(messages.clone());
+    let port = TwoStatePort::same(messages.clone());
     start_resume(
         windowed_request(1, json!({"type":"start"}), None),
         &ctx,
@@ -198,15 +227,15 @@ async fn a_history_page_seeding_first_leaves_the_late_seed_a_no_op() {
         port.clone(),
     );
     drain(&mut rx).await;
-    assert!(ctx.chat.facade_hub.history_seed_pending("chat-1"));
 
-    // What a page request does before serving: seed from its own copy.
+    // What a page request does before serving: seed from its own copy (whichever
+    // seeder reaches the log first, the other finds it filled).
     ctx.chat
         .facade_hub
         .seed_history_snapshot("chat-1", &messages);
     assert!(!ctx.chat.facade_hub.history_seed_pending("chat-1"));
 
-    settle_seed(&port).await;
+    settle_seed(&ctx).await;
     ctx.chat
         .facade_hub
         .on_chat_surface_event(revision_event(transcript("edited")));
@@ -222,7 +251,7 @@ async fn a_history_page_seeding_first_leaves_the_late_seed_a_no_op() {
 async fn a_reconnect_after_the_reply_carries_a_change_made_while_seeding() {
     let ctx = AppCtx::test_ctx();
     let (connection, mut rx) = windowed_connection(&ctx).await;
-    let port = HeldSeedPort::new(transcript("hello"));
+    let port = TwoStatePort::same(transcript("hello"));
     start_resume(
         windowed_request(1, json!({"type":"start"}), None),
         &ctx,
@@ -244,19 +273,14 @@ async fn a_reconnect_after_the_reply_carries_a_change_made_while_seeding() {
         .facade_hub
         .on_chat_surface_event(revision_event(edited.clone()));
     drain(&mut rx).await;
-    settle_seed(&port).await;
+    settle_seed(&ctx).await;
 
     let reconnect = windowed_request(
         2,
         json!({"type":"revision","epoch":epoch,"revision":revision}),
         Some(&floor),
     );
-    start_resume(
-        reconnect,
-        &ctx,
-        &connection,
-        Arc::new(FixedSnapshot(edited)),
-    );
+    start_resume(reconnect, &ctx, &connection, TwoStatePort::same(edited));
     let frames = drain(&mut rx).await;
     assert!(
         frames
@@ -264,23 +288,4 @@ async fn a_reconnect_after_the_reply_carries_a_change_made_while_seeding() {
             .any(|f| f.to_string().contains("edited while seeding")),
         "the reconnect carries the edit: {frames:?}"
     );
-}
-
-struct FixedSnapshot(Vec<DisplayMessage>);
-
-impl ResumePort for FixedSnapshot {
-    fn resume_snapshot<'a>(&'a self, _session_id: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
-        let messages = self.0.clone();
-        Box::pin(async move {
-            ResumeSnapshot {
-                messages,
-                streaming: None,
-                pending: None,
-            }
-        })
-    }
-
-    fn is_running(&self, _session_id: &str) -> bool {
-        false
-    }
 }
