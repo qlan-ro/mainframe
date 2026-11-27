@@ -87,6 +87,7 @@ export class AcpChatController {
       dispatch: (event) => this.dispatch(event),
       load: () => this.load(),
       sendPrompt: (text, meta) => this.plane.sendPrompt(text, meta),
+      announceUserSend: () => this.announceUserSend(),
     };
     this.loader = new ChatPlaneLoader({
       getPort: () => this.port,
@@ -254,9 +255,7 @@ export class AcpChatController {
 
   /** The user's own send (composer, Compact, review comments via `onNew`), announced once its bubble is in state. */
   public sendMessage(message: AppendMessage): Promise<void> {
-    const sent = sendChatMessage(this.actionHost, message);
-    this.announceUserSend();
-    return sent;
+    return sendChatMessage(this.actionHost, message);
   }
 
   /** Tells this chat's transcript the user sent something (`user-sent.ts`). */
@@ -308,16 +307,13 @@ export class AcpChatController {
 
   /** Send a message a Stop held back, and line up the ones behind it. */
   public sendHeld(messageId: string): Promise<void> {
-    const sent = sendHeldMessages(this.actionHost, messageId);
-    this.announceUserSend();
-    return sent;
+    return sendHeldMessages(this.actionHost, messageId);
   }
 
   /** Resume a paused queue: the daemon sends the oldest held prompt as the next turn. */
-  public resumeQueue(): Promise<void> {
-    const resumed = resumeQueuedMessages(this.port, this.daemonId);
+  public async resumeQueue(): Promise<void> {
+    await resumeQueuedMessages(this.port, this.daemonId);
     this.announceUserSend();
-    return resumed;
   }
 
   public async cancelQueued(messageId: string): Promise<void> {

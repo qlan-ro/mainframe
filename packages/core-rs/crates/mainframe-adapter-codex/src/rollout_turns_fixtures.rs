@@ -112,3 +112,14 @@ pub(super) fn pr_turn(turn: &str, call: &str, pr: u32, pad: usize) -> Vec<String
         event("task_complete", turn),
     ]
 }
+
+pub(super) fn no_pr_turn(turn: &str, call: &str) -> Vec<String> {
+    vec![
+        event("task_started", turn),
+        user("go"),
+        exec(call, "ls"),
+        exec_output(call, "file.txt\n"),
+        assistant("done"),
+        event("task_complete", turn),
+    ]
+}
