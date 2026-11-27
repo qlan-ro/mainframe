@@ -182,6 +182,7 @@ pub(super) async fn parity(text: &str, turns: usize, first_read: u64) -> Option<
         &HashSet::new(),
         turns,
         small(first_read),
+        &mut Held::default(),
     )
     .unwrap()?;
     let full = full_read(&file.path).await;

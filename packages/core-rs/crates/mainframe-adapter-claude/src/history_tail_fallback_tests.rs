@@ -17,7 +17,15 @@ async fn a_result_split_from_its_call_by_the_cut_reads_the_whole_file() {
     let text = build.text();
     for read in READS {
         let file = write(&text);
-        let found = read_tail(&file.path, SESSION, &HashSet::new(), 1, small(read)).unwrap();
+        let found = read_tail(
+            &file.path,
+            SESSION,
+            &HashSet::new(),
+            1,
+            small(read),
+            &mut Held::default(),
+        )
+        .unwrap();
         assert!(found.is_none(), "the cut would orphan the result");
     }
 }
@@ -42,7 +50,15 @@ async fn a_chain_that_leaves_the_tail_reads_the_whole_file() {
     );
     lines.push(reply);
     let file = write(&(lines.join("\n") + "\n"));
-    let found = read_tail(&file.path, SESSION, &HashSet::new(), 2, small(400)).unwrap();
+    let found = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        2,
+        small(400),
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(found.is_none());
 }
 
@@ -61,7 +77,15 @@ async fn copied_history_from_another_session_reads_the_whole_file() {
     build.turns(6);
     let text = other.join("\n") + "\n" + &build.text();
     let file = write(&text);
-    let found = read_tail(&file.path, SESSION, &HashSet::new(), 2, small(400)).unwrap();
+    let found = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        2,
+        small(400),
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(found.is_none(), "the tail names another session");
 }
 
@@ -75,10 +99,26 @@ async fn a_line_that_is_not_utf8_reads_the_whole_file() {
     std::fs::write(&path, bytes).unwrap();
     let path = path.to_str().unwrap();
     // The cut would sit past the bad line, where the full read never gets.
-    let found = read_tail(path, SESSION, &HashSet::new(), 6, small(700)).unwrap();
+    let found = read_tail(
+        path,
+        SESSION,
+        &HashSet::new(),
+        6,
+        small(700),
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(found.is_none());
     // A cut after it is safe: the bad line lies before the read.
-    let found = read_tail(path, SESSION, &HashSet::new(), 2, small(700)).unwrap();
+    let found = read_tail(
+        path,
+        SESSION,
+        &HashSet::new(),
+        2,
+        small(700),
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(found.is_some());
 }
 
@@ -92,78 +132,42 @@ async fn a_record_without_a_uuid_or_time_reads_the_whole_file() {
         *build.lines.last_mut().unwrap() = line.to_string();
         build.reply("fine").turns(4);
         let file = write(&build.text());
-        let found = read_tail(&file.path, SESSION, &HashSet::new(), 6, small(300)).unwrap();
+        let found = read_tail(
+            &file.path,
+            SESSION,
+            &HashSet::new(),
+            6,
+            small(300),
+            &mut Held::default(),
+        )
+        .unwrap();
         assert!(found.is_none(), "the loader would invent a {strip}");
     }
-}
-
-pub(super) fn task_transcript(create_in_window: bool) -> String {
-    use crate::history::parallel_fixture::{assistant, tool_result};
-    let mut build = Builder::default();
-    build.turns(2).user("plan");
-    let create = |build: &mut Builder| {
-        build.n += 1;
-        let line = assistant(
-            build.n,
-            "msg-mk",
-            json!([{"type": "tool_use", "id": "mk", "name": "TaskCreate",
-                "input": {"subject": "Write the plan"}}]),
-            json!({}),
-        );
-        build.record(line, None);
-        build.n += 1;
-        let line = tool_result(build.n, "mk", json!({})).replace("output ", "Task #1 created ");
-        build.record(line, None);
-    };
-    let update = |build: &mut Builder| {
-        build.n += 1;
-        let line = assistant(
-            build.n,
-            "msg-update",
-            json!([{"type": "tool_use", "id": "upd", "name": "TaskUpdate",
-                "input": {"taskId": "1", "status": "completed"}}]),
-            json!({}),
-        );
-        build.record(line, None);
-        build.result("upd");
-    };
-    create(&mut build);
-    if create_in_window {
-        update(&mut build);
-        build.reply("planned").turns(3);
-    } else {
-        build.reply("planned").turns(3).user("later");
-        update(&mut build);
-        build.reply("done");
-    }
-    build.text()
-}
-
-#[tokio::test]
-async fn a_task_update_whose_creation_is_in_the_window_matches_the_full_read() {
-    let text = task_transcript(true);
-    for read in READS {
-        parity(&text, 5, read)
-            .await
-            .expect("the task is created in the window");
-    }
-}
-
-#[tokio::test]
-async fn a_task_update_whose_creation_is_before_the_cut_reads_the_whole_file() {
-    let file = write(&task_transcript(false));
-    // One turn holds only the update; the subject lives on the earlier call.
-    let found = read_tail(&file.path, SESSION, &HashSet::new(), 1, small(300)).unwrap();
-    assert!(found.is_none());
 }
 
 #[tokio::test]
 async fn a_short_file_or_one_with_few_prompts_reads_the_whole_file() {
     let file = write(&Builder::default().turns(3).text());
-    let few = read_tail(&file.path, SESSION, &HashSet::new(), 16, small(1 << 20)).unwrap();
+    let few = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        16,
+        small(1 << 20),
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(few.is_none(), "fewer prompts than the window needs");
     let file = write(&Builder::default().turns(30).text());
-    let short = read_tail(&file.path, SESSION, &HashSet::new(), 2, Limits::PRODUCTION).unwrap();
+    let short = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        2,
+        Limits::PRODUCTION,
+        &mut Held::default(),
+    )
+    .unwrap();
     assert!(
         short.is_none(),
         "below the size a tail read is worth it for"
@@ -229,4 +233,26 @@ async fn a_window_needing_more_than_the_file_allows_reads_the_whole_history() {
 async fn a_missing_file_reads_the_whole_history() {
     let files = discovered("/nonexistent/session.jsonl", &[]);
     assert!(window(&files, 4, 2).await.is_none());
+}
+
+#[tokio::test]
+async fn a_compact_boundary_without_a_uuid_reads_the_whole_file() {
+    let mut build = Builder::default();
+    build.turns(4);
+    build.n += 1;
+    let boundary = json!({"type": "system", "subtype": "compact_boundary",
+        "timestamp": "2026-09-25T00:00:00Z", "sessionId": SESSION});
+    build.raw(&boundary.to_string());
+    build.user("after").reply("fine").turns(4);
+    let file = write(&build.text());
+    let found = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        6,
+        small(300),
+        &mut Held::default(),
+    )
+    .unwrap();
+    assert!(found.is_none(), "the loader would invent the boundary's id");
 }

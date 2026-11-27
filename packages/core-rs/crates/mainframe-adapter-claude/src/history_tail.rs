@@ -32,7 +32,6 @@
 //! compares its own tail with what was shown and resyncs on any difference.
 
 use std::collections::HashSet;
-use std::io::{BufRead, Read, Seek, SeekFrom};
 
 use mainframe_adapter_api::{AdapterError, HistoryPage, WindowRequest};
 use mainframe_types::chat::ChatMessage;
@@ -42,10 +41,13 @@ use super::*;
 
 #[path = "history_tail_checks.rs"]
 mod checks;
+#[path = "history_tail_held.rs"]
+mod held;
 use checks::{
     has_orphan_result, has_unresolved_task_update, is_anchor, is_compaction_marker, is_turn_start,
     lacks_identity,
 };
+use held::{Held, Limits, first_session_id, utf8_line};
 
 /// Bytes of the file's end read first.
 const FIRST_READ: u64 = 2 << 20;
@@ -80,11 +82,17 @@ async fn load_window_within(
         return Ok(None);
     }
     let mut turns = req.turns.clamp(1, MAX_TURNS);
+    let mut held = Held::default();
     for _ in 0..MAX_ATTEMPTS {
         let (id, path) = (session_id.to_owned(), discovered.primary_path.clone());
         let children = discovered.subagent_files.clone();
-        let read =
-            run_history_worker(move || read_tail(&path, &id, &children, turns, limits)).await?;
+        let mut kept = std::mem::take(&mut held);
+        let (read, kept) = run_history_worker(move || {
+            let read = read_tail(&path, &id, &children, turns, limits, &mut kept);
+            (read, kept)
+        })
+        .await?;
+        held = kept;
         let messages = match read {
             Ok(Some(messages)) => messages,
             Ok(None) => return Ok(None),
@@ -107,55 +115,18 @@ async fn load_window_within(
     Ok(None)
 }
 
-/// The first session id the file names, within its first lines.
-fn first_session_id(path: &str) -> std::io::Result<Option<String>> {
-    let mut reader = std::io::BufReader::new(std::fs::File::open(path)?);
-    let mut line = Vec::new();
-    for _ in 0..32 {
-        line.clear();
-        if (&mut reader).take(1 << 20).read_until(b'\n', &mut line)? == 0 {
-            break;
-        }
-        if let Ok(entry) = serde_json::from_slice::<Value>(&line)
-            && let Some(id) = entry.get("sessionId").and_then(Value::as_str)
-        {
-            return Ok(Some(id.to_owned()));
-        }
-    }
-    Ok(None)
-}
-
-fn utf8_line(raw: &[u8]) -> Option<&str> {
-    let line = std::str::from_utf8(raw).ok()?;
-    Some(line.strip_suffix('\r').unwrap_or(line))
-}
-
-/// How much of the file a tail read may take.
-#[derive(Clone, Copy)]
-pub(super) struct Limits {
-    /// Bytes of the file's end read first.
-    pub(super) first_read: u64,
-    /// Files shorter than this are not read from the end.
-    pub(super) min_file: u64,
-}
-
-impl Limits {
-    const PRODUCTION: Self = Self {
-        first_read: FIRST_READ,
-        min_file: MIN_FILE,
-    };
-}
-
 /// Reads backwards from the end of `path` until it holds `turns` whole turns
 /// after a settled cut. `Ok(None)` when the cut is ambiguous or the file is
-/// too short or too thin in prompts to gain anything; the caller reads the
-/// whole file.
+/// too short or too thin in prompts to gain anything, or when the bytes per
+/// turn seen so far project a window longer than a read from the end can
+/// save over the full read; the caller reads the whole file.
 pub(super) fn read_tail(
     path: &str,
     session_id: &str,
     children: &HashSet<String>,
     turns: usize,
     limits: Limits,
+    held: &mut Held,
 ) -> std::io::Result<Option<Vec<ChatMessage>>> {
     let mut file = std::fs::File::open(path)?;
     let length = file.metadata()?.len();
@@ -169,26 +140,11 @@ pub(super) fn read_tail(
     // the markers that lead the first turn kept.
     let wanted = turns + 1;
     let cap = (length / 3).clamp(MIN_READ, MAX_READ);
-    // The bytes from `start` to the end, kept across growth steps.
-    let mut bytes: Vec<u8> = Vec::new();
-    let mut start = length;
-    let mut span = limits.first_read.max(1);
+    let mut span = limits.first_read.max(1).max(held.begin(length));
     loop {
-        let from = length.saturating_sub(span);
-        let mut earlier = vec![0; (start - from) as usize];
-        file.seek(SeekFrom::Start(from))?;
-        file.read_exact(&mut earlier)?;
-        earlier.extend_from_slice(&bytes);
-        (bytes, start) = (earlier, from);
-        // A read that begins mid-line drops its partial first line.
-        let body = match (start, bytes.iter().position(|&byte| byte == b'\n')) {
-            (0, _) => Some(0),
-            (_, Some(newline)) => Some(newline + 1),
-            _ => None,
-        };
-        let lines: Vec<&[u8]> = body.map_or_else(Vec::new, |first| {
-            bytes[first..].split(|&byte| byte == b'\n').collect()
-        });
+        held.extend_to(&mut file, length, span)?;
+        let bytes = &held.bytes;
+        let lines = held.lines();
         let anchors = anchors(&lines, session_id, wanted);
         if anchors.len() >= wanted {
             return Ok(settle(
@@ -199,12 +155,18 @@ pub(super) fn read_tail(
                 &own_session,
             ));
         }
-        // Too few prompts in the whole file, or the window outgrew what a
-        // read from the end can save over the full read.
-        if start == 0 || span >= cap {
+        if held.start == 0 {
             return Ok(None);
         }
-        span = (span * 4).min(cap);
+        // The bytes per prompt so far project how long the window is. One
+        // that outgrows the cap is no cheaper than the full read: stop now
+        // rather than read up to the cap first.
+        let projected =
+            (bytes.len() as u64).saturating_mul(wanted as u64) / anchors.len().max(1) as u64;
+        if span >= cap || projected > cap {
+            return Ok(None);
+        }
+        span = (projected + projected / 4).max(span * 2).min(cap);
     }
 }
 
@@ -275,6 +237,9 @@ fn settle(
 }
 
 #[cfg(test)]
+#[path = "history_tail_budget_tests.rs"]
+mod budget_tests;
+#[cfg(test)]
 #[path = "history_tail_fallback_tests.rs"]
 mod fallback_tests;
 #[cfg(test)]
@@ -283,6 +248,9 @@ mod fixture;
 #[cfg(test)]
 #[path = "history_tail_perf_tests.rs"]
 mod perf_tests;
+#[cfg(test)]
+#[path = "history_tail_task_tests.rs"]
+mod task_tests;
 #[cfg(test)]
 #[path = "history_tail_tests.rs"]
 mod tests;

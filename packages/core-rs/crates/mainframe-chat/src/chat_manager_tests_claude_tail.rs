@@ -73,6 +73,8 @@ enum Shape {
     Plain,
     /// A compaction boundary near the start, long before any window.
     IdleCompacted,
+    /// A compaction boundary three turns from the end, inside any window.
+    IdleInWindow,
     /// A task created in the first turn and updated in the last.
     TaskAcrossCut,
 }
@@ -93,7 +95,9 @@ fn transcript(path: &std::path::Path, shape: &Shape) {
                 w.result("create", "Task #1 created successfully");
             }
         }
-        if turn == 1 && matches!(shape, Shape::IdleCompacted) {
+        if (turn == 1 && matches!(shape, Shape::IdleCompacted))
+            || (turn == TURNS - 3 && matches!(shape, Shape::IdleInWindow))
+        {
             {
                 w.line("s", false, json!({"type": "system", "subtype": "compact_boundary",
                     "uuid": "boundary", "content": "Conversation compacted"}));
@@ -195,4 +199,15 @@ async fn a_task_update_whose_creation_is_before_the_cut_takes_the_full_read() {
     // The cold full load that follows is the baseline, not a window's resync.
     let (window, _) = open(Shape::TaskAcrossCut, false).await;
     assert!(window.is_none(), "the subject cannot be told from the tail");
+}
+
+#[tokio::test]
+async fn a_marker_whose_boundary_is_inside_the_window_shows_there_without_a_resync() {
+    let (window, resyncs) = open(Shape::IdleInWindow, true).await;
+    let (messages, _) = window.expect("the tail serves the first window");
+    assert!(
+        messages.iter().any(|m| m.id == "request"),
+        "the renamed boundary is part of the window"
+    );
+    assert_eq!(resyncs, 0);
 }

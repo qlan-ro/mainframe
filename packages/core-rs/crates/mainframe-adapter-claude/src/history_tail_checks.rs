@@ -67,8 +67,9 @@ pub(super) fn has_orphan_result(messages: &[ChatMessage]) -> bool {
     })
 }
 
-/// A user or assistant record the loader would have to give an id or a time
-/// of its own: it would differ from one read to the next.
+/// A record that becomes a message, and that the loader would have to give an
+/// id or a time of its own: it would differ from one read to the next. That
+/// is a user or assistant record, a compact boundary, or a queued prompt.
 pub(super) fn lacks_identity(entry: &Value) -> bool {
     let text = |key| {
         entry
@@ -76,10 +77,15 @@ pub(super) fn lacks_identity(entry: &Value) -> bool {
             .and_then(Value::as_str)
             .is_some_and(|value| !value.is_empty())
     };
-    matches!(
-        entry.get("type").and_then(Value::as_str),
-        Some("user" | "assistant")
-    ) && !(text("uuid") && text("timestamp"))
+    let kept = match entry.get("type").and_then(Value::as_str) {
+        Some("user" | "assistant") => true,
+        Some("system") => entry.get("subtype").and_then(Value::as_str) == Some("compact_boundary"),
+        Some("attachment") => {
+            entry.pointer("/attachment/type").and_then(Value::as_str) == Some("queued_command")
+        }
+        _ => false,
+    };
+    kept && !(text("uuid") && text("timestamp"))
 }
 
 /// A task update with no subject of its own whose task is not created, or
