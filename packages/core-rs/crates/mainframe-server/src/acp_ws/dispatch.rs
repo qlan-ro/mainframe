@@ -57,6 +57,7 @@ pub async fn handle_inbound(
             if matches!(
                 request.method.as_str(),
                 "_mainframe.dev/history_page"
+                    | "_mainframe.dev/history_around"
                     | "_mainframe.dev/history_search"
                     | "_mainframe.dev/subagent_history_page"
                     | "_mainframe.dev/subagent_history_search"

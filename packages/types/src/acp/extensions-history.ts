@@ -40,6 +40,37 @@ export const HistoryPageResultSchema = HistoryStateSchema.extend({
 });
 export type HistoryPageResult = z.infer<typeof HistoryPageResultSchema>;
 
+/**
+ * `_mainframe.dev/history_around`: a window of items centred on one item,
+ * independent of the connection's history floor. `before` and `after` count
+ * items (default 20, clamped to 0..200). `itemId` may be an item id, a
+ * tool-use id or a container id.
+ */
+export const HistoryAroundParamsSchema = z
+  .object({
+    sessionId: z.string(),
+    itemId: z.string(),
+    before: z.number().int().optional(),
+    after: z.number().int().optional(),
+  })
+  .loose();
+export type HistoryAroundParams = z.infer<typeof HistoryAroundParamsSchema>;
+
+export const HistoryAroundResultSchema = z
+  .object({
+    updates: z.array(SessionUpdateSchema).optional(),
+    batches: z.array(ReplayBatchParamsSchema).optional(),
+    hasBefore: z.boolean(),
+    hasAfter: z.boolean(),
+    firstItemId: z.string().optional(),
+    lastItemId: z.string().optional(),
+    targetItemId: z.string().optional(),
+    contextItemIds: z.array(z.string()).optional(),
+    stale: z.boolean().optional(),
+  })
+  .loose();
+export type HistoryAroundResult = z.infer<typeof HistoryAroundResultSchema>;
+
 export const HistorySearchParamsSchema = z.object({ sessionId: z.string(), query: z.string() }).loose();
 export type HistorySearchParams = z.infer<typeof HistorySearchParamsSchema>;
 export const HistoryMatchSchema = z
