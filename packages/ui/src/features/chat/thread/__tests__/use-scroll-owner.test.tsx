@@ -60,8 +60,8 @@ function mount() {
   return view;
 }
 
-let frames: FrameRequestCallback[] = [];
-const runFrame = () => act(() => frames.splice(0).forEach((frame) => frame(0)));
+let frames: (FrameRequestCallback | null)[] = [];
+const runFrame = () => act(() => frames.splice(0).forEach((frame) => frame?.(0)));
 
 const grow = (by: number) => {
   layout.height += by;
@@ -72,7 +72,9 @@ const following = () => owner.controller.isFollowing();
 beforeEach(() => {
   frames = [];
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
-  vi.stubGlobal('cancelAnimationFrame', () => {});
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    if (id > 0 && id <= frames.length) frames[id - 1] = null;
+  });
   for (const name of Object.keys(DRIVEN))
     originals[name] = Object.getOwnPropertyDescriptor(Element.prototype, name) ?? {
       value: undefined,
@@ -356,5 +358,80 @@ describe('a chat switch', () => {
     act(() => resize());
     expect(scrollBy).not.toHaveBeenCalled();
     expect(layout.top).toBe(3000);
+  });
+});
+
+describe('a newer landing record is not dropped by an older one’s frame', () => {
+  it('keeps the record of the newer page when a slice’s drop was already scheduled', async () => {
+    mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 22;
+    rowTop = 400;
+    const content = viewport.querySelector('[data-testid="content"]')!;
+    act(() => owner.controller.beforePrepend?.());
+    act(() => void content.appendChild(document.createElement('i')));
+    await act(async () => void (await Promise.resolve()));
+    // The slice's two-frame drop is now scheduled. A page lands before it runs.
+    runFrame();
+    act(() => owner.controller.beforePrepend?.());
+    runFrame();
+    act(() => void content.appendChild(document.createElement('i')));
+    await act(async () => void (await Promise.resolve()));
+    layout.height += 500;
+    rowTop += 500;
+    act(() => resize());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 500, behavior: 'instant' });
+  });
+});
+
+describe('on an engine without overflow-anchor', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('restores the reader’s block after a page lands, by what it measured before the commit', () => {
+    vi.stubGlobal('CSS', { supports: () => false });
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 800;
+    rowTop = 1000;
+    act(() => owner.controller.beforePrepend?.());
+    // The page lands 840 px above; nothing anchors, so scrollTop stays where it was.
+    layout.height += 840;
+    rowTop += 840;
+    act(() => resize());
+    expect(layout.top).toBe(1640);
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing for the same page where the browser does anchor', () => {
+    vi.stubGlobal('CSS', { supports: () => true });
+    mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 800;
+    rowTop = 1000;
+    act(() => owner.controller.beforePrepend?.());
+    layout.height += 840;
+    rowTop += 840;
+    act(() => resize());
+    expect(layout.top).toBe(800);
+  });
+});
+
+describe('followNow', () => {
+  it('moves to the tail at once while following, for rows that land before the resize observer exists', () => {
+    mount();
+    layout.top = 0;
+    layout.height = 2600;
+    act(() => owner.controller.followNow?.());
+    expect(layout.top).toBe(2100);
+  });
+
+  it('does nothing once the reader has left', () => {
+    mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 300;
+    layout.height = 2600;
+    act(() => owner.controller.followNow?.());
+    expect(layout.top).toBe(300);
   });
 });

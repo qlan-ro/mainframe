@@ -8,6 +8,14 @@ import type { TranscriptScrollController } from './transcript-scroll-context';
 export const FIRST_ROWS = 6;
 /** Rows added per step while the rest of the window lands above. */
 export const STEP_ROWS = 12;
+/**
+ * Before paint, at most this many passes may mount a slice, each larger than the last (12, 24, 48, then
+ * `MAX_LAYOUT_STEP`), so a tail that is a long run of near-empty rows (a folded turn draws most of its
+ * messages as 1 px slices) neither throws React's update-depth error nor mounts hundreds of rows before
+ * the first frame. What is still missing lands in the task-sized slices below.
+ */
+export const MAX_LAYOUT_PASSES = 8;
+const MAX_LAYOUT_STEP = 96;
 
 interface Row {
   id: string;
@@ -36,6 +44,7 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
   const findOpen = useFindInChatStore((s) => s.isOpen) && scroll?.findOwner === true;
   const found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
   const startIndex = state.done || found < 0 ? 0 : found;
+  const layoutPasses = useRef(0);
   const latest = useRef({ rows, scroll });
   latest.current = { rows, scroll };
   const chatId = scroll?.chatId;
@@ -56,6 +65,7 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     const timer = setTimeout(() => {
       frame = requestAnimationFrame(() => {
         frame = 0;
+        layoutPasses.current = 0;
         const { rows: all, scroll: owner } = latest.current;
         const at = all.findIndex((row) => row.id === state.startId);
         if (at <= 0) return;
@@ -77,9 +87,12 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     // The owner's resize observer is created after the first paint, so keep the tail in view from here.
     scroll?.followNow?.();
     if (viewport.scrollHeight > viewport.clientHeight) return;
+    if (layoutPasses.current >= MAX_LAYOUT_PASSES) return;
     const at = rows.findIndex((row) => row.id === state.startId);
     if (at <= 0) return;
-    const next = Math.max(0, at - STEP_ROWS);
+    const step = Math.min(MAX_LAYOUT_STEP, STEP_ROWS * 2 ** layoutPasses.current);
+    layoutPasses.current++;
+    const next = Math.max(0, at - step);
     setState({ startId: rows[next]!.id, done: next === 0 });
   });
   const setPending = scroll?.tailPending?.set;

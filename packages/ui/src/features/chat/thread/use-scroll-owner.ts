@@ -107,6 +107,11 @@ export function useScrollOwner(
     const el = viewportElement.current;
     const contentEl = contentElement.current;
     if (!el || current.following) return;
+    // A drop scheduled for an earlier record (a slice's) must not clear this one's.
+    cancelAnimationFrame(current.staleFrame);
+    current.staleFrame = 0;
+    current.near = null;
+    current.restore = null;
     const hit = readerAnchor(el);
     if (!hit) return;
     if (contentEl && el.scrollTop < el.clientHeight) {

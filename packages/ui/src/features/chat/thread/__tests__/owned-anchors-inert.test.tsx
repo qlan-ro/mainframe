@@ -114,7 +114,8 @@ describe('the row anchor on a browser that cannot anchor', () => {
     rowTop = 260;
     hook.rerender({ open: true });
     expect(supports).toHaveBeenCalledWith('overflow-anchor', 'auto');
-    expect(writes.length).toBeGreaterThan(0);
+    // The row moved 240 px (20 to 260): the reader's offset is restored from 100 to 340.
+    expect(writes).toEqual([340]);
   });
 });
 
@@ -138,7 +139,7 @@ describe('the row anchor', () => {
   it('keeps the row in place and takes the lock when the owner is not in charge (control)', () => {
     const { beginInteraction } = toggle(false);
     expect(beginInteraction).toHaveBeenCalledTimes(1);
-    expect(writes.length).toBeGreaterThan(0);
+    expect(writes).toEqual([340]);
   });
 
   it('does nothing under the owner, for a click and for an automatic fold', () => {

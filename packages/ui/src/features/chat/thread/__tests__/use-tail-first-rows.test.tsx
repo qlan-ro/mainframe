@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import { useFindInChatStore } from '../../find/find-in-chat-store';
-import { FIRST_ROWS, STEP_ROWS, useTailFirstRows } from '../use-tail-first-rows';
+import { FIRST_ROWS, MAX_LAYOUT_PASSES, STEP_ROWS, useTailFirstRows } from '../use-tail-first-rows';
 import type { TranscriptScrollController } from '../transcript-scroll-context';
 
 const make = (count: number, from = 0) => Array.from({ length: count }, (_, i) => ({ id: `m${from + i}` }));
@@ -162,20 +162,21 @@ describe('tail-first mount', () => {
 
 describe('a tail shorter than the viewport', () => {
   /** A viewport 500 px high whose content is `rowHeight` per mounted row. */
-  const sized = (rowHeight: number) => {
+  const sized = (rowHeight: number, clientHeight = 500) => {
     const state = { mounted: 0 };
     const viewport = document.createElement('div');
     Object.defineProperties(viewport, {
-      clientHeight: { get: () => 500 },
-      scrollHeight: { get: () => Math.max(500, state.mounted * rowHeight) },
+      clientHeight: { get: () => clientHeight },
+      scrollHeight: { get: () => Math.max(clientHeight, state.mounted * rowHeight) },
     });
-    const controller = owner(vi.fn(), { viewportElement: { current: viewport } });
+    const followNow = vi.fn();
+    const controller = owner(vi.fn(), { viewportElement: { current: viewport }, followNow });
     const use = (rows: { id: string }[]) => {
       const shown = useTailFirstRows(rows, controller);
       state.mounted = shown.length;
       return shown;
     };
-    return { use };
+    return { use, followNow };
   };
 
   it('mounts further slices before the first paint until the content overflows the viewport', () => {
@@ -201,5 +202,29 @@ describe('a tail shorter than the viewport', () => {
     tick();
     expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
     unmount();
+  });
+
+  it('bounds the passes before paint for a tail of near-empty rows (no update-depth error, no hundreds of rows)', () => {
+    const rows = make(1000);
+    // 1 px rows in an 800 px viewport never overflow within the layout passes.
+    const { use, followNow } = sized(1, 800);
+    const { result, unmount } = renderHook(() => use(rows));
+    // 6 + 12 + 24 + 48 + 96 * 4 rows at most, and the owner is asked to stay at the tail on every pass.
+    expect(result.current.length).toBeLessThanOrEqual(FIRST_ROWS + 12 + 24 + 48 + 96 * (MAX_LAYOUT_PASSES - 3));
+    expect(result.current.length).toBeLessThan(1000);
+    expect(followNow).toHaveBeenCalled();
+    expect(followNow.mock.calls.length).toBeLessThanOrEqual(MAX_LAYOUT_PASSES + 1);
+    expect(result.current[result.current.length - 1]!.id).toBe('m999');
+    // The rest lands in task-sized slices.
+    tick();
+    expect(result.current.length).toBeGreaterThan(FIRST_ROWS);
+    unmount();
+  });
+
+  it('grows the layout step so a medium tail still fills the viewport in the first commit', () => {
+    const rows = make(400);
+    const { use } = sized(4, 800);
+    const { result } = renderHook(() => use(rows));
+    expect(result.current.length).toBeGreaterThanOrEqual(200);
   });
 });
