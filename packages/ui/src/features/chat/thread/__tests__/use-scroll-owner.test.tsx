@@ -482,4 +482,17 @@ describe('a window around a jump target (away)', () => {
     grow(300);
     expect(layout.top).toBe(1800);
   });
+
+  it('cancels a stale-record drop that was scheduled before the window opened', async () => {
+    const view = mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 22;
+    rowTop = 400;
+    act(() => owner.controller.beforePrepend?.());
+    act(() => void viewport.querySelector('[data-testid="content"]')!.appendChild(document.createElement('i')));
+    await act(async () => void (await Promise.resolve()));
+    expect(frames.some(Boolean)).toBe(true);
+    goAway(view);
+    expect(frames.some(Boolean)).toBe(false);
+  });
 });

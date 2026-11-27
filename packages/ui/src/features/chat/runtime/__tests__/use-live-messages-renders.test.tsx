@@ -45,7 +45,7 @@ function createStore() {
 }
 
 let chat: ReturnType<typeof createStore>;
-const counts = { task: 0, gate: 0, probe: 0, reader: 0 };
+const counts = { task: 0, gate: 0, probe: 0, reader: 0, shape: 0 };
 
 const text = (id: string, body: string): ThreadMessageLike => ({
   id,
@@ -85,6 +85,14 @@ function Reader() {
   const length = useLiveMessages((messages) => messages.length);
   return <span data-testid="reader">{length}</span>;
 }
+/** A reader whose answer comes from what the projection adds to the messages: statuses and sends. */
+function Shape() {
+  counts.shape++;
+  const shape = useLiveMessages((messages) =>
+    messages.map((m) => (m.role === 'assistant' ? (m.status?.type ?? 'none') : `user:${m.id}`)).join(' '),
+  );
+  return <span data-testid="shape">{shape}</span>;
+}
 /** Proves the thread's own messages did change: it re-renders with them. */
 function Probe() {
   counts.probe++;
@@ -112,7 +120,7 @@ function stream(frames: number) {
 beforeEach(() => {
   chat = createStore();
   store.controller = chat;
-  Object.assign(counts, { task: 0, gate: 0, probe: 0, reader: 0 });
+  Object.assign(counts, { task: 0, gate: 0, probe: 0, reader: 0, shape: 0 });
   chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'start')] });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -178,5 +186,58 @@ describe('consumers of the live transcript while it streams', () => {
       chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'a'), text('m2', 'b'), text('m3', 'c')] }),
     );
     expect(view.getByTestId('reader').textContent).toBe('3');
+  });
+
+  it('away from the tail, a reader sees a run start and a pending send though the messages did not change', () => {
+    const view = render(
+      <Runtime>
+        <Shape />
+      </Runtime>,
+    );
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w1', 'a jump window')] }));
+    expect(view.getByTestId('shape').textContent).toBe('complete');
+    act(() => chat.dispatch({ type: 'run.started' }));
+    expect(view.getByTestId('shape').textContent).toBe('running');
+    act(() =>
+      chat.dispatch({
+        type: 'local.message.queued',
+        pending: { clientId: 'c1', chatId: 'chat', text: 'hello', createdAt: 1, status: 'pending' },
+      }),
+    );
+    expect(view.getByTestId('shape').textContent).toMatch(/^running user:/);
+  });
+
+  it('away from the tail, a new jump window costs a live reader nothing', () => {
+    const view = render(
+      <Runtime>
+        <Reader />
+      </Runtime>,
+    );
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w1', 'a jump window')] }));
+    const settled = counts.reader;
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w2', 'another'), text('w3', 'and more')] }));
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w4', 'a third')] }));
+    expect(view.getByTestId('reader').textContent).toBe('1');
+    expect(counts.reader).toBe(settled);
+  });
+
+  it('projects the live transcript again for a reader that comes back after the last one left', () => {
+    const project = vi.spyOn(TranscriptProjector.prototype, 'projectMessages');
+    const withReader = (show: boolean) => (
+      <Runtime>
+        {show ? <Reader /> : null}
+        <Probe />
+      </Runtime>
+    );
+    const view = render(withReader(true));
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w1', 'a jump window')] }));
+    const before = project.mock.calls.length;
+    view.rerender(withReader(true));
+    // Another reader on the same live messages shares the projection already made.
+    expect(project.mock.calls.length).toBe(before);
+    view.rerender(withReader(false));
+    view.rerender(withReader(true));
+    expect(view.getByTestId('reader').textContent).toBe('1');
+    expect(project.mock.calls.length).toBeGreaterThan(before);
   });
 });

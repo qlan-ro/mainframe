@@ -1,29 +1,17 @@
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import { useAuiState, type ThreadMessage } from '@assistant-ui/react';
 import type { AcpChatController } from '../controller/acp-chat-controller';
-import type { ChatThreadState } from '../controller/chat-thread-state';
+import { projectionInputs } from '../controller/project-messages';
 import { TranscriptProjector } from '../controller/transcript-projector';
 import { noSubscription, useAwayFromTail, useChatController } from './use-away-from-tail';
 
-/** What `projectMessages` reads of the thread state besides the messages themselves. */
-function projectionKey(state: ChatThreadState): unknown[] {
-  return [
-    state.messages,
-    state.runState,
-    state.authoritativeItemStreaming,
-    state.pendingUserMessages,
-    state.interactions.queued,
-    state.queuedAttachmentPreviews,
-  ];
-}
-
 interface Projection {
-  key: unknown[];
+  key: readonly unknown[];
   projected: readonly ThreadMessage[];
 }
 interface Entry {
   projector: TranscriptProjector;
-  /** Readers away from the tail; the projection is dropped with the last of them. */
+  /** Readers away from the tail; the entry is dropped with the last of them. */
   readers: number;
   last?: Projection;
 }
@@ -46,7 +34,8 @@ function subscribeReader(controller: AcpChatController, listener: () => void): (
   return () => {
     off();
     entry.readers -= 1;
-    if (entry.readers === 0) entry.last = undefined;
+    // The last reader away: the projection and the projector's own memory of the window go with it.
+    if (entry.readers === 0) projectors.delete(controller);
   };
 }
 
@@ -58,7 +47,7 @@ function subscribeReader(controller: AcpChatController, listener: () => void): (
 function liveProjection(controller: AcpChatController): readonly ThreadMessage[] {
   const entry = entryOf(controller);
   const state = controller.getState();
-  const key = projectionKey(state);
+  const key = projectionInputs(state);
   if (entry.last && entry.last.key.every((part, index) => Object.is(part, key[index]))) return entry.last.projected;
   const projected = entry.projector.projectMessages({ ...state, windowMessages: null }, state.messages);
   entry.last = { key, projected };

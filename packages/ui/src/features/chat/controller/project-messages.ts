@@ -106,6 +106,22 @@ function projectSteeredMessages(state: ChatThreadState, serverMessageIds: Readon
 }
 
 /**
+ * What `stampServerStatuses` and `projectTrailingMessages` read of the thread state besides the
+ * messages themselves, in a fixed order: a projection of the same messages is the same projection
+ * while each of these is the same object. Keep it in step with those two functions.
+ */
+export function projectionInputs(state: ChatThreadState): readonly unknown[] {
+  return [
+    state.messages,
+    state.authoritativeItemStreaming,
+    state.runState,
+    state.pendingUserMessages,
+    state.interactions.queued,
+    state.queuedAttachmentPreviews,
+  ];
+}
+
+/**
  * Everything that follows the confirmed transcript: steered turns (D1), then
  * the pending (optimistic) sends sorted by createdAt — always "newest", sent
  * just now; a reconciled pending no longer appears here.
