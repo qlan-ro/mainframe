@@ -33,6 +33,21 @@ impl ChatManager {
         chat_id: &str,
         containers: usize,
     ) -> Option<AdapterWindow> {
+        self.adapter_first_window_by(chat_id, PAGE_TURNS, &move |messages| {
+            messages.len() >= containers
+        })
+        .await
+    }
+
+    /// As [`Self::adapter_first_window`], stopping once `enough` accepts the
+    /// display messages read so far, asking the adapter for `page_turns` turns
+    /// a page.
+    pub async fn adapter_first_window_by(
+        &self,
+        chat_id: &str,
+        page_turns: usize,
+        enough: &(dyn Fn(&[DisplayMessage]) -> bool + Send + Sync),
+    ) -> Option<AdapterWindow> {
         if !self.initial_history_eligible(chat_id)
             || self.shared.messages.lock_recover().get(chat_id).is_some()
             || self.shared.history_cache.has_snapshot(chat_id).await
@@ -41,12 +56,11 @@ impl ChatManager {
         }
         let session = self.history_session(chat_id)?;
         let categories = self.shared.deps.get_tool_categories(chat_id);
-        let full = |raw: &[ChatMessage]| {
-            self.display_of(chat_id, raw, categories.as_ref()).len() >= containers
-        };
+        let full =
+            |raw: &[ChatMessage]| enough(&self.display_of(chat_id, raw, categories.as_ref()));
         let page = session
             .load_history_window(WindowRequest {
-                turns: PAGE_TURNS,
+                turns: page_turns,
                 enough: &move |messages| full(&remap_history_for(messages.to_vec(), chat_id)),
             })
             .await

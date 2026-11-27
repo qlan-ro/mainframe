@@ -45,6 +45,7 @@ async fn a_single_large_container_has_an_item_floor_and_pages_without_gaps() {
                 before: history["floorItemId"].as_str().unwrap().into(),
                 containers: Some(40),
                 items: Some(80),
+                turns: None,
                 until_item_id: None,
             };
             let page = crate::history_page::prepare(&port.messages, &params, Default::default());
@@ -113,6 +114,7 @@ fn load_through_reaches_a_target_inside_the_same_container() {
         before: "tool:tool-327".into(),
         containers: Some(40),
         items: Some(80),
+        turns: None,
         until_item_id: Some("tool:tool-10".into()),
     };
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
@@ -167,6 +169,7 @@ fn pages_skip_empty_encoded_containers_and_reach_the_beginning() {
         session_id: "chat_1".into(),
         before: "message:0:top:m119".into(),
         items: Some(80),
+        turns: None,
         containers: Some(40),
         until_item_id: None,
     };
@@ -238,6 +241,7 @@ async fn preorder_parallel_tasks_include_the_old_context_when_a_page_reaches_a_s
         before: "tool:b-120".into(),
         containers: Some(40),
         items: Some(80),
+        turns: None,
         until_item_id: None,
     };
     let page = crate::history_page::prepare(&port.messages, &params, Default::default());
@@ -264,6 +268,7 @@ fn native_activity_and_task_targets_load_their_older_history() {
             before: before.into(),
             containers: Some(40),
             items: Some(80),
+            turns: None,
             until_item_id: Some(target.into()),
         };
         let page = crate::history_page::prepare(&port.messages, &params, Default::default());

@@ -8,6 +8,7 @@ use mainframe_types::display::DisplayMessage;
 
 use crate::{
     EncodedItem, ResumePort, SessionState, history_window, replay_previews, resume::with_messages,
+    turn_window,
 };
 
 #[path = "history_page_items.rs"]
@@ -70,7 +71,7 @@ fn prepare_for(
         len: messages.len(),
         previews: HashSet::new(),
     };
-    if params.items.is_some() {
+    if params.items.is_some() && params.turns.is_none() {
         items::prepare(messages, params, &mut page);
         if !page.containers.is_empty() {
             prepare_content(messages, params, options, agent, &mut page);
@@ -94,8 +95,21 @@ fn prepare_for(
     if start >= before {
         return page;
     }
-    page.start = history_window::snap(messages, start);
+    let by_turns = params.turns.is_some() && params.until_item_id.is_none();
+    page.start = if by_turns {
+        start
+    } else {
+        history_window::snap(messages, start)
+    };
     page.containers = history_window::encode_range(messages, None, page.start, before);
+    if by_turns {
+        page.start = turn_window::fit(
+            messages,
+            page.start,
+            &mut page.containers,
+            turn_window::MAX_WINDOW_BYTES,
+        );
+    }
     prepare_content(messages, params, options, agent, &mut page);
     page
 }
@@ -112,6 +126,7 @@ pub fn subagent_page(
         before: request.before.unwrap_or_default(),
         containers: request.containers,
         items: None,
+        turns: None,
         until_item_id: request.until_item_id,
     };
     if !initial {
@@ -140,7 +155,12 @@ fn page_start(
 ) -> Option<usize> {
     match &params.until_item_id {
         Some(target) => history_window::find_item(messages, target),
-        None => Some(before.saturating_sub(history_window::page_size(params.containers))),
+        None => Some(match params.turns {
+            Some(turns) => {
+                turn_window::start_before(messages, before, turn_window::turn_count(turns))
+            }
+            None => before.saturating_sub(history_window::page_size(params.containers)),
+        }),
     }
 }
 
@@ -152,7 +172,7 @@ fn prepare_content(
     page: &mut PreparedPage,
 ) {
     render(messages.len(), &params.session_id, options, agent, page);
-    if params.items.is_none() {
+    if params.items.is_none() || params.turns.is_some() {
         page.result.history = history_window::state(page.start, &page.containers);
     }
 }
@@ -238,6 +258,7 @@ mod tests {
             before: "message:0:top:m1".into(),
             containers: Some(1),
             items: None,
+            turns: None,
             until_item_id: None,
         };
         for compressed in [false, true] {
@@ -296,6 +317,7 @@ mod tests {
             before: "message:299:top:m299".into(),
             containers: Some(200),
             items: None,
+            turns: None,
             until_item_id: None,
         };
         let compressed = prepare(

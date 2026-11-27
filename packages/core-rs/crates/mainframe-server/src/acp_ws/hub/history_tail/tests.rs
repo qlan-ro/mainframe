@@ -177,6 +177,7 @@ async fn restart_replays_the_tail_without_canonical_restoration_then_pages_full_
             before: "message:0:top:m60".into(),
             containers: Some(40),
             items: None,
+            turns: None,
             until_item_id: None,
         },
         Default::default(),
@@ -284,3 +285,6 @@ mod upgrade;
 
 #[path = "refresh_tests.rs"]
 mod refresh;
+
+#[path = "turn_window_tests.rs"]
+mod turn_window;

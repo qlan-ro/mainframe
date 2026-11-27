@@ -165,13 +165,13 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     if name == "cursor.params.json" {
         return roundtrip_as::<CursorParams>(body);
     }
-    if name == "history-window.json" {
+    if name == "history-window.json" || name == "history-window.turns.json" {
         return roundtrip_as::<HistoryWindow>(body);
     }
     if name == "history-state.json" {
         return roundtrip_as::<HistoryState>(body);
     }
-    if name == "history-page.params.json" {
+    if name == "history-page.params.json" || name == "history-page-turns.params.json" {
         return roundtrip_as::<HistoryPageParams>(body);
     }
     if name.starts_with("history-page.") {

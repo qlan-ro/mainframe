@@ -53,6 +53,7 @@ fn page_params(messages: &[DisplayMessage]) -> HistoryPageParams {
         before: ids[0].clone(),
         containers: Some(40),
         items: None,
+        turns: None,
         until_item_id: None,
     }
 }

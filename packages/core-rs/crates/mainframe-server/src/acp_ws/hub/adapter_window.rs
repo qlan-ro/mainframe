@@ -9,7 +9,9 @@
 
 use mainframe_acp::resume::persisted::PreparedHistoryTail;
 use mainframe_acp::resume::{BoxFuture, ResumePort, ResumeSnapshot};
-use mainframe_acp::{ResumeOptions, ResumeReplay, dispatch_resume_with, history_window};
+use mainframe_acp::{
+    ResumeOptions, ResumeReplay, dispatch_resume_with, history_window, turn_window,
+};
 use mainframe_chat::chat_manager::ChatManager;
 use mainframe_types::acp::extensions::RevisionCursor;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
@@ -22,6 +24,9 @@ use super::history_tail::first_window;
 /// Containers a window can pull in beyond its size: the start snaps back over
 /// up to 8 to land on a user message.
 const SNAP_MARGIN: usize = 9;
+
+/// Adapter turns asked for per page, as on a window by containers.
+const PAGE_TURNS: usize = 16;
 
 /// Serves a fixed list as the chat's history, idle.
 struct WindowPort(Vec<DisplayMessage>);
@@ -53,8 +58,22 @@ impl FacadeHub {
         let (chat_id, _) = first_window(request, options)?;
         let resume: ResumeSessionRequest = serde_json::from_value(request.params.clone()?).ok()?;
         let window = history_window::parse_window(resume.meta.as_ref()).ok()?;
-        let wanted = history_window::page_size(window.containers) + SNAP_MARGIN;
-        let found = manager.adapter_first_window(&chat_id, wanted).await?;
+        let found = match window.turns {
+            // The newest `turns` turns, each opened by its own start, so a
+            // partial list holding that many starts holds the whole window.
+            Some(turns) => {
+                let turns = turn_window::turn_count(turns);
+                manager
+                    .adapter_first_window_by(&chat_id, turns.max(PAGE_TURNS), &move |messages| {
+                        turn_window::count_turns(messages) >= turns
+                    })
+                    .await?
+            }
+            None => {
+                let wanted = history_window::page_size(window.containers) + SNAP_MARGIN;
+                manager.adapter_first_window(&chat_id, wanted).await?
+            }
+        };
         // The list is partial, so it must not seed any revision log.
         let (response, replay) =
             dispatch_resume_with(request.clone(), &WindowPort(found.messages), None, options).await;

@@ -37,6 +37,7 @@ pub mod session_state;
 pub mod stream;
 pub mod throttle;
 pub mod tool_images;
+pub mod turn_window;
 
 pub use capabilities::client_opts_into_windowed_history;
 pub use capabilities::{

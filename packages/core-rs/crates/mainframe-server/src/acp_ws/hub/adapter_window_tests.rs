@@ -58,13 +58,17 @@ async fn context(pages: Option<Vec<Vec<ChatMessage>>>) -> (Arc<AppCtx>, String) 
 }
 
 fn request(chat_id: &str) -> JsonRpcRequest {
+    request_for(chat_id, json!({"containers":40}))
+}
+
+fn request_for(chat_id: &str, window: serde_json::Value) -> JsonRpcRequest {
     JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(RequestId::Number(1)),
         method: "session/resume".into(),
         params: Some(json!({"sessionId":chat_id,
         "cwd":"/tmp", "replayFrom":{"type":"start"},
-        "_meta":{"_mainframe.dev":{"window":{"containers":40}}}})),
+        "_meta":{"_mainframe.dev":{"window":window}}})),
     }
 }
 
@@ -134,4 +138,30 @@ async fn a_connection_without_windowed_history_is_left_alone() {
         .await;
 
     assert!(window.is_none());
+}
+
+#[tokio::test]
+async fn a_first_window_by_turns_reads_pages_until_that_many_turns_exist() {
+    let (ctx, chat_id) = context(Some(pages())).await;
+    for (turns, wanted) in [(3, 3), (30, 30)] {
+        let (_, replay) = ctx
+            .chat
+            .facade_hub
+            .adapter_window_resume(
+                &ctx.chat.chat_manager,
+                &request_for(&chat_id, json!({ "turns": turns })),
+                options(),
+                None,
+            )
+            .await
+            .expect("the adapter pages");
+        let ids: Vec<_> = replay
+            .containers
+            .iter()
+            .flatten()
+            .map(|i| i.id().to_string())
+            .collect();
+        assert_eq!(ids.len(), wanted, "turns = {turns}");
+        assert!(ids.last().unwrap().contains("m99"), "{ids:?}");
+    }
 }

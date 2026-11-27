@@ -1,6 +1,6 @@
 use super::super::ReplayCursor;
 use super::SnapshotView;
-use crate::{EncodedItem, ReplayPlan, RevisionLog, history_window};
+use crate::{EncodedItem, ReplayPlan, RevisionLog, history_window, turn_window};
 use mainframe_types::acp::extensions::{HistoryWindow, RevisionCursor};
 use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
@@ -64,6 +64,13 @@ impl Selection {
 }
 
 fn newest_start(snapshot: &SnapshotView<'_>, window: &HistoryWindow) -> usize {
+    if let Some(turns) = window.turns {
+        return turn_window::start_before(
+            snapshot.messages,
+            snapshot.messages.len(),
+            turn_window::turn_count(turns),
+        );
+    }
     history_window::snap(
         snapshot.messages,
         snapshot
@@ -85,7 +92,18 @@ fn select(
         start,
         snapshot.messages.len(),
     );
-    if window.items.is_some()
+    // A window by turns takes whole containers: no item trim, only the size guard.
+    let items = window.items.filter(|_| window.turns.is_none());
+    let mut start = start;
+    if window.turns.is_some() && floor.is_none() {
+        start = turn_window::fit(
+            snapshot.messages,
+            start,
+            &mut containers,
+            turn_window::MAX_WINDOW_BYTES,
+        );
+    }
+    if items.is_some()
         && let Some(floor) = floor
     {
         match crate::item_window::ItemWindow::from_floor(containers, start, floor) {
@@ -96,9 +114,9 @@ fn select(
     let selected = crate::item_window::ItemWindow::newest(
         containers,
         start,
-        window.items.map(crate::item_window::budget),
+        items.map(crate::item_window::budget),
     );
-    if window.items.is_some() {
+    if items.is_some() {
         selected.track_context()
     } else {
         selected
@@ -138,6 +156,7 @@ fn context_changed(
 ) -> bool {
     matches!(plan, ReplayPlan::Incremental(_))
         && window.items.is_some()
+        && window.turns.is_none()
         && selected
             .history
             .context_item_ids

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { useUiPrefs } from '@/store/ui-prefs';
+import { HISTORY_TURNS_DEFAULT, useUiPrefs } from '@/store/ui-prefs';
 import { ChatPane } from '../ChatPane';
 
 beforeEach(() => {
@@ -65,5 +65,51 @@ describe('ChatPane — mentions and commands as chips', () => {
 
     expect(useUiPrefs.getState().chipComposer).toBe(true);
     expect(screen.getByTestId('settings-chat-chip-composer')).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+describe('ChatPane — turns to load at a time', () => {
+  beforeEach(() => useUiPrefs.setState({ historyTurns: HISTORY_TURNS_DEFAULT }));
+
+  it('shows the default of 10', () => {
+    render(<ChatPane />);
+
+    expect(screen.getByLabelText('Turns to load at a time')).toHaveValue(10);
+  });
+
+  it('saves a new count when the field is committed', () => {
+    render(<ChatPane />);
+    const field = screen.getByTestId('settings-chat-history-turns');
+
+    fireEvent.change(field, { target: { value: '20' } });
+    fireEvent.blur(field);
+
+    expect(useUiPrefs.getState().historyTurns).toBe(20);
+  });
+
+  it('clamps a count outside 2 to 50 and shows the clamped value', () => {
+    render(<ChatPane />);
+    const field = screen.getByTestId('settings-chat-history-turns');
+
+    fireEvent.change(field, { target: { value: '500' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(useUiPrefs.getState().historyTurns).toBe(50);
+    expect(field).toHaveValue(50);
+
+    fireEvent.change(field, { target: { value: '0' } });
+    fireEvent.blur(field);
+    expect(useUiPrefs.getState().historyTurns).toBe(2);
+    expect(field).toHaveValue(2);
+  });
+
+  it('keeps the old count when the field is cleared', () => {
+    render(<ChatPane />);
+    const field = screen.getByTestId('settings-chat-history-turns');
+
+    fireEvent.change(field, { target: { value: '' } });
+    fireEvent.blur(field);
+
+    expect(useUiPrefs.getState().historyTurns).toBe(10);
+    expect(field).toHaveValue(10);
   });
 });
