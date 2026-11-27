@@ -1,7 +1,7 @@
 /**
  * Shared shiki token-rendering primitives.
  *
- * Both the chat `SyntaxHighlighter` and the markdown-preview `CodeBlock` use
+ * The chat's markdown code blocks and the markdown-preview `CodeBlock` use
  * these so the async-swap-in logic (mounted-ref guard, resolveLanguage,
  * plain-text fallback) lives in one place.
  *
@@ -80,15 +80,20 @@ export function useShikiTokens(
 
 // ── TokenLine ─────────────────────────────────────────────────────────────────
 
-/** Renders one line of shiki tokens as inline `<span>` elements. */
+/** One line of shiki tokens as inline, coloured `<span>` elements. */
+export function TokenSpans({ tokens }: { tokens: ThemedToken[] }) {
+  return tokens.map((tok, i) => (
+    <span key={i} style={{ color: tok.color, fontStyle: (tok.fontStyle ?? 0) & 1 ? 'italic' : undefined }}>
+      {tok.content}
+    </span>
+  ));
+}
+
+/** Renders one line of shiki tokens as a block `<span>`. */
 export function TokenLine({ tokens, addNewline }: { tokens: ThemedToken[]; addNewline: boolean }) {
   return (
     <span className="block">
-      {tokens.map((tok, i) => (
-        <span key={i} style={{ color: tok.color, fontStyle: (tok.fontStyle ?? 0) & 1 ? 'italic' : undefined }}>
-          {tok.content}
-        </span>
-      ))}
+      <TokenSpans tokens={tokens} />
       {addNewline && '\n'}
     </span>
   );

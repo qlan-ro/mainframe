@@ -12,13 +12,13 @@ This replaces the old "assistant-ui first, stop and ask" rule. Do not look for a
 
 - **assistant-ui owns** the composer field's behaviour (drafts, IME, paste, key handling), attachments, quoting and selection, the action bar, and the session list. It stays the runtime bridge through `useExternalStoreRuntime`.
 - **Mainframe owns the transcript:** the data path, turns, rows, the list, scrolling, paging, sub-agents, gates and the queue. The transcript scrolls inside `ThreadPrimitive.Viewport`, but Mainframe owns its scroll behaviour; assistant-ui's auto-scroll stays off. Do not adopt `onLoadEarlier`, `createThreadRowsSelector` or `ThreadPrimitive.Row`: the last two don't fold turns, and they end a turn at every user message, queued ones included (#948).
-- **shadcn owns presentation** for rows (Trace), gates (Questionnaire, Item), code (Code Block), scroll (Message Scroller, if the scroll proof picks it) and the composer's card (Input Group), tiles (Attachment) and buttons. "shadcn" means its core components and its AI Elements at ui.shadcn.com, never the deprecated `vercel/ai-elements`. Adopt shadcn's component unless it lacks something we need, and say what that is.
+- **shadcn owns presentation** for rows (Trace), gates (Questionnaire, Item), code (Code Block; markdown code blocks use it already), scroll (Message Scroller, if the scroll proof picks it) and the composer's card (Input Group), tiles (Attachment) and buttons. "shadcn" means its core components and its AI Elements at ui.shadcn.com, never the deprecated `vercel/ai-elements`. Adopt shadcn's component unless it lacks something we need, and say what that is.
 - **assistant-ui 0.15.38 specifics:**
   - No `ThreadPrimitive.ViewportFooter`: its height counts as "at bottom". The footer above the composer is a plain div.
   - All of assistant-ui's viewport scrolling is off: `autoScroll`, `scrollToBottomOnThreadSwitch`, `scrollToBottomOnRunStart`, `scrollToBottomOnInitialize`, and composer focus on switch (`unstable_focusOnThreadSwitched`).
   - The viewport's prepend scroll correction (`messagesPrepended`) has no switch. Expect it when rows are prepended.
   - Mainframe's bottom pin (`features/chat/thread/use-thread-bottom-pin.ts`) is the only code that follows streaming output. Do not add another follower or turn assistant-ui's back on.
-- Bump assistant-ui only for a fix we need, and pin the set exactly (see Conventions). The `INTERNAL` imports break first on a bump.
+- Bump assistant-ui only for a fix we need, and pin the set exactly (see Conventions). The `INTERNAL` import (the composer's input-plugin registry) breaks first on a bump.
 
 Research: [shadcn agent components](../../docs/research/2026-11-26-shadcn-agent-components.md), [composer study](../../docs/research/2026-11-26-composer-shadcn-study.md). How each chat area is built today: [chat area notes](docs/chat-area-notes.md).
 
@@ -57,7 +57,7 @@ Research: [shadcn agent components](../../docs/research/2026-11-26-shadcn-agent-
 - **No file > 300 lines**, no function > 50. Decompose god-files on port (don't carry them).
 - **Every interactive element needs a stable `data-testid`** (`<surface>-<element>`); `ui/` primitives stay passthrough.
 - **`convert-acp-item` invariants are load-bearing:** stable item ids are the aui message keys (identical live, in resume replay, and in history — spec decision 3), subagent nesting comes from parent-attribution `_meta` (the WS14c `task_group` dual re-encode is retired with the dialect), ≥1-content-part + error fallbacks stay. Identity too: an untouched container returns the same `ThreadMessageLike` (and parts) on every conversion — assistant-ui memoizes on object identity, and the per-chunk render cost of the whole transcript depends on it.
-- **Pin the whole `@assistant-ui/*` set together, exact** — currently `react@0.15.38` / `store@0.3.25` / `core@0.3.38` / `tap@0.9.27` / `react-markdown@0.14.26`, every one an exact version (was the `0.14.27`/`0.2.21` line). They're independently versioned and sub-1.0 — never let `^` ranges drift them apart. `react-markdown` must move in lockstep (`0.14.26` peers `react ^0.15.0`). *Historical: the ban on `0.14.19`/`0.14.20` (React-Compiler subscription bug, fixed in `.21`) is superseded by the 0.15 line.*
+- **Pin the whole `@assistant-ui/*` set together, exact** — currently `react@0.15.38` / `store@0.3.25` / `core@0.3.38` / `tap@0.9.27`, every one an exact version (was the `0.14.27`/`0.2.21` line). They're independently versioned and sub-1.0 — never let `^` ranges drift them apart. `@assistant-ui/react-markdown` is gone: transcript markdown renders through Streamdown (exact pin), see the chat area notes. *Historical: the ban on `0.14.19`/`0.14.20` (React-Compiler subscription bug, fixed in `.21`) is superseded by the 0.15 line.*
 - **Drop, don't port,** obsolete code: the `zone/` layout, layout/ui stores, the dual tool dispatcher, regex go-to-definition.
 
 ## Known gaps / phantom deps

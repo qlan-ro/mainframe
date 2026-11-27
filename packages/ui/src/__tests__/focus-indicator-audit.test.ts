@@ -84,6 +84,7 @@ const EXEMPT: Record<string, Exemption> = {
   'components/ui/popover.tsx': { count: 1, shownBy: PANEL },
   'components/ui/hover-card.tsx': { count: 1, shownBy: PANEL },
   'components/ui/attachment.tsx': { count: 1, shownBy: 'Attachment’s `focus-within` line' },
+  'components/ui/code-block.tsx': { count: 1, shownBy: 'the frame’s line while its scrolling body is focused' },
   'components/ui/command.tsx': {
     count: 2,
     shownBy: 'the palette: focus never leaves its input, and the selected row is highlighted',
