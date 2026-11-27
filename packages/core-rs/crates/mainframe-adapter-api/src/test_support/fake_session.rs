@@ -54,6 +54,8 @@ pub struct FakeSession {
     /// setting real, stat-able paths here ever exercises the history
     /// snapshot cache.
     pub history_sources: Vec<PathBuf>,
+    /// Collected files reported by `peek_history_files`.
+    pub history_files: Mutex<Option<crate::CollectedHistoryFiles>>,
     /// Fires synchronously inside `respond_to_permission`, before it resolves —
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
@@ -256,6 +258,12 @@ impl AdapterSession for FakeSession {
     fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
         let sources = self.history_sources.clone();
         Box::pin(async move { sources })
+    }
+    fn peek_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
+        self.history_files.lock_recover().clone()
+    }
+    fn restore_history_files(&self, files: crate::CollectedHistoryFiles) {
+        *self.history_files.lock_recover() = Some(files);
     }
     fn load_scan_records<'a>(
         &'a self,

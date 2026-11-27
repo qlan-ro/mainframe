@@ -10,9 +10,9 @@ use mainframe_types::acp::session::ResumeSessionRequest;
 use serde_json::Value;
 
 use super::FacadeHub;
-mod store;
-use store::Manifest;
-pub(super) use store::TailStore;
+pub(super) mod store;
+use super::history_refresh::TailWindow;
+pub(super) use store::{Manifest, TailStore};
 
 impl FacadeHub {
     pub(crate) fn with_history_tails(mut self, directory: PathBuf) -> Self {
@@ -41,6 +41,7 @@ impl FacadeHub {
         cursor: Option<&RevisionCursor>,
     ) -> Option<(JsonRpcResponse, ResumeReplay)> {
         let (chat_id, window) = first_window(request, options)?;
+        self.remember_window(&chat_id, &window, options);
         let store = self.history_tails.as_ref()?;
         let manifest = store.manifest(&chat_id).await?;
         if manifest.window != window
@@ -75,6 +76,7 @@ impl FacadeHub {
         let Some((chat_id, window)) = first_window(&request, options) else {
             return;
         };
+        self.remember_window(&chat_id, &window, options);
         let Some(store) = self.history_tails.clone() else {
             return;
         };
@@ -109,6 +111,16 @@ impl FacadeHub {
             };
             store.write(manifest, tail, permit).await;
         });
+    }
+
+    fn remember_window(&self, chat_id: &str, window: &Value, options: ResumeOptions) {
+        self.remember_tail_window(
+            chat_id,
+            TailWindow {
+                window: window.clone(),
+                previews: options.result_previews,
+            },
+        );
     }
 
     pub(crate) fn seed_history_snapshot(

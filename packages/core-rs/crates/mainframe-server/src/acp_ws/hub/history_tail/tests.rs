@@ -280,3 +280,6 @@ async fn a_cold_tail_miss_without_rest_delivers_one_replay_without_a_resync() {
 
 #[path = "upgrade_tests.rs"]
 mod upgrade;
+
+#[path = "refresh_tests.rs"]
+mod refresh;

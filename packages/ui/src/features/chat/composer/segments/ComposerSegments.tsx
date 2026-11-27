@@ -10,7 +10,9 @@
  * so inserting a wrapper between the segments block and the input can't break
  * it, and never a second composer (edit mode renders its own input testid).
  */
-import { useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
+import { useUiPrefs } from '@/store/ui-prefs';
+import { LazyChipTextEditor } from '../lexical/lazy-fields';
 import { useComposerSegments } from './segment-store';
 import { SegmentQuotePill } from './SegmentQuotePill';
 
@@ -20,7 +22,9 @@ const EMPTY_COMPOSITION = { committed: [], liveQuote: null } as const;
  * A committed segment's prose box. Plain textarea semantics on purpose (spec
  * §2.2 Decision 9): no `ComposerHighlight` overlay and no `@`/`/` triggers —
  * those are wired to the single native `ComposerPrimitive.Input` — and Enter
- * inserts a newline here where the identical-looking box below sends.
+ * inserts a newline here where the identical-looking box below sends. With the
+ * chip setting on it is a chip editor instead, so a chip that moved up with
+ * the quote stays a chip; still no menu, and Enter is still a new line.
  */
 function ComposerSegmentTextarea({
   segmentId,
@@ -34,6 +38,7 @@ function ComposerSegmentTextarea({
   onChange: (text: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const chips = useUiPrefs((s) => s.chipComposer);
 
   useEffect(() => {
     const el = ref.current;
@@ -41,6 +46,20 @@ function ComposerSegmentTextarea({
     el.style.height = 'auto';
     el.style.height = `${Math.max(el.scrollHeight, 21)}px`;
   }, [value]);
+
+  if (chips) {
+    return (
+      <Suspense fallback={<div className="min-h-[21px]" />}>
+        <LazyChipTextEditor
+          testId="composer-segment-input"
+          dataAttributes={{ 'data-segment-id': segmentId }}
+          value={value}
+          placeholder={placeholder}
+          onChange={onChange}
+        />
+      </Suspense>
+    );
+  }
 
   return (
     <textarea
@@ -67,7 +86,7 @@ export function ComposerSegments({ threadId }: { threadId: string }) {
     if (!liveQuoteId) return;
     containerRef.current
       ?.closest('[data-testid="chat-composer"]')
-      ?.querySelector<HTMLTextAreaElement>('[data-testid="chat-composer-input"]')
+      ?.querySelector<HTMLElement>('[data-testid="chat-composer-input"]')
       ?.focus();
   }, [liveQuoteId]);
 
