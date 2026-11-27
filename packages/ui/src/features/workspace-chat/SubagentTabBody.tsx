@@ -1,11 +1,10 @@
 import { SubagentFind } from './SubagentFind';
 import { ProseBlock, TextBlock } from './SubagentTextBlocks';
 import { ConversationExportButton } from './ConversationExportButton';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import type { ThreadMessage, ToolCallMessagePart } from '@assistant-ui/react';
 import { Bot } from 'lucide-react';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
-import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import type { ChatThreadState } from '@/features/chat/controller/chat-thread-state';
 import { useControllerState } from '@/features/chat/runtime/use-chat-thread-runtime';
 import { useNativeThreadMessages } from '@/features/chat/runtime/use-native-thread-messages';
@@ -40,39 +39,9 @@ import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
+import { useLoadParentCall } from './use-load-parent-call';
+import { useOwnSubagentCall } from './use-own-subagent-call';
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
-function useLoadCall(
-  controller: AcpChatController,
-  state: ChatThreadState,
-  messages: readonly ThreadMessage[],
-  call: SubagentCall | null,
-  target: { toolCallId: string; messageId?: string; nested: boolean },
-): string | null {
-  const [error, setError] = useState<string | null>(null);
-  const { toolCallId, messageId } = target;
-  const partial = controller.isHistoryContext(toolCallId);
-  const ready = state.loadState?.type === 'ready';
-  const hasMore = state.historyWindow?.hasMore ?? false;
-  const needed = !target.nested && ready && (call == null || partial);
-  const exhausted = !hasMore || (!partial && messages.some((message) => message.id === messageId));
-  useEffect(() => {
-    if (!needed || exhausted) return undefined;
-    let cancelled = false;
-    void controller.loadEarlier(toolCallId).then(
-      (found) => {
-        if (!cancelled && !found) setError('Not in this transcript');
-      },
-      (cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load the transcript');
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [controller, needed, exhausted, messages, toolCallId]);
-  return needed && exhausted ? 'Not in this transcript' : error;
-}
-
 interface Place {
   pending: ReadonlySet<string>;
   partLive: boolean;
@@ -182,21 +151,51 @@ export function SubagentTabBody({
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
+  const nested = !!savedNestedCall;
+  const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
+  const taskKey = (ownTasks(listed, toolCallId) ?? [])
+    .map((task) => `${task.id}:${task.status}:${task.endedAt}`)
+    .join();
+  const liveCall = useMemo(
+    () => (nested ? null : findSubagentCall(messages, toolCallId)),
+    [messages, toolCallId, nested],
+  );
+  // In the live window the stream keeps the call current; below the floor the tab holds its own copy.
+  const inLiveWindow = liveCall != null && !controller.isHistoryContext(toolCallId);
+  const own = useOwnSubagentCall({
+    controller,
+    state,
+    toolCallId,
+    enabled: !nested && !inLiveWindow,
+    taskKey,
+    active,
+  });
+  const fallback = !nested && !inLiveWindow && own.kind === 'unsupported';
+  const ownCall = !nested && !inLiveWindow && own.kind === 'call' ? own : null;
   const call = useMemo(
     () =>
       savedNestedCall
         ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
-        : findSubagentCall(messages, toolCallId),
-    [messages, toolCallId, messageId, savedNestedCall],
+        : inLiveWindow || fallback
+          ? liveCall
+          : (ownCall?.call ?? null),
+    [savedNestedCall, messageId, toolCallId, inLiveWindow, fallback, liveCall, ownCall],
   );
-  const error = useLoadCall(controller, state, messages, call, { toolCallId, messageId, nested: !!savedNestedCall });
+  const callMessages = ownCall?.messages ?? messages;
+  const fallbackError = useLoadParentCall(controller, state, messages, call, {
+    toolCallId,
+    messageId,
+    nested,
+    fallback,
+  });
+  const ownError = own.kind === 'error' ? own.message : own.kind === 'missing' ? 'Not in this transcript' : null;
+  const error = fallback ? fallbackError : ownError;
   const historical = call ? subagentFact(call.part) : undefined;
   const nativeAgentId = savedNestedCall ? (historical?.nativeAgentId ?? null) : historical?.nativeAgentId;
-  const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
   const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
-  const place = usePlace(call, messages, state, world);
+  const place = usePlace(call, callMessages, state, world);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;

@@ -12,7 +12,7 @@ import {
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ThreadMessage } from '@assistant-ui/react';
-import type { BackgroundTask, HistoryPageResult } from '@qlan-ro/mainframe-types';
+import type { BackgroundTask, HistoryAroundResult, HistoryPageResult } from '@qlan-ro/mainframe-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionStatusProvider } from '@/app/ConnectionStatusContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -32,7 +32,12 @@ const { controller, world } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
     loadEarlier: vi.fn(async () => true),
-    subagentHistory: { page: vi.fn(async (): Promise<HistoryPageResult> => ({ hasMore: false, updates: [] })) },
+    historyGeneration: 0,
+    subagentHistory: {
+      page: vi.fn(async (): Promise<HistoryPageResult> => ({ hasMore: false, updates: [] })),
+      /** Null: a daemon that cannot answer `history_around`, so the tab pages the parent as before. */
+      around: vi.fn(async (): Promise<HistoryAroundResult | null> => null),
+    },
     isHistoryContext: vi.fn(() => false),
     subscribeLive: vi.fn(() => vi.fn()),
     holdActive: vi.fn(() => vi.fn()),

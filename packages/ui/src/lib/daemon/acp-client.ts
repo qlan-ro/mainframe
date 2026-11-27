@@ -1,11 +1,17 @@
 import { NotSentError } from './not-sent-error';
 import {
+  requestHistoryAround,
   requestHistoryPage,
   requestHistorySearch,
   requestSubagentExport,
   type SubagentPageParams,
 } from './acp-history-client';
-import type { HistoryPageParams, HistoryPageResult, HistoryWindow } from '@qlan-ro/mainframe-types';
+import type {
+  HistoryAroundParams,
+  HistoryPageParams,
+  HistoryPageResult,
+  HistoryWindow,
+} from '@qlan-ro/mainframe-types';
 import {
   type CancelSessionNotification,
   InitializeResponseSchema,
@@ -194,6 +200,10 @@ export class AcpFacadeClient {
 
   historyPage(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown> {
     return requestHistoryPage(this.requireConnection(), params, apply);
+  }
+
+  historyAround(params: HistoryAroundParams) {
+    return requestHistoryAround(this.requireConnection(), params);
   }
 
   subagentHistoryPage(params: SubagentPageParams, apply: (page: HistoryPageResult) => void) {
