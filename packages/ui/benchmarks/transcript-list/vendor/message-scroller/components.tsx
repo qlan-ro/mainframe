@@ -207,11 +207,9 @@ function MessageScrollerViewport({
       return
     }
 
-    // Coalesce into rAF: handleResize mutates the spacer inside the observed
-    // content, and resizing an observed element during delivery fires
-    // "ResizeObserver loop completed with undelivered notifications".
-    // RIG PATCH 2 (upstream: coalesced into requestAnimationFrame). Follow runs in
-    // the observer callback, in the frame the size changed.
+    // RIG PATCH 2 (upstream coalesced this into requestAnimationFrame, to avoid "ResizeObserver
+    // loop completed with undelivered notifications" when handleResize resizes the spacer).
+    // Follow runs in the observer callback, in the frame the size changed.
     const observer = new ResizeObserver(() => {
       handleResize()
     })
@@ -295,11 +293,9 @@ function MessageScrollerContent({
       return
     }
 
-    // Coalesce into rAF: handleResize mutates the spacer inside this observed
-    // element, and resizing an observed element during delivery fires
-    // "ResizeObserver loop completed with undelivered notifications".
-    // RIG PATCH 2 (upstream: coalesced into requestAnimationFrame). Follow runs in
-    // the observer callback, in the frame the size changed.
+    // RIG PATCH 2 (upstream coalesced this into requestAnimationFrame, to avoid "ResizeObserver
+    // loop completed with undelivered notifications" when handleResize resizes the spacer).
+    // Follow runs in the observer callback, in the frame the size changed.
     const observer = new ResizeObserver(() => {
       handleResize()
     })
