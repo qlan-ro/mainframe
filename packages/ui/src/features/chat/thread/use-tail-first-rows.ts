@@ -12,7 +12,9 @@ export const STEP_ROWS = 12;
  * Before paint, at most this many passes may mount a slice, each larger than the last (12, 24, 48, then
  * `MAX_LAYOUT_STEP`), so a tail that is a long run of near-empty rows (a folded turn draws most of its
  * messages as 1 px slices) neither throws React's update-depth error nor mounts hundreds of rows before
- * the first frame. What is still missing lands in the task-sized slices below.
+ * the first frame. What is still missing lands in the task-sized slices below, and each of those slices
+ * starts a new budget: a frame can run up to this many passes again while the content still does not
+ * overflow.
  */
 export const MAX_LAYOUT_PASSES = 8;
 const MAX_LAYOUT_STEP = 96;

@@ -209,15 +209,21 @@ describe('a tail shorter than the viewport', () => {
     // 1 px rows in an 800 px viewport never overflow within the layout passes.
     const { use, followNow } = sized(1, 800);
     const { result, unmount } = renderHook(() => use(rows));
-    // 6 + 12 + 24 + 48 + 96 * 4 rows at most, and the owner is asked to stay at the tail on every pass.
+    // 6 + 12 + 24 + 48 + 96 * 5 rows at most (570), and the owner is asked to stay at the tail on every pass.
     expect(result.current.length).toBeLessThanOrEqual(FIRST_ROWS + 12 + 24 + 48 + 96 * (MAX_LAYOUT_PASSES - 3));
+    expect(result.current.length).toBe(570);
     expect(result.current.length).toBeLessThan(1000);
     expect(followNow).toHaveBeenCalled();
     expect(followNow.mock.calls.length).toBeLessThanOrEqual(MAX_LAYOUT_PASSES + 1);
     expect(result.current[result.current.length - 1]!.id).toBe('m999');
-    // The rest lands in task-sized slices.
+    // The first task-sized slice lands above them, and its commit gets a fresh budget of layout passes.
     tick();
-    expect(result.current.length).toBeGreaterThan(FIRST_ROWS);
+    expect(result.current.length).toBeGreaterThan(570);
+    // The window finishes within twenty more frames. With the budget reset each frame adds its slice and further layout
+    // passes; without it only the twelve rows of the slice land per frame, which would leave about 700 rows.
+    for (let i = 0; i < 20 && result.current.length < 1000; i++) tick();
+    expect(result.current).toHaveLength(1000);
+    expect(result.current[0]!.id).toBe('m0');
     unmount();
   });
 
