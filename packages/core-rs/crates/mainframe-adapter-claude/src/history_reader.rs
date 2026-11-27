@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader};
 
-const CHUNK_SIZE: usize = 1024 * 1024;
+pub(super) const CHUNK_SIZE: usize = 1024 * 1024;
 
 pub(super) async fn first_record(path: &str) -> Option<Vec<u8>> {
     let path = path.to_owned();
