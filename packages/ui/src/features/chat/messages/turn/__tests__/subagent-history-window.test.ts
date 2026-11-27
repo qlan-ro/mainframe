@@ -5,6 +5,7 @@ import {
   loadSubagentTarget,
   releaseSubagentHistory,
   useSubagentHistoryStore,
+  type RequestPage,
 } from '../subagent-history-store';
 import { SUBAGENT_PAGES_KEPT, firstWindow, landNewer, landOlder, newerCursor, olderCursor } from '../subagent-window';
 import { PAGE, fakeSubagentPager } from './subagent-pager';
@@ -74,6 +75,14 @@ describe('a long sub-agent', () => {
     expect(request.mock.calls).toContainEqual([`m${PAGE * 4}`, `m${PAGE * 3}`]);
   });
 
+  it('keeps the message object of every row a page leaves untouched, so those rows do not render again', async () => {
+    const { request } = fakeSubagentPager(PAGE * 6);
+    await loadSubagentPage(key, request);
+    const held = new Map(entry().messages.map((message) => [message.id, message]));
+    await loadSubagentPage(key, request, 'older');
+    for (const message of entry().messages.slice(PAGE)) expect(message).toBe(held.get(message.id));
+  });
+
   it('pages up again over pages it dropped from the top', async () => {
     const { request } = fakeSubagentPager(PAGE * 6);
     await loadSubagentPage(key, request);
@@ -86,26 +95,70 @@ describe('a long sub-agent', () => {
     expect(request).toHaveBeenCalledExactlyOnceWith(`m${PAGE * 2}`, `m${PAGE}`);
     expect(ids()).toEqual(range(PAGE, PAGE * 4));
   });
+});
 
-  it('finds a target below a window whose newest pages were dropped', async () => {
-    const { request } = fakeSubagentPager(PAGE * 8);
-    await loadSubagentPage(key, request);
-    for (let page = 0; page < 5; page++) await loadSubagentPage(key, request, 'older');
+describe('Find in a bounded window', () => {
+  const total = PAGE * 50;
+  const pages = () => entry().window.bottom - entry().window.top + 1;
+  const find = (request: RequestPage, n: number) => loadSubagentTarget(key, request, `m${n}`, `m${n}`);
+
+  /** The reader paged far up a 2,000-step agent: m160 to m279 held, the newest pages dropped. */
+  async function pagedUp() {
+    const pager = fakeSubagentPager(total);
+    await loadSubagentPage(key, pager.request);
+    for (let page = 0; page < 45; page++) await loadSubagentPage(key, pager.request, 'older');
+    expect(ids()).toEqual(range(160, 280));
     expect(entry().later).toBe(true);
-    const target = `m${PAGE * 6 + 3}`;
-    await loadSubagentTarget(key, request, target, target);
-    expect(ids()).toContain(target);
-    expect(ids()).toEqual(range(PAGE * 6 + 3, PAGE * 8));
-    expect(entry().later).toBe(false);
+    pager.request.mockClear();
+    return pager.request;
+  }
+
+  it('loads the page up to a match just above the window, and stays within three pages', async () => {
+    const request = await pagedUp();
+    await find(request, 155);
+    expect(request).toHaveBeenCalledExactlyOnceWith('m160', 'm155');
+    expect(ids()).toEqual(range(155, 240));
+    expect(pages()).toBeLessThanOrEqual(SUBAGENT_PAGES_KEPT);
   });
 
-  it('finds a target above the window with one page up to it', async () => {
-    const { request } = fakeSubagentPager(PAGE * 8);
-    await loadSubagentPage(key, request);
-    const target = `m${PAGE * 2 + 5}`;
-    await loadSubagentTarget(key, request, target, target);
-    expect(request).toHaveBeenLastCalledWith(`m${PAGE * 7}`, target);
-    expect(ids()[0]).toBe(target);
-    expect(ids()).toHaveLength(PAGE * 8 - (PAGE * 2 + 5));
+  it('brings dropped pages back one at a time for a match just below, and stays within three pages', async () => {
+    const request = await pagedUp();
+    await find(request, 285);
+    // The daemon's empty page says the match is not above; one newer page holds it.
+    expect(request.mock.calls).toEqual([
+      ['m160', 'm285'],
+      ['m320', 'm280'],
+    ]);
+    expect(ids()).toEqual(range(200, 320));
+    expect(pages()).toBeLessThanOrEqual(SUBAGENT_PAGES_KEPT);
+  });
+
+  it('holds at most three pages for a match far above: the page up to it, and two below', async () => {
+    const request = await pagedUp();
+    await find(request, 10);
+    expect(ids()).toEqual(range(10, 240));
+    expect(pages()).toBe(SUBAGENT_PAGES_KEPT);
+    expect(entry().messages.length).toBeLessThan(260);
+  });
+
+  it('does not seek a match the transcript does not have twice in a row', async () => {
+    const request = await pagedUp();
+    await find(request, total + 5);
+    request.mockClear();
+    await find(request, total + 5);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('finds a match again after the window moved on from it', async () => {
+    const request = await pagedUp();
+    await find(request, 300); // below: brought back, and the seek is remembered on the entry
+    expect(ids()).toContain('m300');
+    await find(request, 10); // far above
+    for (let page = 0; page < 2; page++) await loadSubagentPage(key, request, 'older');
+    expect(ids()).not.toContain('m300');
+    expect(entry().target).toBeUndefined();
+    await find(request, 300);
+    expect(ids()).toContain('m300');
+    expect(pages()).toBeLessThanOrEqual(SUBAGENT_PAGES_KEPT);
   });
 });

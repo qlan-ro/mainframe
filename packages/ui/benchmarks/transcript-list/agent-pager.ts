@@ -50,6 +50,8 @@ export const agentPager = {
     const start = before !== undefined && until !== undefined ? Math.min(index(until), end) : Math.max(0, end - PAGE);
     const updates = Array.from({ length: end - start }, (_, offset) => container(start + offset)).flat();
     agentPager.landedAt.push(performance.now());
+    // Nothing between `until` and `before`: the daemon's empty page names `before` as the floor.
+    if (before !== undefined && end <= start) return { hasMore: end > 0, floorItemId: before, updates: [] };
     return { hasMore: start > 0, ...(end > start && { floorItemId: `agent-m${start}` }), updates };
   },
 };

@@ -90,6 +90,20 @@ it('offers the dropped newest pages below the steps and loads them back', async 
   expect(screen.getByRole('list')).toHaveAttribute('data-ends-early', 'false');
 });
 
+it('loads a page on the reader own input only, never on a scroll a landing page caused', async () => {
+  await pagedPastTheCap(fakeSubagentPager(200));
+  const view = show();
+  const viewport = view.container.querySelector('[data-conversation-scroller]')!;
+  request.mockClear();
+  // The browser's anchoring moves the scroll position down as rows land above: not the reader.
+  Object.defineProperty(viewport, 'scrollTop', { value: 500, configurable: true });
+  fireEvent.scroll(viewport);
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.keyDown(viewport, { key: 'PageDown' });
+  await screen.findByText('m199');
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 it('tells the plain list scroll owner before the rows of a page commit', async () => {
   useUiPrefs.setState({ plainTranscript: true });
   await pagedPastTheCap(fakeSubagentPager(200));

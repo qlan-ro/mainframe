@@ -71,7 +71,8 @@ export function SubagentFind({
     if (!open || !match || !entry || entry.loading || entry.error) return;
     const held = entry.messages.some(({ id }) => id === match.containerId);
     // The held window is bounded: a match may be above it or, once its newest pages were dropped, below it.
-    if (!held && (entry.before || (entry.later && entry.target !== match.containerId))) {
+    // `target` marks a seek that ended without it (not in this transcript), so it is not sought again.
+    if (!held && entry.target !== match.containerId && (entry.before || entry.later)) {
       void loadSubagentTarget(
         key,
         (before, until) =>
