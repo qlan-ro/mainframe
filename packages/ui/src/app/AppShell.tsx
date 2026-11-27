@@ -28,7 +28,7 @@ import { AutomationsSurface } from '../features/automations/AutomationsSurface';
 import { AdvisorSurface } from '../features/setup-advisor/AdvisorSurface';
 import { SettingsSurface } from '../features/settings/SettingsSurface';
 import { ConfirmDialogHost } from '../components/overlays/ConfirmDialogHost';
-import { ReviewPanel } from '../features/review/ReviewPanel';
+import { LazyReviewPanel } from '../features/review/LazyReviewPanel';
 import { TutorialOverlay } from '../features/tour/TutorialOverlay';
 import { useFirstRunTour } from '../features/tour/use-first-run-tour';
 import { useSessionsThreadList } from '../features/sessions/runtime/use-sessions-thread-list';
@@ -185,7 +185,7 @@ function RuntimeBody({ port }: { port: number }) {
       <SpotlightPalette />
       <FindInPathModal />
       <DirectoryPickerModal />
-      <ReviewPanel />
+      <LazyReviewPanel />
       <TagPopoverHost port={port} />
       <TasksModalHost port={port} />
       {/* Automations: the always-on runtime (toasts, WS patches, the rail's
