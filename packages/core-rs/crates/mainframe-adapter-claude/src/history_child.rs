@@ -80,7 +80,9 @@ fn parent_agents(discovered: &DiscoveredFiles) -> Arc<CallMemo> {
     }
     let memo = Arc::new(CallMemo { stamps, agents });
     let mut memos = CALLS.lock_recover();
-    memos.retain(|other| other.stamps.first() != memo.stamps.first());
+    // One memo per parent: a newer version of the same parent replaces the old one.
+    let parent = memo.stamps.first().map(|(path, _)| path);
+    memos.retain(|other| other.stamps.first().map(|(path, _)| path) != parent);
     memos.push_front(Arc::clone(&memo));
     memos.truncate(CALL_MEMOS);
     memo
