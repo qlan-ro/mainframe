@@ -121,6 +121,17 @@ impl ClaudeSession {
         *self.history_files.lock_recover() = Some(files);
         Ok(messages)
     }
+    /// The newest whole turns of the history, read from the end of the main
+    /// transcript, or `None` when the cut cannot be settled from the tail.
+    pub async fn load_history_window(
+        &self,
+        req: mainframe_adapter_api::WindowRequest<'_>,
+    ) -> Result<Option<mainframe_adapter_api::HistoryPage>, AdapterError> {
+        let Some((id, _, discovered)) = self.discover_history().await else {
+            return Ok(None);
+        };
+        crate::history::load_history_window(&id, &discovered, req).await
+    }
     pub(super) async fn read_history(
         &self,
         messages: bool,

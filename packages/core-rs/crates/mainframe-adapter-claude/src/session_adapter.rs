@@ -173,6 +173,12 @@ impl AdapterSession for ClaudeSession {
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin((ClaudeSession::load_history(self)).instrument(self.span.clone()))
     }
+    fn load_history_window<'a>(
+        &'a self,
+        req: mainframe_adapter_api::WindowRequest<'a>,
+    ) -> mainframe_adapter_api::HistoryPageFuture<'a> {
+        Box::pin(ClaudeSession::load_history_window(self, req).instrument(self.span.clone()))
+    }
     fn load_subagent_history(
         &self,
         agent_id: String,

@@ -1,5 +1,9 @@
 use super::*;
 
+#[path = "history_tail.rs"]
+mod tail;
+pub(crate) use tail::load_window as load_history_window;
+
 pub(crate) async fn load_discovered_history(
     session_id: &str,
     discovered: &DiscoveredFiles,
