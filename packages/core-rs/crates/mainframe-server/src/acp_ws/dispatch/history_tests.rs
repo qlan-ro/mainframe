@@ -122,3 +122,133 @@ async fn history_around_and_search_are_routed_and_answered() {
     .await;
     assert!(bad["error"].is_object());
 }
+
+mod routing {
+    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+    use mainframe_acp::resume::{BoxFuture, MessageReader, ResumeSnapshot};
+    use mainframe_acp::{ResumePort, history_page::PageOptions};
+    use mainframe_types::acp::extensions::HistoryPageParams;
+    use mainframe_types::display::DisplayMessage;
+
+    use super::super::compute_page;
+    use crate::acp_ws::hub::FacadeHub;
+    use std::sync::Arc;
+
+    /// Records which read path a page took: `read_messages` borrows the list,
+    /// `resume_snapshot` copies it.
+    #[derive(Default)]
+    struct Spy {
+        messages: Vec<DisplayMessage>,
+        borrowed: AtomicUsize,
+        copied: AtomicUsize,
+    }
+
+    impl ResumePort for Spy {
+        fn resume_snapshot<'a>(&'a self, _: &'a str) -> BoxFuture<'a, ResumeSnapshot> {
+            self.copied.fetch_add(1, SeqCst);
+            Box::pin(async move {
+                ResumeSnapshot {
+                    messages: self.messages.clone(),
+                    streaming: None,
+                    pending: None,
+                }
+            })
+        }
+        fn is_running(&self, _: &str) -> bool {
+            false
+        }
+        fn read_messages<'a>(&'a self, _: &'a str, read: MessageReader<'a>) -> BoxFuture<'a, ()> {
+            self.borrowed.fetch_add(1, SeqCst);
+            Box::pin(async move { read(&self.messages) })
+        }
+    }
+
+    fn spy() -> Arc<Spy> {
+        let messages = (0..60)
+            .map(|i| {
+                serde_json::from_value(serde_json::json!({"id":format!("m{i}"),"chatId":"c",
+                    "type":"user","timestamp":"now","content":[{"type":"text","text":"x"}]}))
+                .unwrap()
+            })
+            .collect();
+        Arc::new(Spy {
+            messages,
+            ..Spy::default()
+        })
+    }
+
+    fn params(until: Option<&str>) -> HistoryPageParams {
+        HistoryPageParams {
+            session_id: "c".into(),
+            before: "message:0:top:m50".into(),
+            containers: Some(10),
+            items: None,
+            until_item_id: until.map(str::to_owned),
+        }
+    }
+
+    /// A hub whose chat `c` has a seeded revision log.
+    fn seeded_hub(spy: &Spy) -> Arc<FacadeHub> {
+        let hub = Arc::new(FacadeHub::default());
+        hub.open_revision_log_for_test("c");
+        hub.seed_history_snapshot("c", &spy.messages);
+        assert!(!hub.history_seed_pending("c"));
+        hub
+    }
+
+    async fn run(spy: &Arc<Spy>, hub: &Arc<FacadeHub>, params: HistoryPageParams) {
+        let page = compute_page(spy.clone(), hub.clone(), params, PageOptions::default()).await;
+        assert!(page.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_bounded_page_on_a_seeded_chat_borrows_the_list() {
+        let spy = spy();
+        let hub = seeded_hub(&spy);
+        run(&spy, &hub, params(None)).await;
+        assert_eq!((spy.borrowed.load(SeqCst), spy.copied.load(SeqCst)), (1, 0));
+    }
+
+    #[tokio::test]
+    async fn a_load_through_page_copies_the_list_off_the_lock() {
+        let spy = spy();
+        let hub = seeded_hub(&spy);
+        run(&spy, &hub, params(Some("m10"))).await;
+        assert_eq!((spy.borrowed.load(SeqCst), spy.copied.load(SeqCst)), (0, 1));
+    }
+
+    #[tokio::test]
+    async fn a_page_after_an_epoch_reset_copies_and_reseeds() {
+        let spy = spy();
+        let hub = seeded_hub(&spy);
+        hub.reset_revision_epoch_for_test("c");
+        assert!(hub.history_seed_pending("c"));
+        run(&spy, &hub, params(None)).await;
+        assert_eq!((spy.borrowed.load(SeqCst), spy.copied.load(SeqCst)), (0, 1));
+        assert!(!hub.history_seed_pending("c"));
+    }
+
+    #[tokio::test]
+    async fn a_load_through_page_seeds_an_unseeded_log() {
+        let spy = spy();
+        let hub = Arc::new(FacadeHub::default());
+        hub.open_revision_log_for_test("c");
+        run(&spy, &hub, params(Some("m10"))).await;
+        assert_eq!(spy.copied.load(SeqCst), 1);
+        assert!(!hub.history_seed_pending("c"));
+    }
+
+    #[test]
+    fn seed_pending_follows_the_revision_log() {
+        let spy = spy();
+        let hub = FacadeHub::default();
+        assert!(!hub.history_seed_pending("c"), "no log, nothing to seed");
+        hub.open_revision_log_for_test("c");
+        assert!(hub.history_seed_pending("c"));
+        hub.seed_history_snapshot("c", &spy.messages);
+        assert!(!hub.history_seed_pending("c"));
+        hub.reset_revision_epoch_for_test("c");
+        assert!(hub.history_seed_pending("c"));
+    }
+}

@@ -75,13 +75,26 @@ async fn search(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
     };
     // A scan encodes every container, so it runs on a copy off the cache
     // lock; the lock is shared by every chat's live emissions.
-    let snapshot = port.resume_snapshot(&params.session_id).await;
+    let chat_id = params.session_id.clone();
+    let snapshot = port.resume_snapshot(&chat_id).await;
     let result = tokio::task::spawn_blocking(move || {
         mainframe_acp::history_search::search(&snapshot.messages, &params.query)
     })
-    .await
-    .ok();
-    reply(connection, request.id, result, "history search");
+    .await;
+    let (result, detail) = match result {
+        Ok(result) => (Some(result), None),
+        Err(err) => (None, Some(err.to_string())),
+    };
+    reply(
+        connection,
+        request.id,
+        Reply {
+            chat_id: &chat_id,
+            what: "history search",
+            result,
+            detail,
+        },
+    );
 }
 
 async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &dyn ResumePort) {
@@ -98,20 +111,44 @@ async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
     };
     let result = mainframe_acp::history_around::around_chat(port, &params, options).await;
-    reply(connection, request.id, result, "history around");
+    reply(
+        connection,
+        request.id,
+        Reply {
+            chat_id: &params.session_id,
+            what: "history around",
+            result,
+            // The panic text is logged where it is caught, in `with_messages`.
+            detail: None,
+        },
+    );
+}
+
+struct Reply<'a, T> {
+    chat_id: &'a str,
+    what: &'a str,
+    result: Option<T>,
+    detail: Option<String>,
 }
 
 fn reply<T: serde::Serialize>(
     connection: &FacadeConnection,
     id: Option<mainframe_types::acp::jsonrpc::RequestId>,
-    result: Option<T>,
-    what: &str,
+    reply: Reply<'_, T>,
 ) {
-    connection.send_json(&match result {
+    connection.send_json(&match reply.result {
         Some(result) => rpc::success_response(id, serde_json::json!(result)),
         None => {
-            error!(what, "history read produced no result");
-            rpc::error_response(id, rpc::internal_error(&format!("{what} failed")))
+            error!(
+                chat_id = reply.chat_id,
+                what = reply.what,
+                error = reply
+                    .detail
+                    .as_deref()
+                    .unwrap_or("reader produced no result"),
+                "history request failed"
+            );
+            rpc::error_response(id, rpc::internal_error(&format!("{} failed", reply.what)))
         }
     });
 }

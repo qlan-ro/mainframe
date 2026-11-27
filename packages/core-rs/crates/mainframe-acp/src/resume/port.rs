@@ -68,7 +68,22 @@ pub async fn with_messages<T: Send>(
     port.read_messages(
         session_id,
         Box::new(|messages| {
-            out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(messages))).ok();
+            out = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read(messages))) {
+                Ok(value) => Some(value),
+                Err(payload) => {
+                    let text = payload
+                        .downcast_ref::<&str>()
+                        .copied()
+                        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                        .unwrap_or("non-string panic");
+                    tracing::error!(
+                        chat_id = session_id,
+                        panic = text,
+                        "history reader panicked"
+                    );
+                    None
+                }
+            };
         }),
     )
     .await;

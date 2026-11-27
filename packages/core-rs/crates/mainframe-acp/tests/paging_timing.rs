@@ -133,6 +133,17 @@ fn page_and_search_timing_with_and_without_the_clone() {
                 messages.len()
             );
         }
+        // A page whose revision log is unseeded (first page, or after an epoch
+        // reset) also encodes the whole transcript to seed it: borrowed it
+        // would hold the lock that long, so it takes the copy instead.
+        println!(
+            "containers={} hold seed-pending borrowed={:8.2} ms  copy-only={copy:8.2} ms",
+            messages.len(),
+            median_ms(|| {
+                drop(encoder::encode_containers(&messages, None));
+                drop(prepare(&messages, &page, opts));
+            }),
+        );
         println!(
             "containers={} hold page   borrowed={:8.2} ms  around={:8.2} ms",
             messages.len(),
