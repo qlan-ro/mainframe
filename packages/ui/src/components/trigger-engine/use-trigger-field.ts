@@ -60,7 +60,7 @@ export interface UseTriggerFieldOptions {
   /**
    * A rich-text field inserts the pick itself (a chip node) instead of the
    * engine splicing text and calling `onChange`. Returns false when it found
-   * no token to replace, which leaves the field untouched. Spike: lexical chips.
+   * no token to replace, which leaves the field untouched (the composer's chip field).
    */
   insert?(request: TriggerInsertRequest): boolean;
 }

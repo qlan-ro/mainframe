@@ -44,7 +44,6 @@ import { TriggerFieldPopover } from '@/components/trigger-engine/TriggerFieldPop
 import type { TriggerConfig } from '@/components/trigger-engine/types';
 import { TriggerFieldAriaProvider } from './trigger-field-aria-context';
 import { useMaskedText, type LexicalComposerBridge } from '../lexical/lexical-bridge';
-import { insertTriggerPick } from '../lexical/lexical-edits';
 
 /**
  * Builds the `/` skills and `@` mention trigger configs for the active chat,
@@ -153,7 +152,7 @@ export function ComposerTriggers({
 }: {
   children: ReactNode;
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
-  /** Spike (#482): the Lexical field's bridge. Picks become chips, and detection ignores chips. */
+  /** The chip field's bridge, when it is on: picks become chips, and detection ignores chips. */
   lexical?: LexicalComposerBridge | null;
 }) {
   const { triggers, refreshSessions } = useComposerTriggerConfigs();
@@ -165,9 +164,7 @@ export function ComposerTriggers({
     onChange: (next) => aui.composer.setText(next),
     triggers,
     textareaRef,
-    ...(lexical && {
-      insert: (request) => (lexical.editor ? insertTriggerPick(lexical.editor, request) : false),
-    }),
+    ...(lexical && { insert: lexical.insertPick }),
   });
 
   // Re-ask on open, not per keystroke: a session started since the last read

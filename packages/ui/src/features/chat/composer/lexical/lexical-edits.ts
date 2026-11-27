@@ -1,23 +1,22 @@
 /**
- * Editor edits the Lexical composer makes on its own behalf: insert a picked
- * trigger item as a chip, open the `@` menu from the `+` button, rebuild
- * pasted text with chips, and read the masked text the trigger engine sees.
+ * Editor edits the chip fields make on their own behalf: insert a picked
+ * trigger item as a chip, open the `@` menu from the `+` button, build nodes
+ * from text (a paste, a controlled value) and read the text back.
  */
 import {
   $createLineBreakNode,
+  $createParagraphNode,
   $createTextNode,
   $getRoot,
   $getSelection,
   $isElementNode,
-  $isNodeSelection,
   $isRangeSelection,
   $isTextNode,
   type LexicalEditor,
   type LexicalNode,
-  type PointType,
 } from 'lexical';
-import { $createDirectiveNode, $isDirectiveNode, type DirectiveNode } from '@assistant-ui/react-lexical';
-import type { Unstable_DirectiveFormatter } from '@assistant-ui/react';
+import { $createDirectiveNode, $isDirectiveNode } from '@assistant-ui/react-lexical';
+import type { Unstable_DirectiveFormatter, Unstable_DirectiveSegment } from '@assistant-ui/react';
 import { detectTrigger } from '@/components/trigger-engine/detect';
 import type { TriggerInsertRequest } from '@/components/trigger-engine/use-trigger-field';
 import { mentionDraft } from '../triggers/open-mention-trigger';
@@ -74,25 +73,24 @@ export function insertTriggerPick(editor: LexicalEditor, request: TriggerInsertR
 /** The `+` menu's Mention: an `@` the detector can see, at the end, with the caret after it. */
 export function openMentionInEditor(editor: LexicalEditor): void {
   editor.update(() => {
-    const root = $getRoot();
-    const current = readComposerText();
+    const current = $readEditorText();
     const addition = mentionDraft(current).slice(current.length);
-    root.selectEnd();
+    $getRoot().selectEnd();
     const selection = $getSelection();
     if ($isRangeSelection(selection)) selection.insertText(addition);
   });
   editor.focus();
 }
 
-/** Inside a read or update: the composer text, one `\n` per paragraph, as SyncPlugin writes it. */
-function readComposerText(): string {
+/** Inside a read or update: the text, one `\n` per paragraph, as react-lexical's SyncPlugin writes it. */
+export function $readEditorText(): string {
   return $getRoot()
     .getChildren()
     .map((paragraph) => paragraph.getTextContent())
     .join('\n');
 }
 
-/** Inside a read: the composer text with each chip blanked to spaces (see `lexical-bridge.ts`). */
+/** Inside a read: the text with each chip blanked to spaces (see `lexical-bridge.ts`). */
 export function $readMaskedText(): string {
   const lines: string[] = [];
   for (const paragraph of $getRoot().getChildren()) {
@@ -107,64 +105,41 @@ export function $readMaskedText(): string {
   return lines.join('\n');
 }
 
+function $segmentNodes(segments: readonly Unstable_DirectiveSegment[], formatter: Unstable_DirectiveFormatter) {
+  const nodes: LexicalNode[] = [];
+  for (const segment of segments) {
+    if (segment.kind === 'text') {
+      if (segment.text !== '') nodes.push($createTextNode(segment.text));
+    } else {
+      const item = { id: segment.id, type: segment.type, label: segment.label };
+      nodes.push($createDirectiveNode(item, formatter.serialize(item)));
+    }
+  }
+  return nodes;
+}
+
+const lines = (text: string) => text.replace(/\r\n?/g, '\n').split('\n');
+
 /** Pasted plain text as nodes, with every token the formatter recognises as a chip. Null when it holds none. */
 export function $pastedNodes(text: string, formatter: Unstable_DirectiveFormatter): LexicalNode[] | null {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n');
-  const parsed = lines.map((line) => formatter.parse(line));
+  const parsed = lines(text).map((line) => formatter.parse(line));
   if (!parsed.some((segments) => segments.some((s) => s.kind === 'mention'))) return null;
   const nodes: LexicalNode[] = [];
   parsed.forEach((segments, index) => {
     if (index > 0) nodes.push($createLineBreakNode());
-    for (const segment of segments) {
-      if (segment.kind === 'text') {
-        if (segment.text !== '') nodes.push($createTextNode(segment.text));
-      } else {
-        const item = { id: segment.id, type: segment.type, label: segment.label };
-        nodes.push($createDirectiveNode(item, formatter.serialize(item)));
-      }
-    }
+    nodes.push(...$segmentNodes(segments, formatter));
   });
   return nodes;
 }
 
-/** The chip directly beside a point in one direction, if any. */
-function $chipBeside(point: PointType, backward: boolean): DirectiveNode | null {
-  const node = point.getNode();
-  if ($isTextNode(node)) {
-    const atEdge = backward ? point.offset === 0 : point.offset === node.getTextContentSize();
-    const sibling = atEdge ? (backward ? node.getPreviousSibling() : node.getNextSibling()) : null;
-    return $isDirectiveNode(sibling) ? sibling : null;
+/** Inside an update: replaces the whole content with `text`, one paragraph per line, tokens as chips. */
+export function $setEditorText(text: string, formatter: Unstable_DirectiveFormatter): void {
+  const root = $getRoot();
+  root.clear();
+  for (const line of lines(text)) {
+    const paragraph = $createParagraphNode();
+    paragraph.append(...$segmentNodes(formatter.parse(line), formatter));
+    root.append(paragraph);
   }
-  if ($isElementNode(node)) {
-    const child = node.getChildAtIndex(backward ? point.offset - 1 : point.offset);
-    return $isDirectiveNode(child) ? child : null;
-  }
-  return null;
-}
-
-/**
- * Inside a key command: ← or → past a chip in one press (⇧ extends the
- * selection over it). Word and line moves keep the native behaviour.
- */
-export function $stepOverChip(event: KeyboardEvent, backward: boolean): boolean {
-  if (event.altKey || event.metaKey || event.ctrlKey) return false;
-  const selection = $getSelection();
-  if ($isNodeSelection(selection)) {
-    const [node] = selection.getNodes();
-    if (!$isDirectiveNode(node)) return false;
-    event.preventDefault();
-    if (backward) node.selectPrevious();
-    else node.selectNext(0, 0);
-    return true;
-  }
-  if (!$isRangeSelection(selection)) return false;
-  if (!event.shiftKey && !selection.isCollapsed()) return false;
-  const chip = $chipBeside(selection.focus, backward);
-  if (!chip) return false;
-  event.preventDefault();
-  const parentKey = chip.getParentOrThrow().getKey();
-  const index = chip.getIndexWithinParent() + (backward ? 0 : 1);
-  selection.focus.set(parentKey, index, 'element');
-  if (!event.shiftKey) selection.anchor.set(parentKey, index, 'element');
-  return true;
+  root.selectEnd();
 }

@@ -1,35 +1,25 @@
 'use client';
 
 /**
- * Spike (todo #482): the composer field as a Lexical editor with atomic chips,
- * in place of `ComposerPrimitive.Input` and the colour overlay behind it.
- * Behind `isLexicalComposerEnabled()`; see
- * `docs/research/2026-11-26-lexical-chips-spike.md`.
+ * The composer field as a Lexical editor with atomic chips, in place of
+ * `ComposerPrimitive.Input` and the colour overlay behind it. Shown when the
+ * "Mentions and commands as chips" setting is on (`ui-prefs.chipComposer`);
+ * loaded lazily (`lazy-fields.ts`).
  *
  * `LexicalComposerInput` keeps the text in the same aui composer, so drafts
  * per thread, attachments, the send path and the wire text are unchanged. The
  * trigger engine reaches it through the same composer-input plugin registry.
  */
-import { useMemo } from 'react';
 import { LexicalComposerInput } from '@assistant-ui/react-lexical';
-import { useActiveThreadId } from '../../runtime/use-active-thread-id';
-import { useSessionReferences } from '../sessions/session-reference-store';
 import { useTriggerFieldAria } from '../triggers/trigger-field-aria-context';
 import { ComposerChip } from './ComposerChip';
-import { createComposerChipFormatter } from './composer-chip-formatter';
-import { ComposerBridgePlugin, ComposerKeysPlugin, ComposerPastePlugin } from './composer-lexical-plugins';
+import { ChipCaretPlugin, ChipPastePlugin, TypedChipsPlugin } from './chip-plugins';
+import { AttachmentPastePlugin, ComposerBridgePlugin, ComposerKeysPlugin } from './composer-lexical-plugins';
 import type { LexicalComposerBridge } from './lexical-bridge';
+import { useChipFormatter } from './use-chip-formatter';
+import { CHIP_EDITOR_CLASS } from './chip-editor-class';
 
-const NO_LABELS: readonly string[] = [];
-
-function useChipFormatter() {
-  const threadId = useActiveThreadId();
-  const references = useSessionReferences((s) => (threadId == null ? undefined : s.byThread[threadId]));
-  const key = references ? Object.keys(references).join('\0') : '';
-  // Keyed on the label list, not the record, so the formatter (and the
-  // re-parse SyncPlugin runs when it changes) moves only when a label does.
-  return useMemo(() => createComposerChipFormatter(key ? key.split('\0') : NO_LABELS), [key]);
-}
+const PLACEHOLDER_AT_PADDING = '[&_.aui-lexical-placeholder]:top-0.5 [&_.aui-lexical-placeholder]:left-1';
 
 export function ComposerLexicalField({
   bridge,
@@ -55,17 +45,14 @@ export function ComposerLexicalField({
       formatter={formatter}
       directiveChip={ComposerChip}
       style={{ overflowY: 'visible' }}
-      className={[
-        'relative w-full px-1 pt-0.5 pb-2 font-sans text-composer-input text-foreground',
-        '[&_.aui-lexical-input]:min-h-[1lh] [&_.aui-lexical-input]:outline-none',
-        '[&_.aui-lexical-input_p]:m-0',
-        '[&_.aui-lexical-placeholder]:pointer-events-none [&_.aui-lexical-placeholder]:absolute',
-        '[&_.aui-lexical-placeholder]:top-0.5 [&_.aui-lexical-placeholder]:left-1 [&_.aui-lexical-placeholder]:text-muted-foreground',
-      ].join(' ')}
+      className={`relative w-full px-1 pt-0.5 pb-2 ${CHIP_EDITOR_CLASS} ${PLACEHOLDER_AT_PADDING}`}
     >
       <ComposerBridgePlugin bridge={bridge} aria={aria} />
       <ComposerKeysPlugin onEnter={onEnter} onShiftTab={onShiftTab} />
-      <ComposerPastePlugin formatter={formatter} />
+      <ChipCaretPlugin />
+      <AttachmentPastePlugin />
+      <ChipPastePlugin formatter={formatter} />
+      <TypedChipsPlugin />
     </LexicalComposerInput>
   );
 }

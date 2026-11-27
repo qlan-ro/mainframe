@@ -9,10 +9,12 @@
  * `parse` runs when text arrives from outside the editor (thread switch, a
  * restored unsent message, a paste): the draft's session labels first, because
  * a title has spaces no pattern can find (#240), then the transcript's own
- * token grammar from `user-directives.ts`.
+ * token grammar from `user-directives.ts`. react-lexical parses line by line,
+ * so a `/command` is recognised at the start of a line; text after a session
+ * label is mid-line and never opens one.
  */
 import type { Unstable_DirectiveFormatter, Unstable_DirectiveSegment } from '@assistant-ui/react';
-import { mainframeUserFormatter } from '@/features/chat/messages/user-directives';
+import { mainframeUserFormatter, mainframeUserInlineFormatter } from '@/features/chat/messages/user-directives';
 import { findSessionMentions } from '@/features/chat/session-references/session-mention';
 
 export function createComposerChipFormatter(sessionLabels: readonly string[]): Unstable_DirectiveFormatter {
@@ -22,18 +24,19 @@ export function createComposerChipFormatter(sessionLabels: readonly string[]): U
       const segments: Unstable_DirectiveSegment[] = [];
       let last = 0;
       for (const mention of findSessionMentions(text, sessionLabels)) {
-        pushTokens(segments, text.slice(last, mention.start));
+        pushTokens(segments, text.slice(last, mention.start), last);
         const label = text.slice(mention.start, mention.end);
         segments.push({ kind: 'mention', type: 'session', label, id: label.slice(1) });
         last = mention.end;
       }
-      pushTokens(segments, text.slice(last));
+      pushTokens(segments, text.slice(last), last);
       return segments.length > 0 ? segments : [{ kind: 'text', text }];
     },
   };
 }
 
-function pushTokens(segments: Unstable_DirectiveSegment[], text: string): void {
+function pushTokens(segments: Unstable_DirectiveSegment[], text: string, base: number): void {
   if (text === '') return;
-  segments.push(...mainframeUserFormatter.parse(text));
+  const formatter = base === 0 ? mainframeUserFormatter : mainframeUserInlineFormatter;
+  segments.push(...formatter.parse(text));
 }

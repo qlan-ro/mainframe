@@ -1,13 +1,17 @@
 'use client';
 
 /**
- * One atomic token in the Lexical composer: `/command`, `/skill`, `@file`,
- * `@agent` or `@session`. Rendered by react-lexical's `DirectiveNode`, a
+ * One atomic token in a chip field: `/command`, `/skill`, `@file`, `@dir`, a
+ * typed `@path` or a `@session`. Rendered by react-lexical's `DirectiveNode`, a
  * non-editable inline decorator, so the caret steps over it in one move and
  * Backspace removes it whole.
  *
- * The shape is the transcript's session chip (`user-directive-renderers.tsx`),
- * so a token reads as the same object before and after it is sent. Spike only.
+ * The shape is the transcript's session chip (`user-directive-renderers.tsx`):
+ * the toolbar's outline-badge geometry, 20 px tall, a `muted` fill and a
+ * hairline, mono 12 px. So a token reads as the same object before and after
+ * it is sent. The colour is the overlay's token colour (`render-highlights`):
+ * Blue Ink for commands and paths, the directive hues for skills and sessions.
+ * A long path truncates; its full text is the chip's title and accessible name.
  */
 import type { DirectiveChipProps } from '@assistant-ui/react-lexical';
 import { AtSignIcon, FileIcon, FolderIcon, MessageSquare, Wrench } from 'lucide-react';
@@ -33,8 +37,9 @@ export function ComposerChip({ directiveType, label }: DirectiveChipProps) {
     <span
       data-testid={`composer-chip-${directiveType}`}
       data-directive-type={directiveType}
+      title={label}
       className={cn(
-        'mx-px inline-flex h-5 max-w-[260px] min-w-0 items-center gap-1 rounded-4xl border border-border bg-muted px-1.5 align-[-3px] font-mono text-xs leading-none select-none',
+        'mx-px inline-flex h-5 max-w-[230px] min-w-0 items-center gap-1 rounded-4xl border border-border bg-muted px-1.5 align-[-3px] font-mono text-xs leading-none font-normal select-none',
         TINT[directiveType] ?? 'text-accent-ink',
       )}
     >

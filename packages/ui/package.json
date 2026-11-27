@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
+    "test:chips": "MF_TEST_CHIP_COMPOSER=1 vitest run src/features/chat/composer src/components/trigger-engine",
     "test:watch": "vitest",
     "preview": "vite preview"
   },

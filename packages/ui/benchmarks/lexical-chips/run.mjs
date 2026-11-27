@@ -1,5 +1,5 @@
 /**
- * Spike checks for the Lexical chip composer (todo #482). Synthetic fixture,
+ * Checks for the Lexical chip composer (todos #482, #493). Synthetic fixture,
  * temporary Vite server on port 5199, no daemon. Prints one row per behaviour.
  *
  *   node packages/ui/benchmarks/lexical-chips/run.mjs            # WebKit, Lexical field
@@ -26,7 +26,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 
 const input = page.locator('[data-testid="chat-composer-input"]');
 const popover = page.locator('[data-testid="composer-trigger-popover"]');
-const chips = page.locator('[data-directive-type]');
+const chips = page.locator('[data-testid="chat-composer"] [data-directive-type]');
 const text = async () => JSON.parse(await page.locator('[data-testid="composer-text"]').innerText());
 const sent = async () => JSON.parse(await page.locator('[data-testid="sent"]').innerText());
 const settle = (ms = 120) => page.waitForTimeout(ms);
@@ -87,7 +87,11 @@ await check('caret steps over a chip in one move', async () => {
 await check('caret cannot land inside a chip (click on it)', async () => {
   await type('see ');
   await pick('@app');
-  const box = await page.locator('[data-directive-type]').first().boundingBox().catch(() => null);
+  const box = await page
+    .locator('[data-directive-type]')
+    .first()
+    .boundingBox()
+    .catch(() => null);
   if (!box) return { pass: false, detail: 'no chip element (textarea draws none)' };
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await type('X');
@@ -144,7 +148,10 @@ await check('paste of copied text brings chips back', async () => {
   await paste({ text: 'look at @src/app.ts and /review' });
   const t = await text();
   const n = await chips.count();
-  return { pass: t === 'look at @src/app.ts and /review' && (textarea ? false : n === 1), detail: `${JSON.stringify(t)} chips=${n}` };
+  return {
+    pass: t === 'look at @src/app.ts and /review' && (textarea ? false : n === 1),
+    detail: `${JSON.stringify(t)} chips=${n}`,
+  };
 });
 await check('copy then paste in the field keeps chips (keyboard)', async () => {
   await type('a ');
@@ -169,7 +176,10 @@ await check('directory pick stays open for drill-down, then a file chips', async
   await page.keyboard.press('Enter');
   await settle();
   const t = await text();
-  return { pass: mid === '@src/' && stillOpen && t === '@src/app.ts ', detail: `${JSON.stringify(mid)} open=${stillOpen} → ${JSON.stringify(t)}` };
+  return {
+    pass: mid === '@src/' && stillOpen && t === '@src/app.ts ',
+    detail: `${JSON.stringify(mid)} open=${stillOpen} → ${JSON.stringify(t)}`,
+  };
 });
 await check('path with spaces becomes one quoted chip', async () => {
   await pick('@notes');
@@ -188,7 +198,10 @@ await check('session mention chips and re-chips after a remount', async () => {
   await settle(300);
   const after = await text();
   const kinds = await chips.evaluateAll((els) => els.map((e) => e.getAttribute('data-directive-type')));
-  return { pass: before === '@Fix login bug ' && after === before && kinds.join() === 'session', detail: `${JSON.stringify(after)} chips=${kinds}` };
+  return {
+    pass: before === '@Fix login bug ' && after === before && kinds.join() === 'session',
+    detail: `${JSON.stringify(after)} chips=${kinds}`,
+  };
 });
 await check('draft restored from the runtime comes back as chips', async () => {
   await page.evaluate(() => window.__fixture.aui.composer.setText('/review look at @src/app.ts\nand @"a b.md"'));
@@ -203,7 +216,10 @@ await check('Enter sends the plain text and clears the field', async () => {
   await settle();
   const s = await sent();
   const editorEmpty = (await input.innerText()).trim() === '';
-  return { pass: s[0]?.text === 'hello @src/app.ts ' && s[0]?.mode === 'send' && editorEmpty, detail: JSON.stringify(s) };
+  return {
+    pass: s[0]?.text === 'hello @src/app.ts ' && s[0]?.mode === 'send' && editorEmpty,
+    detail: JSON.stringify(s),
+  };
 });
 await check('⌘Z after a send leaves the field empty', async () => {
   await type('hello');
@@ -239,14 +255,19 @@ await check('Enter in the open menu picks instead of sending', async () => {
   await popover.waitFor();
   await page.keyboard.press('Enter');
   await settle();
-  return { pass: (await sent()).length === 0 && (await text()) === '@src/app.ts ', detail: JSON.stringify(await text()) };
+  return {
+    pass: (await sent()).length === 0 && (await text()) === '@src/app.ts ',
+    detail: JSON.stringify(await text()),
+  };
 });
 await check('Arrow keys move the menu highlight', async () => {
   await type('@');
   await popover.waitFor();
   await page.keyboard.press('ArrowDown');
   await settle();
-  const idx = await page.locator('[data-highlighted]').evaluate((el) => [...el.closest('[role=listbox]').querySelectorAll('button')].indexOf(el));
+  const idx = await page
+    .locator('[data-highlighted]')
+    .evaluate((el) => [...el.closest('[role=listbox]').querySelectorAll('button')].indexOf(el));
   return { pass: idx === 1, detail: `highlighted=${idx}` };
 });
 await check('Esc closes the menu first, then parks focus on the transcript', async () => {
@@ -255,11 +276,16 @@ await check('Esc closes the menu first, then parks focus on the transcript', asy
   await page.keyboard.press('Escape');
   await settle();
   const closed = !(await popover.isVisible());
-  const stillInField = await input.evaluate((el) => el === document.activeElement || el.contains(document.activeElement));
+  const stillInField = await input.evaluate(
+    (el) => el === document.activeElement || el.contains(document.activeElement),
+  );
   await page.keyboard.press('Escape');
   await settle();
   const onTranscript = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
-  return { pass: closed && stillInField && onTranscript === 'transcript', detail: `closed=${closed} field=${stillInField} then=${onTranscript}` };
+  return {
+    pass: closed && stillInField && onTranscript === 'transcript',
+    detail: `closed=${closed} field=${stillInField} then=${onTranscript}`,
+  };
 });
 await check('no false menu right after a chip', async () => {
   await pick('@app');
@@ -288,7 +314,9 @@ await check('combobox ARIA is on the editable element', async () => {
   const closed = await input.evaluate((el) => [el.getAttribute('role'), el.getAttribute('aria-expanded')].join());
   await type('@');
   await popover.waitFor();
-  const open = await input.evaluate((el) => [el.getAttribute('aria-expanded'), !!el.getAttribute('aria-activedescendant')].join());
+  const open = await input.evaluate((el) =>
+    [el.getAttribute('aria-expanded'), !!el.getAttribute('aria-activedescendant')].join(),
+  );
   return { pass: closed === 'combobox,false' && open === 'true,true', detail: `closed=${closed} open=${open}` };
 });
 await check('focus helpers find the field by test id', async () => {
@@ -305,7 +333,15 @@ await check('Enter during IME composition does not send', async () => {
     await type('ni');
     await input.evaluate((el) => {
       el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
-      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, isComposing: true, bubbles: true, cancelable: true }));
+      el.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          keyCode: 229,
+          isComposing: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
       el.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'ni' }));
     });
     await settle();
@@ -315,13 +351,67 @@ await check('Enter during IME composition does not send', async () => {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Input.imeSetComposition', { text: 'にほ', selectionStart: 2, selectionEnd: 2 });
   await settle();
-  await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 229 });
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown',
+    key: 'Enter',
+    code: 'Enter',
+    windowsVirtualKeyCode: 229,
+  });
   await settle();
   await cdp.send('Input.insertText', { text: '日本' });
   await settle();
   const s = await sent();
-  return { pass: s.length === 0 && (await text()) === '日本', detail: `sent=${s.length} text=${JSON.stringify(await text())}` };
+  return {
+    pass: s.length === 0 && (await text()) === '日本',
+    detail: `sent=${s.length} text=${JSON.stringify(await text())}`,
+  };
 });
+await check('a token typed by hand becomes a chip once a space follows', async () => {
+  await type('see @src/app.ts ');
+  await page.keyboard.press('Escape'); // the menu may still list matches for the typed path
+  await settle();
+  return {
+    pass: (await text()) === 'see @src/app.ts ' && (await chips.count()) === 1,
+    detail: `${JSON.stringify(await text())} chips=${await chips.count()}`,
+  };
+});
+await check('a typed /command opening the message becomes a chip; mid-line it stays text', async () => {
+  await type('/review now and /later ');
+  const types = await chips.evaluateAll((els) => els.map((el) => el.getAttribute('data-directive-type')).join());
+  return {
+    pass: (await text()) === '/review now and /later ' && types === 'command',
+    detail: `${JSON.stringify(await text())} chips=${types}`,
+  };
+});
+await check('a token being typed mid-text does not chip under the caret', async () => {
+  await type('a  b');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  await type('@sr');
+  const before = await chips.count();
+  await page.keyboard.press('Escape');
+  return {
+    pass: (await text()) === 'a @sr b' && before === 0,
+    detail: `${JSON.stringify(await text())} chips=${before}`,
+  };
+});
+await check(
+  'the segment and edit editor shows tokens as chips (a mid-line /review stays text) and keeps its text',
+  async () => {
+    if (textarea) return { pass: false, detail: 'chip editor only' };
+    const editor = page.locator('[data-testid="segment-editor"]');
+    const seeded = await editor.locator('[data-directive-type]').count();
+    await editor.click();
+    await page.keyboard.press('End');
+    await type(' @docs/x.md ');
+    const after = await editor.locator('[data-directive-type]').count();
+    const value = JSON.parse(await page.locator('[data-testid="segment-text"]').innerText());
+    return {
+      pass: seeded === 1 && after === 2 && value === 'see @src/app.ts and /review @docs/x.md ',
+      detail: `seeded=${seeded} after=${after} ${JSON.stringify(value)}`,
+    };
+  },
+);
 
 console.log(`\n${useChromium ? 'Chromium' : 'WebKit'} · ${textarea ? 'textarea' : 'Lexical'}\n`);
 console.log('| Behaviour | Result | Detail |\n| --- | --- | --- |');

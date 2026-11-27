@@ -38,7 +38,7 @@ export function ComposerAddMenu({
   onOpenMention,
 }: {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
-  /** Spike (#482): the Lexical field opens the menu through its editor instead. */
+  /** The chip field opens the menu through its editor instead (`lexical-bridge.ts`). */
   onOpenMention?: () => void;
 }) {
   const [open, setOpen] = useState(false);

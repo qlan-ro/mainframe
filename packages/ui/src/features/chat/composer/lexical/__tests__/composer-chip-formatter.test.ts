@@ -30,4 +30,11 @@ describe('createComposerChipFormatter', () => {
   it('returns text untouched when it holds no token', () => {
     expect(createComposerChipFormatter([]).parse('plain words')).toEqual([{ kind: 'text', text: 'plain words' }]);
   });
+
+  it('never opens a command after a session label, mid-line', () => {
+    expect(createComposerChipFormatter(['Fix login bug']).parse('@Fix login bug /review')).toEqual([
+      { kind: 'mention', type: 'session', label: '@Fix login bug', id: 'Fix login bug' },
+      { kind: 'text', text: ' /review' },
+    ]);
+  });
 });

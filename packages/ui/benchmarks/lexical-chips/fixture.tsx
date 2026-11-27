@@ -1,8 +1,10 @@
 /**
- * Spike harness (todo #482): the composer field with the real trigger engine,
- * formatters, chip field and plugins, over a synthetic external-store runtime.
- * No daemon, no provider. `?textarea` mounts the textarea field instead, for a
- * before/after comparison. `window.__fixture` exposes state to `run.mjs`.
+ * Chip composer harness (todos #482, #493): the composer field with the real
+ * trigger engine, formatters, chip field and plugins, over a synthetic
+ * external-store runtime. No daemon, no provider, no app. `?textarea` mounts the
+ * textarea field instead, for a before/after comparison. Below the card, the
+ * standalone chip editor that quote segments and queued-message edits use.
+ * `window.__fixture` exposes state to `run.mjs`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -29,12 +31,12 @@ import { TriggerFieldAriaProvider } from '../../src/features/chat/composer/trigg
 import { SideChatScopeProvider } from '../../src/features/side-chat/side-chat-scope';
 import { useSessionReferences } from '../../src/features/chat/composer/sessions/session-reference-store';
 import { ComposerLexicalField } from '../../src/features/chat/composer/lexical/ComposerLexicalField';
+import { ChipTextEditor } from '../../src/features/chat/composer/lexical/ChipTextEditor';
 import {
   createLexicalComposerBridge,
   useMaskedText,
   type LexicalComposerBridge,
 } from '../../src/features/chat/composer/lexical/lexical-bridge';
-import { insertTriggerPick, openMentionInEditor } from '../../src/features/chat/composer/lexical/lexical-edits';
 
 const THREAD = 'fixture';
 const textareaMode = location.search.includes('textarea');
@@ -107,7 +109,7 @@ function Triggers({
     onChange: (next) => aui.composer.setText(next),
     triggers: useTriggers(),
     textareaRef,
-    ...(lexical && { insert: (r) => (lexical.editor ? insertTriggerPick(lexical.editor, r) : false) }),
+    ...(lexical && { insert: lexical.insertPick }),
   });
   return (
     <ComposerPrimitive.Unstable_TriggerPopoverRoot>
@@ -180,11 +182,7 @@ function Card({ running, onSent }: { running: boolean; onSent: (s: Sent) => void
           )}
         </div>
         <div className="mt-2 flex gap-2 text-xs">
-          <button
-            type="button"
-            data-testid="open-mention"
-            onClick={() => lexical?.editor && openMentionInEditor(lexical.editor)}
-          >
+          <button type="button" data-testid="open-mention" onClick={() => lexical?.openMention()}>
             + Mention
           </button>
           <span data-testid="attachment-count">{attachments}</span>
@@ -194,6 +192,19 @@ function Card({ running, onSent }: { running: boolean; onSent: (s: Sent) => void
         </pre>
       </ComposerPrimitive.Root>
     </Triggers>
+  );
+}
+
+/** The standalone chip editor, as a quote segment or a queued-message edit uses it. */
+function SegmentEditor() {
+  const [value, setValue] = useState('see @src/app.ts and /review');
+  return (
+    <div className="m-6 w-[560px] rounded-[12px] bg-card p-3">
+      <ChipTextEditor testId="segment-editor" value={value} onChange={setValue} placeholder="Add a message…" />
+      <pre data-testid="segment-text" className="mt-2 text-xs whitespace-pre-wrap">
+        {JSON.stringify(value)}
+      </pre>
+    </div>
   );
 }
 
@@ -227,6 +238,7 @@ function Fixture() {
           <p className="mx-6">transcript</p>
           <Card running={running} onSent={onSent} />
         </div>
+        {!textareaMode && <SegmentEditor />}
         <pre data-testid="sent" className="m-6 text-xs">
           {JSON.stringify(sent)}
         </pre>

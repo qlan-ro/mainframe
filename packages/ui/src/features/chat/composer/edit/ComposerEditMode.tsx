@@ -5,7 +5,8 @@
  *
  * Amber header marks the mode ("Editing queued message · stays queued until the
  * run finishes" + esc-to-cancel). The blocks a message carries for the agent
- * (captures, session references) are kept out of the field and put back. The text is loaded + editable; the config
+ * (captures, session references) are kept out of the field and put back. The text is loaded + editable (with
+ * chips when the chip setting is on, so a token never shows as raw text); the config
  * toolbar is shown MUTED (the queue-edit contract is content-only — `PATCH
  * /queue/:id { content }`). Save updates the queued item; Cancel-edit discards
  * and leaves it queued.
@@ -13,14 +14,17 @@
  * On save failure the editor stays open and an inline error line is shown —
  * the edit is NOT silently discarded.
  */
-import { useState, useCallback, useRef } from 'react';
+import { Suspense, useState, useCallback, useRef } from 'react';
 import { PencilIcon, CheckIcon } from 'lucide-react';
 import { ApiRequestError } from '@/lib/api/http';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { splitHiddenPrefix } from '../../markers/message-markers';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { ComposerToolbar } from '../config-toolbar/ComposerToolbar';
 import { StopControl } from '../send/SendControls';
+import { LazyChipTextEditor } from '../lexical/lazy-fields';
 import type { QueuedEdit } from './composer-edit-context';
 
 export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: () => void }) {
@@ -30,6 +34,11 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
   const latestText = useRef(visible);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const chips = useUiPrefs((s) => s.chipComposer);
+  const changeText = useCallback((next: string) => {
+    latestText.current = next;
+    setText(next);
+  }, []);
 
   const handleSave = useCallback(() => {
     if (saving) return;
@@ -71,7 +80,10 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
       data-testid="chat-composer-edit"
       // Caution amber and the edit-ring glow stay bridge-owned: v2's `warning`
       // means wrong-but-not-broken, and an edit in flight is neither.
-      className="relative z-1 overflow-hidden rounded-2xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset"
+      className={cn(
+        'relative z-1 overflow-hidden rounded-2xl border border-warning bg-card shadow-[var(--mf-shadow-edit-ring)] has-[textarea:focus-visible]:focus-line-inset',
+        chips && 'has-[[contenteditable=true]:focus-visible]:focus-line-inset',
+      )}
     >
       <div className="flex items-center gap-2 bg-warning-surface py-1.5 pr-3 pl-2.5">
         <PencilIcon size={12} className="shrink-0 text-warning" />
@@ -86,23 +98,38 @@ export function ComposerEditMode({ edit, onDone }: { edit: QueuedEdit; onDone: (
         {!saving && <span className="ml-auto font-mono text-xs text-muted-foreground">esc to cancel</span>}
       </div>
 
-      <textarea
-        data-testid="chat-composer-edit-input"
-        data-noring
-        value={text}
-        readOnly={saving}
-        onChange={(e) => {
-          latestText.current = e.target.value;
-          setText(e.target.value);
-        }}
-        onKeyDown={(e) => {
-          if (!saving && e.key === 'Escape') onDone();
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave();
-        }}
-        autoFocus
-        rows={2}
-        className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-sm leading-relaxed text-foreground outline-none"
-      />
+      {chips ? (
+        <Suspense fallback={<div className="min-h-12" />}>
+          <LazyChipTextEditor
+            testId="chat-composer-edit-input"
+            value={text}
+            onChange={changeText}
+            readOnly={saving}
+            autoFocus
+            onSubmit={handleSave}
+            onKeyDown={(e) => {
+              if (!saving && e.key === 'Escape') onDone();
+            }}
+            className="max-h-48 overflow-y-auto text-sm leading-relaxed"
+            boxClassName="min-h-[2lh] px-4 pt-3 pb-1.5"
+          />
+        </Suspense>
+      ) : (
+        <textarea
+          data-testid="chat-composer-edit-input"
+          data-noring
+          value={text}
+          readOnly={saving}
+          onChange={(e) => changeText(e.target.value)}
+          onKeyDown={(e) => {
+            if (!saving && e.key === 'Escape') onDone();
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave();
+          }}
+          autoFocus
+          rows={2}
+          className="max-h-48 w-full resize-none bg-transparent px-4 pt-3 pb-1.5 text-sm leading-relaxed text-foreground outline-none"
+        />
+      )}
 
       <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-1.5">
         {/* Config shown muted — content-only edit per the daemon queue contract.
