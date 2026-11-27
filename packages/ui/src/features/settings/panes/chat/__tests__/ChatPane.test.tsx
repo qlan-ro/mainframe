@@ -111,6 +111,8 @@ describe('ChatPane — turns to load at a time', () => {
 
     expect(useUiPrefs.getState().historyTurns).toBe(10);
     expect(field).toHaveValue(10);
+  });
+});
 
 describe('ChatPane — plain transcript list', () => {
   beforeEach(() => useUiPrefs.setState({ plainTranscript: false }));

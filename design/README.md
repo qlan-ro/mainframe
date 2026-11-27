@@ -28,7 +28,7 @@ One canvas page per area. A board belongs to the area whose board prefix matches
 | Transcript | `transcript` | `Chat-Thread`, `Chat-Window`, `Chat-States` | `src-features-chat-thread.md` |
 | Session panel | `session-panel` | `Chat-SessionPanel*`, `Workspace-SessionPanel` | `src-features-session-panel.md` |
 | Workspace | `workspace` | `Workspace-*`, `Chat-SideChat` | `src-layout-surfaces-workspacesurface-tsx.md` |
-| Settings & dialogs | `settings` | `Settings-*` | none |
+| Settings & dialogs | `settings` | `Settings-*` | `src-features-settings.md` |
 | Automations | `automations` | `Automations-*` | none |
 | Tasks | `tasks` | `Tasks-*` | none |
 

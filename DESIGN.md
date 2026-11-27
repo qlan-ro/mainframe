@@ -604,7 +604,7 @@ A `card` surface with 10 px radius, the float shadow and 4 px padding. Items hav
 ### Scrollbars
 Overlay thumbs only, never a track or a gutter, whatever the engine or the macOS scroll bar setting. Native scrollbars are hidden. A 6 px thumb (ink at 26 %, 3 px radius, inset 2 px, at least 24 px long) fades in while a region scrolls or is hovered, widens to 8 px (ink at 42 %) under the pointer, can be dragged, and fades out about a second after. Content keeps its full width, so the transcript's text edges stay aligned with the composer. `prefers-reduced-motion` removes the fade.
 
-One manager draws the thumb for every scroll container in the app, portals included (`packages/ui/src/lib/overlay-scrollbars`, mounted once in `App.tsx`): a container only needs `overflow: auto`. `data-scrollbar="none"` opts a strip out where a thumb would cover it (session tabs, workspace tabs, the project strip, attachments); those fade at the edge instead. The terminal uses xterm's own overlay bar, set to the same size and colours in a 10 px lane.
+One manager draws the thumb for every scroll container in the app, portals included (`packages/ui/src/lib/overlay-scrollbars`, mounted once in `App.tsx`): a container only needs `overflow: auto`. `data-scrollbar="none"` opts a strip out where a thumb would cover it (session tabs, workspace tabs, the project strip, attachments); those fade at the edge instead. The transcript is opted out too: its thumb jumped and resized whenever older messages were added above, which read as broken scrolling. The terminal uses xterm's own overlay bar, set to the same size and colours in a 10 px lane.
 
 A resize strip on a scroller's edge carries `data-edge-handle` (the sidebar's rail). The thumb shows over it and leaves it the outermost 2 px.
 
@@ -621,7 +621,7 @@ Motion is functional and short:
 - **Menus, rows and toasts entering:** a 4 px rise over 0.14–0.22 s on `cubic-bezier(.16,1,.3,1)`.
 - **Workspace panel slide:** 0.32 s on `cubic-bezier(.22,1,.36,1)`.
 - **Disclosure chevrons:** rotate over 0.15 s.
-- **Spinners:** 0.8 s linear.
+- **Spinners:** 0.8 s linear. A loading indicator that is not a row's status is shadcn's Spinner (`components/ui/spinner.tsx`): a 14 to 24 px Loader2 in `meta` ink, still under `prefers-reduced-motion`. Its label sits beside it in 12 px `meta`. One that waits on a load shows only if the load outlasts 200 ms and then stays at least 300 ms, so a fast load never flashes it (`use-delayed-visible.ts`).
 - **Group-header actions:** fade over 0.12 s.
 - **Jump highlight:** the transcript row a jump lands on is tinted with the accent at 16 % and fades over 2.2 s. With reduced motion it is a still 12 % tint for the same time.
 
