@@ -35,6 +35,7 @@ import { MarkdownInlineCode, MarkdownPre } from './markdown-code';
 import { MarkdownUl, MarkdownOl, MarkdownLi, MarkdownTaskCheckbox } from './markdown-lists';
 import { MarkdownTable, MarkdownThead, MarkdownTh, MarkdownTd, MarkdownTr } from './markdown-table';
 import { useSelectionHold, recheckHeld } from './selection-hold';
+import { withParseCache } from './markdown-parse-cache';
 import { hasFootnoteSyntax, splitFootnoteBlocks } from './split-blocks';
 import { useSmoothText } from './use-smooth-text';
 
@@ -116,14 +117,22 @@ interface MarkdownBodyProps {
   /** The text is still streaming: close unfinished syntax at its end. */
   running?: boolean;
   remarkPlugins?: PluggableList;
+  /** Keep the parsed blocks for the next mount (`markdown-parse-cache.ts`). Only for text that has stopped changing. */
+  cacheParse?: boolean;
 }
 
-export function MarkdownBody({ text, running = false, remarkPlugins = REPLY_PLUGINS }: MarkdownBodyProps) {
+export function MarkdownBody({
+  text,
+  running = false,
+  remarkPlugins = REPLY_PLUGINS,
+  cacheParse = false,
+}: MarkdownBodyProps) {
   return (
     <Streamdown
       className={MARKDOWN_ROOT_CLASS}
       components={markdownComponents}
-      remarkPlugins={remarkPlugins}
+      // Settling swaps the list once, so the finished reply's blocks render (and are kept) once more.
+      remarkPlugins={cacheParse ? withParseCache(remarkPlugins) : remarkPlugins}
       rehypePlugins={NO_REHYPE_PLUGINS}
       urlTransform={urlTransform}
       parseIncompleteMarkdown={running}
@@ -161,7 +170,7 @@ export const MarkdownText: TextMessagePartComponent = (props) => {
   return (
     <div data-text-part data-search-item-id={searchItemId(props)} ref={containerRef}>
       <SmartActionsProvider>
-        <MarkdownBody text={shown} running={running} />
+        <MarkdownBody text={shown} running={running} cacheParse={!running && shown === text} />
       </SmartActionsProvider>
     </div>
   );
