@@ -3,6 +3,7 @@ import {
   HistoryPageResultSchema,
   type HistoryAroundParams,
   type HistoryAroundResult,
+  type HistoryTrimParams,
   SubagentHistoryExportResultSchema,
   type SubagentHistoryParams,
   type SubagentHistoryPageParams,
@@ -60,6 +61,14 @@ export async function requestHistoryAround(
     decodeBatches(result, params.sessionId, 'History window');
   });
   return result!;
+}
+
+/** `_mainframe.dev/history_trim`: the daemon raises this connection's history floor to the new page's start. */
+export async function requestHistoryTrim(
+  connection: RpcConnection,
+  params: HistoryTrimParams,
+): Promise<HistoryPageResult> {
+  return HistoryPageResultSchema.parse(await connection.sendRequest('_mainframe.dev/history_trim', params));
 }
 
 export function requestHistoryPage(

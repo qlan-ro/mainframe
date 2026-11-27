@@ -144,9 +144,24 @@ export class AcpChatController {
     this.plane.history.returnToTail();
   }
 
-  /** The reader is back at the tail: cut the window back to its newest page. */
+  /** The reader is back at the tail: cut the window back to its newest page (when the daemon can follow). */
   trimToNewestPage(): void {
-    this.plane.history.trim();
+    void this.plane.history.trim();
+  }
+
+  /** Pages the live window, whatever window the reader is in: export and the sub-agent fallback need it, not a jump window. */
+  loadEarlierLive(untilItemId?: string): Promise<boolean> {
+    return this.plane.history.loadLive(untilItemId);
+  }
+
+  /** The live window's paging state, which a window around a jump target leaves alone. */
+  get liveHistory() {
+    return this.plane.history.liveHistory;
+  }
+
+  /** What the transcript list shows: the window around a jump target while there is one, else the live window. */
+  get shownMessages() {
+    return this.state.windowMessages ?? this.state.messages;
   }
 
   private async reactivatePlane(client: AcpClientHandle): Promise<void> {

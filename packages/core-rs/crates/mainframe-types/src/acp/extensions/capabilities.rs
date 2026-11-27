@@ -52,6 +52,9 @@ pub struct MainframeCapabilities {
     /// Whether `history_around` honours `includeDescendants`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_around_descendants: Option<bool>,
+    /// Whether `_mainframe.dev/history_trim` is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_trim: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lazy_tool_images: Option<bool>,
     /// Whether history responses (`history_page`, `history_around`,
@@ -139,6 +142,7 @@ mod tests {
             history_search: None,
             history_around: None,
             history_around_descendants: None,
+            history_trim: None,
             lazy_tool_images: None,
             binary_history_frames: None,
         };

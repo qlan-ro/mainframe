@@ -13,6 +13,7 @@ type LifecycleEvent = Extract<
       | 'history.ready'
       | 'history.failed'
       | 'transcript.updated'
+      | 'window.updated'
       | 'transcript.cleared'
       | 'run.started'
       | 'run.cancelling'
@@ -37,6 +38,8 @@ function reduceLifecycle(state: ChatThreadState, event: LifecycleEvent): ChatThr
       return { ...state, loadState: { type: 'error', error: event.error } };
     case 'transcript.updated':
       return { ...state, messages: event.messages };
+    case 'window.updated':
+      return state.windowMessages === event.messages ? state : { ...state, windowMessages: event.messages };
     case 'transcript.cleared':
       return state.messages.length === 0 && state.retry === null
         ? state
@@ -156,6 +159,7 @@ export function reduceChatThreadState(state: ChatThreadState, event: ChatStateEv
     case 'history.ready':
     case 'history.failed':
     case 'transcript.updated':
+    case 'window.updated':
     case 'transcript.cleared':
     case 'run.started':
     case 'run.cancelling':

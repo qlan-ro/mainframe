@@ -2,12 +2,14 @@ import { NotSentError } from './not-sent-error';
 import {
   requestHistoryAround,
   requestHistoryPage,
+  requestHistoryTrim,
   requestHistorySearch,
   requestSubagentExport,
   type SubagentPageParams,
 } from './acp-history-client';
 import type {
   HistoryAroundParams,
+  HistoryTrimParams,
   HistoryPageParams,
   HistoryPageResult,
   HistoryWindow,
@@ -200,6 +202,10 @@ export class AcpFacadeClient {
 
   historyPage(params: HistoryPageParams, apply: (page: HistoryPageResult) => void): Promise<unknown> {
     return requestHistoryPage(this.requireConnection(), params, apply);
+  }
+
+  historyTrim(params: HistoryTrimParams) {
+    return requestHistoryTrim(this.requireConnection(), params);
   }
 
   historyAround(params: HistoryAroundParams) {

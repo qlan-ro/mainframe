@@ -72,18 +72,21 @@ export class AcpTranscriptStore {
   }
 
   closeAround(): void {
+    // The window's rows are no longer shown: forget the stamps of those the live window does not hold.
+    for (const item of this.around?.itemsInOrder ?? []) {
+      if (!this.visible.has(item.id)) this.firstSeenAt.delete(item.id);
+    }
     this.around = null;
   }
 
-  /**
-   * Drops everything above the newest page of `turns` turns. Returns the item the page now starts
-   * at, or null when the window held no more than a page.
-   */
-  trimLive(turns: number): string | null {
-    const start = newestPageStart(this.visible.itemsInOrder, turns);
-    if (start === null) return null;
-    this.visible.trimBefore(start);
-    return start;
+  /** The item the newest page of `turns` turns starts at in the live window, or null when it holds no more. */
+  newestPageStart(turns: number): string | null {
+    return newestPageStart(this.visible.itemsInOrder, turns);
+  }
+
+  /** Drops everything above `start` from the live window, and the stamps of what went. */
+  trimTo(start: string): void {
+    for (const id of this.visible.trimBefore(start)) this.firstSeenAt.delete(id);
   }
 
   /** A new replay window opened — the window (via its coordinator) owns the returned stage from here on. */

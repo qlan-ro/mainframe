@@ -1,19 +1,28 @@
 ---
 version: 1
-slug: "src-features-chat-thread"
-primary_target: "src/features/chat/thread"
-related_targets: ["src/features/chat/messages/turn","src/features/chat/tools","src/features/chat/links","src/features/chat/view-model/turn"]
+slug: 'src-features-chat-thread'
+primary_target: 'src/features/chat/thread'
+related_targets:
+  [
+    'src/features/chat/messages/turn',
+    'src/features/chat/tools',
+    'src/features/chat/links',
+    'src/features/chat/view-model/turn',
+  ]
 ---
 
 # Transcript
 
 ## Scope and mode
+
 Operate. Messages, turns, tool rows, markers, sub-agents and delegated tasks, markdown and links. Canvas page "Transcript". Spec rows: T1–T1g in `design/redesign/DECISIONS.md`.
 
 ## Audience and job
+
 Follow what an agent did and why, find the step that failed, and copy or quote what matters.
 
 ## Constraints
+
 A turn is the agent's response to one user message, read from the messages themselves, so it holds for every provider and for history. Rows render per message: a streamed chunk re-renders the slice it touched, and text that becomes a step keeps its element. Nothing a transcript holds is dropped or told falsely: another agent's messages are drawn by the components that draw them in a chat, and a state is only "running" while something can still finish it. A part of a turn stands as the evidence says, never as the transcript's shape suggests: `partState` in `build-turns.ts` is the one rule. Going is read from the session, an end only from the part's own messages (`turn-end.ts`), and nothing is kept of how a run ended, so paging, a reload or a reconnect changes no end. A message written into a run ends no part of it, and assistant-ui's stand-in for the coming reply is no message. Where nothing says how a turn, or a call, ended, its row makes no claim; “Stopped” needs a cancelled call or turn, or a task record. Long threads, streamed. Every tool the app renders has a row or a marker (T1a). Times live in hover footers.
 
 Queued messages are not in the transcript: they are rows in the composer. A steered message is, with "Steered into the running turn" under its bubble. Requests are answered above the composer, so a delegated task's card carries none.
@@ -30,13 +39,14 @@ Only one module scrolls the transcript to follow new output, and assistant-ui's 
 
 Two lists draw the transcript, chosen in Settings › Chat (the plain list is a preview, off by default). Today's list is react-virtuoso inside assistant-ui's viewport, held by the bottom pin (`use-thread-bottom-pin.ts`), the prepend anchor and the row anchor. The plain list draws every loaded message as a plain row under one scroll owner (`use-scroll-owner.ts`) with the browser's scroll anchoring on and the composer below the scroller, not inside it. The owner follows the tail inside the resize callback, stops following only on the reader's upward input (or opening a row, or a jump to a row) and follows again only on downward input that reaches the bottom, the End key, the jump button or the user's own send. A page of older messages that lands within a screen of the top is corrected where the browser did not hold the reader, with a relative scroll that keeps a flick going. The newest rows mount first and the rest follows above them in slices, so the tail is on screen at once. The top of the plain list is a fixed 48 px band in every state, so it never moves the rows under the reader: a spinner with "Loading earlier messages" while a page is in flight (held at least 300 ms), a muted "Earlier messages" cue with an up arrow while more is above and nothing loads (a click loads), and "Beginning of conversation" at the start. Today's boundary row is unchanged.
 
-The plain list keeps its loaded window bounded. When the reader comes back to the bottom, everything above the newest page (the same number of whole turns a page loads, Settings › Chat) is dropped; they are at the bottom, so nothing moves, and the cue above reads "Earlier messages" again. A page loads only on the reader's upward scroll, so there is no cap on how far back they can read; the window shrinks when they return. A jump to something not loaded (a Find match, an Activity row, a link to an item) loads about a hundred items around it instead of everything between, and the transcript shows that window until the reader leaves it. The window opens at its top, then the jump scrolls to the row. Follow stays off in it: its bottom is not the live end, and the scroll-to-bottom button always takes the reader to the live tail. The top of the window behaves as the top of the list (a page of earlier items on upward input). Its bottom is a 48 px band with the same rules: a spinner with "Loading later messages", a muted "Later messages" button with a down arrow while the window ends before the chat does (downward input within a screen of the bottom loads the next items), and "Back to latest" where the window reaches the end of the chat (one more downward step at the bottom returns). Sending a message returns to the tail. What the chat does meanwhile is never lost: the tail keeps every update and shows them on return. The window is a snapshot and is read again at the end of a turn, after a compaction, a cleared transcript or a resync. Find has no in-page fallback on the plain list; a daemon without search shows "Search needs a newer daemon".
+The plain list keeps its loaded window bounded. When the reader comes back to the bottom, everything above the newest page (the same number of whole turns a page loads, Settings › Chat) is dropped; they are at the bottom, so nothing moves, and the cue above reads "Earlier messages" again. A page loads only on the reader's upward scroll, so there is no cap on how far back they can read; the window shrinks when they return. On a daemon that cannot raise its history floor the window is not cut back, so it only grows. A jump to something not loaded (a Find match, an Activity row, a link to an item) loads about a hundred items around it instead of everything between, and the transcript shows that window until the reader leaves it. The window opens at its top, then the jump scrolls to the row. Follow stays off in it: its bottom is not the live end, and the scroll-to-bottom button always takes the reader to the live tail. The top of the window behaves as the top of the list (a page of earlier items on upward input). Its bottom is a 48 px band with the same rules: a spinner with "Loading later messages", a muted "Later messages" button with a down arrow while the window ends before the chat does (downward input within a screen of the bottom loads the next items), and "Back to latest" where the window reaches the end of the chat (one more downward step at the bottom returns). Sending a message, or leaving the chat, returns to the tail. Export, the session panel and sub-agent tabs keep reading the live transcript meanwhile. What the chat does meanwhile is never lost: the tail keeps every update and shows them on return. The window is a snapshot and is read again at the end of a turn, after a compaction, a cleared transcript or a resync. Find has no in-page fallback on the plain list; a daemon without search shows "Search needs a newer daemon".
 
 Markdown streams by block: while a reply streams, only its last block is parsed and drawn again, and the finished blocks above it keep their elements and any selection in them. The unfinished tail renders as what it is becoming: an open fence is already a code block, a half-written `**bold` is bold, and a link cut mid-address shows its text with no address. The typing reveal holds while a selection sits inside the streaming text. Code blocks in replies are shadcn's Code Block: language label, labelled Copy, numbered lines, and no trailing empty line.
 
 Markdown images, local and remote, inline badges included, sit in a 240 px tall frame from the first render, so the text around them never shifts as they load. A larger image scales down into the frame; a smaller one keeps its size. An image that fails, or has not loaded after 15 seconds, shows its alt text with "(image unavailable)".
 
 ## Direction contract
+
 THESIS: one work row per turn, folded once the answer starts. Events are pills on the spine. This replaces a stack of tool cards.
 OWN-WORLD: rows of glyph, verb, target and receipt. Pills for skills, plans, schedules, monitors, worktrees and notifications. Failures in muted rose. Answered questions are small cards outside the fold.
 STORY: the user reads the answer first, opens the work only when needed, and sees child agents hold the turn open until they finish.
@@ -45,15 +55,16 @@ FORM: seed: none (pinned) "we shouldn't have more than one 'Worked' block in one
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
 ## Memorable moment
+
 "1 failed, retried" in grey, so a recovered failure doesn't shout.
 
 ## Unresolved
+
 Agents and delegated tasks open in the workspace's Agent tab (W8), and their rows say what the tab says (T1c) and have its Stop while the work is live. A delegated task's request shows above the composer (G5).
 
 After a turn ends, only its last failed step can open by itself. It opens if no later step in that turn succeeded and no successful retry recovered it. The same rule applies to child failures in their own turn. Live turns keep failed rows closed by default. The header still counts failures, and manual open or close choices take precedence.
 
 Claude steers stay inside their running turn. The existing steer label also appears after a history reload.
-
 
 Saved Claude agent rows use the recorded outcome and usage. When the transcript cannot settle the outcome, the receipt reads “Open to see status” and the turn does not auto-open a failed row. After the steps load, the receipt says “Status unavailable” if the outcome is still unknown.
 

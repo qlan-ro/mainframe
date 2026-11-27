@@ -24,6 +24,7 @@ vi.mock('@/lib/toast', () => ({
 import type { HistoryAroundResult, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { getChat } from '../../../../lib/api/chats';
+import { exportConversation } from '../../messages/transcript-markdown';
 import { CHAT_ID, flushMicrotasks, makeChat, makeController, makeMsg, type ControllerRig } from './acp-test-kit';
 
 function item(id: string, role: 'user_message' | 'agent_message'): SessionUpdate {
@@ -57,7 +58,8 @@ async function away(): Promise<{ rig: ControllerRig; around: ReturnType<typeof v
   return { rig, around };
 }
 
-const ids = (rig: ControllerRig) => rig.ctrl.getState().messages.map((m) => m.id);
+const live = (rig: ControllerRig) => rig.ctrl.getState().messages.map((m) => m.id);
+const shown = (rig: ControllerRig) => rig.ctrl.getState().windowMessages?.map((m) => m.id) ?? null;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -72,9 +74,10 @@ afterEach(() => {
 });
 
 describe('a window around a jump target, in the controller', () => {
-  it('shows the window and marks the history state detached', async () => {
+  it('shows the window apart from the live transcript, and marks the history state detached', async () => {
     const { rig } = await away();
-    expect(ids(rig)).toEqual(['u2', 'a2']);
+    expect(shown(rig)).toEqual(['u2', 'a2']);
+    expect(rig.ctrl.shownMessages.map((m) => m.id)).toEqual(['u2', 'a2']);
     expect(rig.ctrl.getState().historyWindow.detached).toMatchObject({ hasBefore: true, hasAfter: true });
   });
 
@@ -82,7 +85,8 @@ describe('a window around a jump target, in the controller', () => {
     const { rig } = await away();
     await rig.ctrl.sendMessage(makeMsg('hello'));
     expect(rig.ctrl.getState().historyWindow.detached).toBeUndefined();
-    expect(ids(rig)).toEqual(['u9', 'a9']);
+    expect(shown(rig)).toBeNull();
+    expect(live(rig)).toEqual(['u9', 'a9']);
   });
 
   it('returns on request, and loadLater at the end of the window is the same way back', async () => {
@@ -97,7 +101,31 @@ describe('a window around a jump target, in the controller', () => {
     expect(rig.ctrl.getState().historyWindow.detached).toMatchObject({ hasAfter: false });
     await rig.ctrl.loadLater();
     expect(rig.ctrl.getState().historyWindow.detached).toBeUndefined();
-    expect(ids(rig)).toEqual(['u9', 'a9']);
+    expect(shown(rig)).toBeNull();
+  });
+
+  it('keeps the live transcript for export, which pages the live window and leaves the jump window alone', async () => {
+    const { rig, around } = await away();
+    expect(live(rig)).toEqual(['u9', 'a9']);
+    around.mockClear();
+    rig.acpClient.historyPage = vi.fn(async (_params, apply) =>
+      apply({
+        hasMore: false,
+        floorItemId: 'u8',
+        updates: [item('u8', 'user_message'), item('a8', 'agent_message')],
+      }),
+    ) as never;
+    const markdown = await exportConversation(rig.ctrl);
+    expect(markdown).toContain('u8');
+    expect(markdown).toContain('a9');
+    expect(markdown).not.toContain('a2');
+    expect(around).not.toHaveBeenCalled();
+    expect(rig.acpClient.historyPage).toHaveBeenCalledWith(
+      expect.objectContaining({ before: 'u9' }),
+      expect.anything(),
+    );
+    expect(shown(rig)).toEqual(['u2', 'a2']);
+    expect(rig.ctrl.getState().historyWindow.detached).toBeDefined();
   });
 
   it.each([

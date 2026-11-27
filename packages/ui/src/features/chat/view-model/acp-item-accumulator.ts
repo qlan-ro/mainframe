@@ -67,6 +67,9 @@ export type {
   ApplyOutcome,
 } from './accumulated-item';
 
+/** Trimmed ids remembered so late updates to them are dropped. */
+const DROPPED_CAP = 2000;
+
 export class AcpItemAccumulator {
   private readonly items = new Map<string, AccumulatedItem>();
   private order: string[] = [];
@@ -138,15 +141,21 @@ export class AcpItemAccumulator {
     return this.items.has(id);
   }
 
-  /** Drops every item before `id`, newest side untouched. Returns how many went. */
-  trimBefore(id: string): number {
+  /** Drops every item before `id`, newest side untouched. Returns the ids that went. */
+  trimBefore(id: string): string[] {
     const at = this.order.indexOf(id);
-    if (at <= 0) return 0;
-    for (const gone of this.order.splice(0, at)) {
-      this.items.delete(gone);
-      this.dropped.add(gone);
+    if (at <= 0) return [];
+    const gone = this.order.splice(0, at);
+    for (const goneId of gone) {
+      this.items.delete(goneId);
+      this.dropped.add(goneId);
     }
-    return at;
+    // Bounded: past the cap the oldest go first. A late update to one of those asks for a resync, which is correct if rare.
+    for (const old of this.dropped) {
+      if (this.dropped.size <= DROPPED_CAP) break;
+      this.dropped.delete(old);
+    }
+    return gone;
   }
 
   reset(): void {

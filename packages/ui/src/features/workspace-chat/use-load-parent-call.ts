@@ -25,7 +25,7 @@ export function useLoadParentCall(
   useEffect(() => {
     if (!needed || exhausted) return undefined;
     let cancelled = false;
-    void controller.loadEarlier(toolCallId).then(
+    void controller.loadEarlierLive(toolCallId).then(
       (found) => {
         if (!cancelled && !found) setError('Not in this transcript');
       },

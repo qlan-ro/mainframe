@@ -59,6 +59,7 @@ pub async fn handle_inbound(
                 "_mainframe.dev/history_page"
                     | "_mainframe.dev/history_around"
                     | "_mainframe.dev/history_search"
+                    | "_mainframe.dev/history_trim"
                     | "_mainframe.dev/subagent_history_page"
                     | "_mainframe.dev/subagent_history_search"
                     | "_mainframe.dev/subagent_history_export"

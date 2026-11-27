@@ -133,6 +133,8 @@ export const MainframeCapabilitiesSchema = z
     historyAround: z.boolean().optional(),
     /** Whether `history_around` honours `includeDescendants`. */
     historyAroundDescendants: z.boolean().optional(),
+    /** Whether `_mainframe.dev/history_trim` is available. */
+    historyTrim: z.boolean().optional(),
     lazyToolImages: z.boolean().optional(),
     /**
      * Whether history responses (`history_page`, `history_around`,

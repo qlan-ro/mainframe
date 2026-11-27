@@ -10,6 +10,12 @@ function startsTurn(item: AccumulatedItem): boolean {
   return meta.data.messageMeta?.steered !== true;
 }
 
+/** A compaction or provider-switch divider: it leads the turn after it, as the daemon cuts pages. */
+function isMarker(item: AccumulatedItem): boolean {
+  const meta = ItemMetaSchema.safeParse(item.meta?.[MAINFRAME_META_NAMESPACE]);
+  return meta.success && (meta.data.compaction !== undefined || meta.data.providerSwitch !== undefined);
+}
+
 /**
  * The item the newest page of `turns` turns starts at, or null when the window holds no more than
  * that. Pages are whole turns (the daemon cuts them the same way), so the cut is a user message
@@ -20,7 +26,9 @@ export function newestPageStart(items: readonly AccumulatedItem[], turns: number
   for (let index = items.length - 1; index > 0; index--) {
     if (!startsTurn(items[index]!)) continue;
     seen += 1;
-    if (seen === turns) return index > 0 ? items[index]!.id : null;
+    if (seen < turns) continue;
+    while (index > 0 && isMarker(items[index - 1]!)) index -= 1;
+    return index > 0 ? items[index]!.id : null;
   }
   return null;
 }

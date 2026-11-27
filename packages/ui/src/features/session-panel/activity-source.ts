@@ -76,7 +76,7 @@ async function locateSource(chatId: string, { messageId, toolCallId }: ActivityS
   if (messageId && messageElement(chatId, messageId)) return { messageId, toolCallId };
   const controller = chatControllerRegistry.get(chatId);
   const loaded = (): LocatedSource | undefined => {
-    const messages = controller?.getState().messages ?? [];
+    const messages = controller?.shownMessages ?? [];
     if (messageId && messages.some((message) => message.id === messageId)) return { messageId, toolCallId };
     return toolCallId ? findToolCall(messages, toolCallId) : undefined;
   };

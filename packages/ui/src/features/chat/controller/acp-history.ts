@@ -9,7 +9,7 @@ import type {
 } from '@qlan-ro/mainframe-types';
 import { useUiPrefs } from '@/store/ui-prefs';
 import type { AcpSessionClientPort } from './acp-session-attachment-types';
-import { AroundWindow, type DetachedHistory } from './acp-history-around';
+import { AroundWindow, type AroundStep, type DetachedHistory } from './acp-history-around';
 
 export type { DetachedHistory } from './acp-history-around';
 
@@ -22,10 +22,12 @@ export interface HistoryLoadState extends HistoryState {
 
 /** What the history asks of the transcript store for windows: see `acp-plane-window-host.ts`. */
 export interface HistoryWindowHost {
-  /** Drops what is above the newest `turns` turns; the item the page then starts at, or null when nothing went. */
-  trim(turns: number, refresh: boolean): string | null;
-  /** Shows a window around a target, or the same window cut again. */
-  showWindow(result: HistoryAroundResult): void;
+  /** The item the newest `turns` turns start at in the live window, or null when it holds no more. */
+  newestPageStart(turns: number): string | null;
+  /** Drops everything above `start` from the live window. */
+  trimTo(start: string, refresh: boolean): void;
+  /** Shows a window around a target, or the same window cut again, with what continues it. */
+  showWindow(result: HistoryAroundResult, more?: AroundStep[]): void;
   extendWindow(result: HistoryAroundResult, side: 'before' | 'after'): void;
   hideWindow(): void;
   windowHasItem(id: string): boolean;
@@ -45,7 +47,7 @@ export class AcpHistory {
   private state: HistoryLoadState = { hasMore: false, loading: false };
   private generation = 0;
   private inFlight: Promise<boolean> | null = null;
-  private loadingSide: 'before' | 'after' = 'before';
+  private loadingSide: 'before' | 'after' | 'live' = 'before';
   private readonly around: AroundWindow;
 
   constructor(private readonly host: HistoryHost) {
@@ -66,8 +68,8 @@ export class AcpHistory {
         if (generation === this.generation && this.state.loading) this.update({ ...this.state, loading: false });
       },
       trimLive: () => this.trimLive(false),
-      show: (result) => {
-        host.showWindow(result);
+      show: (result, more) => {
+        host.showWindow(result, more);
         this.host.changed(this.view());
       },
       extendShown: (result, side) => host.extendWindow(result, side),
@@ -149,13 +151,7 @@ export class AcpHistory {
     }
     if (!this.host.active()) return false;
     const pending = window ? this.awayStep(untilItemId) : this.tailStep(untilItemId);
-    if (!pending) return false;
-    this.inFlight = pending;
-    try {
-      return await pending;
-    } finally {
-      if (this.inFlight === pending) this.inFlight = null;
-    }
+    return pending ? this.track(pending) : false;
   }
 
   private holds(id: string): boolean {
@@ -191,13 +187,7 @@ export class AcpHistory {
     }
     if (!window.hasAfter) return this.returnToTail();
     if (!this.host.active()) return false;
-    const pending = this.around.extend('after');
-    this.inFlight = pending;
-    try {
-      return await pending;
-    } finally {
-      if (this.inFlight === pending) this.inFlight = null;
-    }
+    return this.track(this.around.extend('after'));
   }
 
   /** Back to the live window: it was cut to its newest page when the window opened, and has taken every live update since. */
@@ -210,22 +200,67 @@ export class AcpHistory {
     return true;
   }
 
-  /**
-   * The reader is back at the tail: drops everything above the newest page. They are at the bottom,
-   * so nothing needs anchoring. The page above the new floor loads again the usual way.
-   */
-  trim(): boolean {
-    if (this.around.state) return false;
-    this.invalidate();
-    return this.trimLive(true);
+  private track(pending: Promise<boolean>): Promise<boolean> {
+    this.inFlight = pending;
+    return pending.finally(() => {
+      if (this.inFlight === pending) this.inFlight = null;
+    });
   }
 
-  private trimLive(refresh: boolean): boolean {
-    const start = this.host.trim(useUiPrefs.getState().historyTurns, refresh);
+  /**
+   * The reader is back at the tail: drops everything above the newest page. They are at the bottom,
+   * so nothing needs anchoring. The page above the new floor loads again the usual way. Skipped while
+   * a load is under way.
+   */
+  trim(): Promise<boolean> {
+    if (this.around.state || this.inFlight || !this.host.active()) return Promise.resolve(false);
+    return this.track(this.trimLive(true)).catch(() => false);
+  }
+
+  private canTrim(): boolean {
+    const client = this.host.client();
+    const caps = client.mainframeCapabilities;
+    return caps?.windowedHistory === true && caps.historyTrim === true && typeof client.historyTrim === 'function';
+  }
+
+  /**
+   * The daemon serves a page only when `before` is its floor for this connection, so the floor is
+   * raised there first (`history_trim`), and the window is cut only once that is done. A daemon that
+   * cannot raise its floor keeps the window whole: cutting here alone would leave every later page
+   * refused.
+   */
+  private async trimLive(refresh: boolean): Promise<boolean> {
+    if (!this.canTrim()) return false;
+    const start = this.host.newestPageStart(useUiPrefs.getState().historyTurns);
     if (!start) return false;
+    const client = this.host.client();
+    const generation = this.generation;
+    const connection = client.connectionGeneration;
+    const reply = await client.historyTrim!({ sessionId: this.host.chatId(), floorItemId: start });
+    const moved =
+      generation !== this.generation || client !== this.host.client() || connection !== client.connectionGeneration;
+    if (reply.stale || moved) return false;
+    this.host.trimTo(start, refresh);
     this.state = { hasMore: true, floorItemId: start, loading: false };
     this.host.changed(this.view());
     return true;
+  }
+
+  /** Pages the live window whatever the reader is looking at: export and the sub-agent fallback read it, not a jump window. */
+  async loadLive(untilItemId?: string): Promise<boolean> {
+    if (untilItemId && this.holds(untilItemId)) return true;
+    if (this.inFlight) {
+      await this.inFlight;
+      return untilItemId ? this.loadLive(untilItemId) : false;
+    }
+    if (!this.host.active() || !this.state.hasMore || !this.state.floorItemId) return false;
+    this.loadingSide = 'live';
+    return this.track(this.fetch(untilItemId));
+  }
+
+  /** The live window's own paging state, which a window around a target does not change. */
+  get liveHistory(): HistoryState {
+    return this.state;
   }
 
   private async fetch(untilItemId?: string): Promise<boolean> {

@@ -36,6 +36,27 @@ impl SessionStream {
         }
     }
 
+    /// Raises the floor to `id`, an item the stream already holds at or after it. Returns false
+    /// (and changes nothing) for an unknown item, one above the floor's container, or a stream with
+    /// no floor. The client uses it after cutting its loaded window back to the newest page, so a
+    /// page requested before the new floor is accepted again.
+    pub fn raise_history_floor(&mut self, id: &str) -> bool {
+        let Some(window) = &mut self.window else {
+            return false;
+        };
+        let (Some((floor, _)), false) = (&window.floor, window.blocked) else {
+            return false;
+        };
+        let Some(pos) = self.state.container_position(id) else {
+            return false;
+        };
+        if pos < *floor {
+            return false;
+        }
+        window.floor = Some((pos, id.to_owned()));
+        true
+    }
+
     pub fn history_floor(&self) -> Option<&str> {
         self.window
             .as_ref()

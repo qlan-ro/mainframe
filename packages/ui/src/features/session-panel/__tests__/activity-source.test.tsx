@@ -4,6 +4,7 @@ const controller = vi.hoisted(() => ({
   current: undefined as
     | {
         getState: () => { messages: unknown[] };
+        shownMessages: unknown[];
         historyGeneration: number;
         loadEarlier: (id: string) => Promise<boolean>;
       }
@@ -161,7 +162,7 @@ describe('jumpToActivitySource — a call that is not loaded', () => {
   function windowed(loadEarlier: (id: string) => Promise<boolean>) {
     messages.length = 0;
     messages.push({ id: 'm-9', content: [] });
-    controller.current = { getState: () => ({ messages }), historyGeneration: 0, loadEarlier };
+    controller.current = { getState: () => ({ messages }), shownMessages: messages, historyGeneration: 0, loadEarlier };
   }
 
   it('loads the history up to the call and goes to its own row', async () => {
@@ -209,6 +210,7 @@ describe('jumpToActivitySource — superseded', () => {
     const held = [...messages] as unknown[];
     controller.current = {
       getState: () => ({ messages: held }),
+      shownMessages: held,
       historyGeneration: 0,
       loadEarlier: () =>
         new Promise((resolve, reject) => {

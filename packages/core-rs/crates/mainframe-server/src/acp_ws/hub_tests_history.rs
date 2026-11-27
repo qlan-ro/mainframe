@@ -227,3 +227,46 @@ fn an_unframeable_reply_is_an_error_not_a_hang() {
     assert_eq!(receive(&mut rx)[0]["error"]["code"], -32603);
     assert!(binary.try_recv().is_err());
 }
+
+#[test]
+fn a_raised_floor_accepts_the_next_page_before_it_and_refuses_the_old_floor() {
+    let hub = hub();
+    let (_, conn, mut rx) = hub.register("claude".into());
+    conn.mark_windowed_history_opted_in();
+    let messages = history();
+    let mut containers = mainframe_acp::encoder::encode_containers(&messages, None);
+    for container in &mut containers[..80] {
+        container.clear();
+    }
+    hub.begin_resume(&conn, "chat-1");
+    hub.reset_session(&conn, "chat-1", seed(&containers, &reply(1)), |_| {});
+    receive(&mut rx);
+    // The floor can only go up, and only to an item the stream holds.
+    assert!(
+        hub.raise_history_floor(&conn, "chat-1", "message:0:top:nope")
+            .is_none()
+    );
+    assert!(
+        hub.raise_history_floor(&conn, "chat-1", "message:0:top:m20")
+            .is_none()
+    );
+    let state = hub
+        .raise_history_floor(&conn, "chat-1", "message:0:top:m100")
+        .unwrap();
+    assert_eq!(state.floor_item_id.as_deref(), Some("message:0:top:m100"));
+    assert!(state.has_more);
+    assert!(
+        hub.begin_history_page(&conn, "chat-1", "message:0:top:m80")
+            .is_none()
+    );
+    assert!(
+        hub.begin_history_page(&conn, "chat-1", "message:0:top:m100")
+            .is_some()
+    );
+    // Not live on this connection: nothing to raise.
+    let (_, other, _) = hub.register("claude".into());
+    assert!(
+        hub.raise_history_floor(&other, "chat-1", "message:0:top:m100")
+            .is_none()
+    );
+}

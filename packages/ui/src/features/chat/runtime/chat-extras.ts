@@ -112,7 +112,7 @@ function sameExceptMessages(a: ChatThreadState, b: ChatThreadState): boolean {
   const keys = Object.keys(b) as Array<keyof ChatThreadState>;
   if (keys.length !== Object.keys(a).length) return false;
   for (const key of keys) {
-    if (key === 'messages') continue;
+    if (key === 'messages' || key === 'windowMessages') continue;
     if (!Object.is(a[key], b[key])) return false;
   }
   return true;

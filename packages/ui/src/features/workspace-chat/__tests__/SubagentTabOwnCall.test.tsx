@@ -11,7 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 const { controller, world } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
-    loadEarlier: vi.fn(async () => true),
+    loadEarlierLive: vi.fn(async () => true),
     historyGeneration: 0,
     subagentHistory: { page: vi.fn(async () => ({ hasMore: false, updates: [] })), around: vi.fn() },
     isHistoryContext: vi.fn(() => false),
@@ -149,7 +149,7 @@ beforeEach(() => {
   world.state = state();
   world.live = [];
   controller.historyGeneration = 0;
-  controller.loadEarlier.mockClear();
+  controller.loadEarlierLive.mockClear();
   controller.isHistoryContext.mockReturnValue(false);
   controller.subagentHistory.around.mockReset().mockResolvedValue(around({ done: false }));
 });
@@ -161,7 +161,7 @@ describe('a call below the history floor', () => {
     await settle();
     expect(controller.subagentHistory.around).toHaveBeenCalledTimes(1);
     expect(controller.subagentHistory.around).toHaveBeenCalledWith('call-1');
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
     expect(screen.getByTestId('workspace-agent-brief-call-1')).toHaveTextContent('Look for races.');
     expect(screen.getByTestId('workspace-agent-header-call-1')).toHaveTextContent('Review the diff');
     // An earlier turn's copy: a running turn after it does not make it running.
@@ -172,7 +172,7 @@ describe('a call below the history floor', () => {
     controller.subagentHistory.around.mockResolvedValue(around({ done: true, facts: true }));
     render(tab());
     await settle();
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
     expect(status()).toBeNull();
     expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('Found two races.');
     expect(screen.getByTestId('steps')).toHaveTextContent('history');
@@ -201,7 +201,7 @@ describe('a call below the history floor', () => {
     expect(controller.subagentHistory.around).toHaveBeenCalledTimes(2);
     expect(status()).toBeNull();
     expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('Found two races.');
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
   });
 
   it('is fetched again when its tab comes to the front, and not for an unrelated render', async () => {
@@ -239,7 +239,7 @@ describe('a call below the history floor', () => {
     controller.subagentHistory.around.mockRejectedValue(new Error('daemon is away'));
     render(tab());
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('daemon is away'));
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
   });
 });
 
@@ -258,7 +258,7 @@ describe('a call in the live window', () => {
     await settle();
     expect(screen.getByTestId('workspace-agent-brief-call-1')).toHaveTextContent('Live brief.');
     expect(controller.subagentHistory.around).not.toHaveBeenCalled();
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
   });
 });
 
@@ -267,7 +267,7 @@ describe('a daemon that cannot answer history_around', () => {
     controller.subagentHistory.around.mockResolvedValue(null);
     render(tab());
     await settle();
-    expect(controller.loadEarlier).toHaveBeenCalledWith('call-1');
+    expect(controller.loadEarlierLive).toHaveBeenCalledWith('call-1');
   });
 });
 
@@ -352,7 +352,7 @@ describe('a call that is a context item in the live window', () => {
     expect(screen.getByTestId('workspace-agent-result-call-1')).toHaveTextContent('Found two races.');
     expect(status()).toBeNull();
     expect(steps()).toBe('s1,s2,s3,s4');
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
   });
 
   it('is never replaced by an older fetched copy of the call', async () => {
@@ -370,7 +370,7 @@ describe('before the parent has loaded', () => {
     const view = render(tab());
     await settle();
     expect(controller.subagentHistory.around).not.toHaveBeenCalled();
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
     world.state = state();
     view.rerender(tab());
     await settle();
@@ -469,11 +469,11 @@ describe('a daemon without history_around, once the call leaves the window', () 
     ];
     const view = render(tab());
     await settle();
-    expect(controller.loadEarlier).not.toHaveBeenCalled();
+    expect(controller.loadEarlierLive).not.toHaveBeenCalled();
     world.live = [];
     view.rerender(tab());
     await settle();
-    expect(controller.loadEarlier).toHaveBeenCalledWith('call-1');
+    expect(controller.loadEarlierLive).toHaveBeenCalledWith('call-1');
   });
 });
 

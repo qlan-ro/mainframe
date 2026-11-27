@@ -4,31 +4,32 @@ import type { AcpTranscriptStore } from './acp-transcript-store';
 
 /**
  * The window half of the history host: what the plane does to its transcript store when the history
- * trims the live window or shows, extends and hides a window around a jump target. `refresh`
- * converts what the store shows and dispatches it.
+ * trims the live window or shows, extends and hides a window around a jump target. `refreshLive`
+ * converts and dispatches the live window; `refreshWindow` the window around a target (or none).
  */
 export function planeWindowHost(
   store: AcpTranscriptStore,
-  refresh: () => void,
+  refresh: { live: () => void; window: () => void },
   chatId: () => string,
 ): HistoryWindowHost {
   return {
-    trim: (turns, refreshAfter) => {
-      const start = store.trimLive(turns);
-      if (start && refreshAfter) refresh();
-      return start;
+    newestPageStart: (turns) => store.newestPageStart(turns),
+    trimTo: (start, refreshAfter) => {
+      store.trimTo(start);
+      if (refreshAfter) refresh.live();
     },
-    showWindow: (result) => {
+    showWindow: (result, more = []) => {
       store.openAround(result.updates ?? []);
-      refresh();
+      for (const step of more) store.extendAround(step.result.updates ?? [], step.side);
+      refresh.window();
     },
     extendWindow: (result, side) => {
       if (side === 'before') window.dispatchEvent(new CustomEvent('mainframe:history-prepend', { detail: chatId() }));
-      if (store.extendAround(result.updates ?? [], side).length) refresh();
+      if (store.extendAround(result.updates ?? [], side).length) refresh.window();
     },
     hideWindow: () => {
       store.closeAround();
-      refresh();
+      refresh.window();
     },
     windowHasItem: (id) => isHeldHistoryItem(store.shown.itemsInOrder, id),
     windowSpan: (id) => {

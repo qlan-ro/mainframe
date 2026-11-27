@@ -41,6 +41,7 @@ import type { ChatStateEvent } from './chat-thread-state';
 
 /** The `AcpFacadeClient` surface the plane needs — narrowed so a test double doesn't reimplement the whole client. */
 export interface AcpSessionClientPort {
+  historyTrim?: import('@/lib/daemon/acp-client').AcpFacadeClient['historyTrim'];
   historyAround?: import('@/lib/daemon/acp-client').AcpFacadeClient['historyAround'];
   subagentHistoryPage?: import('@/lib/daemon/acp-client').AcpFacadeClient['subagentHistoryPage'];
   onCapabilitiesChanged?(listener: CapabilitiesListener): () => void;
