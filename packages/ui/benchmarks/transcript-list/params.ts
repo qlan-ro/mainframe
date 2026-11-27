@@ -29,6 +29,11 @@ export const params = {
    * reply. Default 60, from the corrected benchmark (an older page shows ~80 ms after the
    * request, about 25 ms of which is rendering); each load varies ±30%. `delay=0` lands at once.
    */
+  /**
+   * Manual mode: open with only the newest N messages, like a chat whose first window is short
+   * (after a compaction). The first upward scroll then has to load a page. Unset = `groups` turns.
+   */
+  windowItems: query.has('window') ? number('window', 2) : 0,
   pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
   /** Manual mode: the app's overlay scrollbar thumb, as in the app (it shows while scrolling or hovered). Off with `scrollbar=0`. */
   scrollbar: query.get('scrollbar') !== '0',
