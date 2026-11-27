@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /**
- * viewer-router tests — pickViewerKind pure function.
+ * viewer-kind tests — pickViewerKind pure function.
  *
  * Each case hardcodes the expected kind; no logic mirrors the implementation.
  * Covers: every supported image extension, svg, csv, pdf, code/text,
  * and the code-fallthrough paths.
  */
 import { describe, expect, it } from 'vitest';
-import { pickViewerKind } from '../viewer-router';
+import { pickViewerKind } from '../viewer-kind';
 
 describe('pickViewerKind', () => {
   it.each([
