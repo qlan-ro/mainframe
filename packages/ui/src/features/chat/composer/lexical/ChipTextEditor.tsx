@@ -26,13 +26,13 @@ import {
   SKIP_DOM_SELECTION_TAG,
 } from 'lexical';
 import { DirectiveChipProvider, DirectiveNode } from '@assistant-ui/react-lexical';
-import type { Unstable_DirectiveFormatter } from '@assistant-ui/react';
 import { cn } from '@/lib/utils';
 import { ComposerChip } from './ComposerChip';
 import { ChipCaretPlugin, ChipPastePlugin, TypedChipsPlugin } from './chip-plugins';
 import { CHIP_EDITOR_CLASS } from './chip-editor-class';
 import { $readEditorText, $setEditorText } from './lexical-edits';
 import { useChipFormatter } from './use-chip-formatter';
+import type { ComposerChipFormatter } from './composer-chip-formatter';
 
 const chipEditorExtension = defineExtension({
   name: '@mainframe/chip-text-editor',
@@ -53,7 +53,7 @@ function ValuePlugin({
 }: {
   value: string;
   onChange(text: string): void;
-  formatter: Unstable_DirectiveFormatter;
+  formatter: ComposerChipFormatter;
   autoFocus: boolean;
 }) {
   const [editor] = useLexicalComposerContext();

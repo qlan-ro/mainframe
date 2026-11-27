@@ -57,8 +57,9 @@ function findSegment(id: string): HTMLElement {
   return segment!;
 }
 
+/** The segment's prose field. In chip mode it is a lazy chunk, which can take over the default 1 s to load. */
 function segmentInput(id: string): Promise<HTMLElement> {
-  return within(findSegment(id)).findByTestId('composer-segment-input');
+  return within(findSegment(id)).findByTestId('composer-segment-input', undefined, { timeout: 5000 });
 }
 
 beforeEach(() => {

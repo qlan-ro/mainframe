@@ -21,9 +21,12 @@ export function setFieldMode(mode: FieldMode): void {
   useUiPrefs.setState({ chipComposer: mode === 'chips' });
 }
 
-/** The live field. Async: the chip field loads lazily. */
+/**
+ * The live field. Async: the chip field is a lazy chunk, and its first import
+ * in a busy test run can take longer than Testing Library's 1 s default.
+ */
 export function findField(testId = 'chat-composer-input'): Promise<HTMLElement> {
-  return screen.findByTestId(testId);
+  return screen.findByTestId(testId, undefined, { timeout: 5000 });
 }
 
 function editorOf(field: HTMLElement): LexicalEditor | null {
@@ -59,6 +62,7 @@ export function isReadOnly(field: HTMLElement): boolean {
   return field.hasAttribute('readonly') || field.getAttribute('contenteditable') === 'false';
 }
 
+/** Types `text` at the caret; a `\n` is a new line (⇧↵). */
 export function typeInto(field: HTMLElement, text: string): void {
   const editor = editorOf(field);
   if (!editor) {
@@ -75,7 +79,9 @@ export function typeInto(field: HTMLElement, text: string): void {
             $getRoot().selectEnd();
             selection = $getSelection();
           }
-          if ($isRangeSelection(selection)) selection.insertText(char);
+          if (!$isRangeSelection(selection)) return;
+          if (char === '\n') selection.insertLineBreak();
+          else selection.insertText(char);
         },
         { discrete: true },
       );

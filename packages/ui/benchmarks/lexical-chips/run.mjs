@@ -1,6 +1,7 @@
 /**
  * Checks for the Lexical chip composer (todos #482, #493). Synthetic fixture,
- * temporary Vite server on port 5199, no daemon. Prints one row per behaviour.
+ * temporary Vite server on port 5199 (`LEXICAL_CHIPS_PORT` overrides it), no
+ * daemon. Prints one row per behaviour.
  *
  *   node packages/ui/benchmarks/lexical-chips/run.mjs            # WebKit, Lexical field
  *   node packages/ui/benchmarks/lexical-chips/run.mjs --textarea # WebKit, today's textarea
@@ -15,7 +16,8 @@ const { chromium, webkit } = require('@playwright/test');
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const textarea = process.argv.includes('--textarea');
 const useChromium = process.argv.includes('--chromium');
-const server = await createServer({ root, logLevel: 'error', server: { port: 5199, strictPort: true } });
+const port = Number(process.env.LEXICAL_CHIPS_PORT ?? 5199);
+const server = await createServer({ root, logLevel: 'error', server: { port, strictPort: true } });
 await server.listen();
 const browser = await (useChromium ? chromium : webkit).launch({ headless: true });
 const context = await browser.newContext();
@@ -33,7 +35,7 @@ const settle = (ms = 120) => page.waitForTimeout(ms);
 const mod = 'Meta';
 
 async function reset() {
-  await page.goto(`http://localhost:5199/benchmarks/lexical-chips/${textarea ? '?textarea' : ''}`);
+  await page.goto(`http://localhost:${port}/benchmarks/lexical-chips/${textarea ? '?textarea' : ''}`);
   await input.waitFor();
   await input.click();
   await settle();
@@ -274,8 +276,15 @@ await check('Esc closes the menu first, then parks focus on the transcript', asy
   await type('@');
   await popover.waitFor();
   await page.keyboard.press('Escape');
-  await settle();
-  const closed = !(await popover.isVisible());
+  // The engine closes at once; the popover then plays its 100 ms exit
+  // animation, so wait for it to go rather than sampling at a fixed delay.
+  const expanded = await input.getAttribute('aria-expanded');
+  const started = Date.now();
+  const closed = await popover.waitFor({ state: 'hidden', timeout: 1000 }).then(
+    () => true,
+    () => false,
+  );
+  const hiddenAfter = Date.now() - started;
   const stillInField = await input.evaluate(
     (el) => el === document.activeElement || el.contains(document.activeElement),
   );
@@ -283,8 +292,8 @@ await check('Esc closes the menu first, then parks focus on the transcript', asy
   await settle();
   const onTranscript = await page.evaluate(() => document.activeElement?.getAttribute('data-testid'));
   return {
-    pass: closed && stillInField && onTranscript === 'transcript',
-    detail: `closed=${closed} field=${stillInField} then=${onTranscript}`,
+    pass: expanded === 'false' && closed && stillInField && onTranscript === 'transcript',
+    detail: `expanded=${expanded} closed=${closed} (${hiddenAfter} ms) field=${stillInField} then=${onTranscript}`,
   };
 });
 await check('no false menu right after a chip', async () => {

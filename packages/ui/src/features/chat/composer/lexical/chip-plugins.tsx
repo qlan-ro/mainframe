@@ -18,8 +18,8 @@ import {
   PASTE_TAG,
 } from 'lexical';
 import { mergeRegister } from '@lexical/utils';
-import type { Unstable_DirectiveFormatter } from '@assistant-ui/react';
 import { $stepOverChip } from './chip-caret';
+import type { ComposerChipFormatter } from './composer-chip-formatter';
 import { $pastedNodes } from './lexical-edits';
 import { registerTypedChips } from './typed-chips';
 
@@ -43,9 +43,10 @@ export function ChipCaretPlugin() {
 
 /**
  * Pasted text holding `/` or `@` tokens comes back as chips: plain-text paste
- * reads only `text/plain`, where a copied chip is its token text.
+ * reads only `text/plain`, where a copied chip is its token text. The paste is
+ * read together with the text around the caret (see `$pastedNodes`).
  */
-export function ChipPastePlugin({ formatter }: { formatter: Unstable_DirectiveFormatter }) {
+export function ChipPastePlugin({ formatter }: { formatter: ComposerChipFormatter }) {
   const [editor] = useLexicalComposerContext();
   useEffect(
     () =>

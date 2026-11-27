@@ -14,12 +14,14 @@ import {
   $isTextNode,
   type LexicalEditor,
   type LexicalNode,
+  type PointType,
 } from 'lexical';
 import { $createDirectiveNode, $isDirectiveNode } from '@assistant-ui/react-lexical';
-import type { Unstable_DirectiveFormatter, Unstable_DirectiveSegment } from '@assistant-ui/react';
+import type { Unstable_DirectiveSegment } from '@assistant-ui/react';
 import { detectTrigger } from '@/components/trigger-engine/detect';
 import type { TriggerInsertRequest } from '@/components/trigger-engine/use-trigger-field';
 import { mentionDraft } from '../triggers/open-mention-trigger';
+import { type ComposerChipFormatter, segmentRange } from './composer-chip-formatter';
 
 /** Inside a read or update: the text node and token the caret closes, if the caret is in one. */
 function $tokenBeforeCaret(char: string) {
@@ -105,41 +107,80 @@ export function $readMaskedText(): string {
   return lines.join('\n');
 }
 
-function $segmentNodes(segments: readonly Unstable_DirectiveSegment[], formatter: Unstable_DirectiveFormatter) {
+/** Inside a read or update: the composer-text offset of a selection point, or of a node's start. */
+function $offsetOf(key: string, type: 'text' | 'element', offsetInPoint: number): number {
+  let offset = 0;
+  for (const paragraph of $getRoot().getChildren()) {
+    if (!$isElementNode(paragraph)) continue;
+    const children = paragraph.getChildren();
+    if (type === 'element' && paragraph.getKey() === key) {
+      return children.slice(0, offsetInPoint).reduce((sum, child) => sum + child.getTextContent().length, offset);
+    }
+    for (const child of children) {
+      if (child.getKey() === key) return offset + (type === 'text' ? offsetInPoint : 0);
+      offset += child.getTextContent().length;
+    }
+    offset += 1;
+  }
+  return offset;
+}
+
+const $pointOffset = (point: PointType) => $offsetOf(point.key, point.type, point.offset);
+
+/** Inside a read or update: where `node` starts in the composer text. */
+export const $nodeOffset = (node: LexicalNode) => $offsetOf(node.getKey(), 'text', 0);
+
+/** Segments as nodes; a `\n` inside a text segment becomes a line break. */
+function $segmentNodes(segments: readonly Unstable_DirectiveSegment[]): LexicalNode[] {
   const nodes: LexicalNode[] = [];
   for (const segment of segments) {
-    if (segment.kind === 'text') {
-      if (segment.text !== '') nodes.push($createTextNode(segment.text));
-    } else {
+    if (segment.kind !== 'text') {
       const item = { id: segment.id, type: segment.type, label: segment.label };
-      nodes.push($createDirectiveNode(item, formatter.serialize(item)));
+      nodes.push($createDirectiveNode(item, segment.label));
+      continue;
     }
+    segment.text.split('\n').forEach((line, index) => {
+      if (index > 0) nodes.push($createLineBreakNode());
+      if (line !== '') nodes.push($createTextNode(line));
+    });
   }
   return nodes;
 }
 
-const lines = (text: string) => text.replace(/\r\n?/g, '\n').split('\n');
+const normalize = (text: string) => text.replace(/\r\n?/g, '\n');
 
-/** Pasted plain text as nodes, with every token the formatter recognises as a chip. Null when it holds none. */
-export function $pastedNodes(text: string, formatter: Unstable_DirectiveFormatter): LexicalNode[] | null {
-  const parsed = lines(text).map((line) => formatter.parse(line));
-  if (!parsed.some((segments) => segments.some((s) => s.kind === 'mention'))) return null;
-  const nodes: LexicalNode[] = [];
-  parsed.forEach((segments, index) => {
-    if (index > 0) nodes.push($createLineBreakNode());
-    nodes.push(...$segmentNodes(segments, formatter));
-  });
-  return nodes;
+/**
+ * Inside an update: pasted plain text as nodes, or null when it holds no chip.
+ * The paste is read in place, between the text before and after the selection,
+ * so a token chips exactly when the message would show it as one: `/review`
+ * pasted after `please ` stays text, and so does `@x.com` pasted onto `mail`.
+ */
+export function $pastedNodes(text: string, formatter: ComposerChipFormatter): LexicalNode[] | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return null;
+  const [start, end] = selection.isBackward()
+    ? [selection.focus, selection.anchor]
+    : [selection.anchor, selection.focus];
+  const message = $readEditorText();
+  const before = message.slice(0, $pointOffset(start));
+  const pasted = normalize(text);
+  const whole = before + pasted + message.slice($pointOffset(end));
+  const segments = segmentRange(whole, formatter.tokens(whole), before.length, before.length + pasted.length);
+  return segments.some((segment) => segment.kind === 'mention') ? $segmentNodes(segments) : null;
 }
 
 /** Inside an update: replaces the whole content with `text`, one paragraph per line, tokens as chips. */
-export function $setEditorText(text: string, formatter: Unstable_DirectiveFormatter): void {
+export function $setEditorText(text: string, formatter: ComposerChipFormatter): void {
+  const message = normalize(text);
+  const tokens = formatter.tokens(message);
   const root = $getRoot();
   root.clear();
-  for (const line of lines(text)) {
+  let lineStart = 0;
+  for (const line of message.split('\n')) {
     const paragraph = $createParagraphNode();
-    paragraph.append(...$segmentNodes(formatter.parse(line), formatter));
+    paragraph.append(...$segmentNodes(segmentRange(message, tokens, lineStart, lineStart + line.length)));
     root.append(paragraph);
+    lineStart += line.length + 1;
   }
   root.selectEnd();
 }

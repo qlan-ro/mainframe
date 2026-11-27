@@ -29,7 +29,15 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { ComposerEditProvider } from '../edit/composer-edit-context';
 import { useComposerSegments } from '../segments/segment-store';
-import { FIELD_MODES, findField, placeholderOf, pressKey, setFieldMode, typeInto } from './composer-field-driver';
+import {
+  FIELD_MODES,
+  fieldText,
+  findField,
+  placeholderOf,
+  pressKey,
+  setFieldMode,
+  typeInto,
+} from './composer-field-driver';
 
 const cyclePermission = vi.fn();
 vi.mock('../config-toolbar/ComposerToolbar', () => ({
@@ -121,6 +129,9 @@ function Harness({ threadId = 'thread-1', running = false, started = false, onNe
   );
 }
 
+/** Lets any follow-up send land: a `waitFor` on the first call alone would pass with a second one queued behind it. */
+const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
 const steerFlag = (message: AppendMessage) =>
   (message.runConfig as { custom?: Record<string, unknown> } | undefined)?.custom?.mainframeSteer;
 
@@ -191,8 +202,11 @@ describe.each(FIELD_MODES)('composer field (%s)', (mode) => {
 
       pressKey(field, 'Enter');
 
-      await waitFor(() => expect(onNew).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(onNew).toHaveBeenCalled());
+      await settle();
+      expect(onNew).toHaveBeenCalledTimes(1);
       expect(onNew.mock.calls[0]![0].content).toEqual([{ type: 'text', text: 'hello' }]);
+      await waitFor(() => expect(fieldText(field)).toBe(''));
     });
 
     it('queues mid-run by default, and ⌥↵ steers', async () => {
@@ -202,10 +216,14 @@ describe.each(FIELD_MODES)('composer field (%s)', (mode) => {
 
       typeInto(field, 'one');
       const event = pressKey(field, 'Enter');
-      await waitFor(() => expect(onNew).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(onNew).toHaveBeenCalled());
+      await settle();
+      expect(onNew).toHaveBeenCalledTimes(1);
       typeInto(field, 'two');
       pressKey(field, 'Enter', { altKey: true });
       await waitFor(() => expect(onNew).toHaveBeenCalledTimes(2));
+      await settle();
+      expect(onNew).toHaveBeenCalledTimes(2);
 
       expect(event.defaultPrevented).toBe(true);
       expect(steerFlag(onNew.mock.calls[0]![0])).toBeUndefined();
@@ -300,15 +318,22 @@ describe.each(FIELD_MODES)('composer field (%s)', (mode) => {
       expect(field.contains(document.activeElement) || document.activeElement === field).toBe(true);
     });
 
-    it('closes an armed trigger first and leaves focus in the field', async () => {
-      render(<Harness />);
+    it('closes an armed trigger first and leaves focus in the field, so a following Enter is not swallowed', async () => {
+      const onNew = vi.fn();
+      render(<Harness onNew={onNew} />);
       const field = await findField();
       act(() => field.focus());
       typeInto(field, '/zzz');
 
       pressKey(field, 'Escape');
-
       expect(field.contains(document.activeElement) || document.activeElement === field).toBe(true);
+
+      const enter = pressKey(field, 'Enter');
+      await waitFor(() => expect(onNew).toHaveBeenCalled());
+      await settle();
+      expect(enter.defaultPrevented).toBe(true);
+      expect(onNew).toHaveBeenCalledTimes(1);
+      expect(onNew.mock.calls[0]![0].content).toEqual([{ type: 'text', text: '/zzz' }]);
     });
   });
 

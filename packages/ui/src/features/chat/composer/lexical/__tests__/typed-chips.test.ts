@@ -1,62 +1,12 @@
 /**
- * Typed tokens become chips once finished — on a headless Lexical editor, one
+ * Typed tokens become chips once finished, and a `/` chip that does not open
+ * the message turns back into text — on a headless Lexical editor, one
  * keystroke per update the way typing arrives.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  $createLineBreakNode,
-  $createParagraphNode,
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  $isRangeSelection,
-  $isTextNode,
-  createEditor,
-  type LexicalEditor,
-  type RangeSelection,
-} from 'lexical';
-import { $isDirectiveNode, DirectiveNode } from '@assistant-ui/react-lexical';
-import { registerTypedChips } from '../typed-chips';
-import { $readEditorText } from '../lexical-edits';
-
-function setup(): LexicalEditor {
-  const editor = createEditor({
-    nodes: [DirectiveNode],
-    onError: (error) => {
-      throw error;
-    },
-  });
-  editor.update(() => $getRoot().append($createParagraphNode()).selectEnd(), { discrete: true });
-  registerTypedChips(editor);
-  return editor;
-}
-
-function type(editor: LexicalEditor, text: string) {
-  for (const char of text) insert(editor, (selection) => selection.insertText(char));
-}
-
-/** The content as `[token]` for chips and plain text otherwise, plus the composer text. */
-function read(editor: LexicalEditor) {
-  return editor.getEditorState().read(() => {
-    const children = $getRoot()
-      .getChildren()
-      .flatMap((paragraph) => ($isElementNode(paragraph) ? paragraph.getChildren() : []));
-    const shape = children
-      .map((node) => ($isDirectiveNode(node) ? `[${node.getTextContent()}]` : node.getTextContent()))
-      .join('');
-    return { shape, text: $readEditorText() };
-  });
-}
-
-function insert(editor: LexicalEditor, edit: (selection: RangeSelection) => void) {
-  editor.update(
-    () => {
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) edit(selection);
-    },
-    { discrete: true },
-  );
-}
+import { $createParagraphNode, $createTextNode, $getRoot, $isTextNode } from 'lexical';
+import { $createDirectiveNode } from '@assistant-ui/react-lexical';
+import { insert, lineBreak, read, setup, type } from './headless-editor';
 
 describe('typed tokens become chips', () => {
   it('chips an @path once a space follows it, with the text unchanged', () => {
@@ -81,12 +31,26 @@ describe('typed tokens become chips', () => {
     expect(read(editor).shape).toBe('[/review] now and /later ');
   });
 
-  it('chips a /command that opens a new line', () => {
+  it('leaves a /command on a later line as text: only the message start opens one', () => {
     const editor = setup();
-    type(editor, 'first');
-    insert(editor, (selection) => selection.insertNodes([$createLineBreakNode()]));
-    type(editor, '/review ');
-    expect(read(editor)).toEqual({ shape: 'first\n[/review] ', text: 'first\n/review ' });
+    type(editor, 'hi');
+    lineBreak(editor);
+    type(editor, '/review now');
+    expect(read(editor)).toEqual({ shape: 'hi\n/review now', text: 'hi\n/review now' });
+  });
+
+  it('chips a /command after leading whitespace, as the transcript does', () => {
+    const editor = setup();
+    type(editor, '  /review now');
+    expect(read(editor).shape).toBe('  [/review] now');
+  });
+
+  it('chips a token that a line break closes', () => {
+    const editor = setup();
+    type(editor, 'see @src/a.ts');
+    lineBreak(editor);
+    type(editor, 'next ');
+    expect(read(editor)).toEqual({ shape: 'see [@src/a.ts]\nnext ', text: 'see @src/a.ts\nnext ' });
   });
 
   it('leaves a token alone while the caret is still in it', () => {
@@ -110,5 +74,59 @@ describe('typed tokens become chips', () => {
     const editor = setup();
     insert(editor, (selection) => selection.insertText('@a.ts and @b.ts done'));
     expect(read(editor).shape).toBe('[@a.ts] and [@b.ts] done');
+  });
+});
+
+/** Lines built the way react-lexical's SyncPlugin restores a draft: one paragraph per line, each line parsed alone. */
+function restore(editor: ReturnType<typeof setup>, lines: (string | { chip: string })[][]) {
+  editor.update(
+    () => {
+      const root = $getRoot().clear();
+      for (const line of lines) {
+        const paragraph = $createParagraphNode();
+        for (const part of line) {
+          paragraph.append(
+            typeof part === 'string'
+              ? $createTextNode(part)
+              : $createDirectiveNode(
+                  { id: part.chip.slice(1), type: part.chip.startsWith('/') ? 'command' : 'mention', label: part.chip },
+                  part.chip,
+                ),
+          );
+        }
+        root.append(paragraph);
+      }
+      root.selectEnd();
+    },
+    { discrete: true },
+  );
+}
+
+describe('chips restored line by line', () => {
+  it('turns a restored line-2 command back into text', () => {
+    const editor = setup();
+    restore(editor, [['hi'], [{ chip: '/review' }, ' now']]);
+    expect(read(editor)).toEqual({ shape: 'hi\n/review now', text: 'hi\n/review now' });
+  });
+
+  it('keeps the command that opens the message', () => {
+    const editor = setup();
+    restore(editor, [[{ chip: '/review' }, ' now'], ['more']]);
+    expect(read(editor).shape).toBe('[/review] now\nmore');
+  });
+
+  it('turns a command chip into text once text is typed before it', () => {
+    const editor = setup();
+    restore(editor, [[{ chip: '/review' }, ' now']]);
+    editor.update(() => $getRoot().getFirstDescendant()?.selectPrevious(), { discrete: true });
+    type(editor, 'x');
+    expect(read(editor)).toEqual({ shape: 'x/review now', text: 'x/review now' });
+  });
+
+  it('does not chip an @ typed right after a mention chip: a mention needs whitespace before it', () => {
+    const editor = setup();
+    restore(editor, [['see ', { chip: '@a.ts' }]]);
+    type(editor, '@b.ts now');
+    expect(read(editor).shape).toBe('see [@a.ts]@b.ts now');
   });
 });
