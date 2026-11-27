@@ -46,6 +46,9 @@ pub struct MainframeCapabilities {
     pub windowed_history: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_search: Option<bool>,
+    /// Whether `_mainframe.dev/history_around` is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_around: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lazy_tool_images: Option<bool>,
 }
@@ -119,6 +122,7 @@ mod tests {
             compressed_replay: None,
             windowed_history: None,
             history_search: None,
+            history_around: None,
             lazy_tool_images: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));

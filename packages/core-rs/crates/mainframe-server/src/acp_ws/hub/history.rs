@@ -34,6 +34,15 @@ impl FacadeHub {
         }
     }
 
+    /// Whether serving a page would first seed the chat's revision log, which
+    /// encodes the whole transcript. A caller holding the list borrowed under
+    /// the cache lock should take a copy instead.
+    pub(crate) fn history_seed_pending(&self, chat_id: &str) -> bool {
+        use mainframe_types::sync::LockExt as _;
+        self.revision_log_for_resume(self.has_revision_log(chat_id), chat_id)
+            .is_some_and(|log| !log.lock_recover().is_seeded())
+    }
+
     pub(crate) fn finish_history_page(
         &self,
         connection: &FacadeConnection,
@@ -103,4 +112,16 @@ pub(super) fn resume_floor(reply: &mainframe_types::acp::jsonrpc::JsonRpcRespons
         .get("history")?
         .get("floorItemId")?
         .as_str()
+}
+
+#[cfg(test)]
+impl FacadeHub {
+    /// Give `chat_id` an unseeded revision log, as a resume would.
+    pub(crate) fn open_revision_log_for_test(&self, chat_id: &str) {
+        self.revision_log_for_resume(true, chat_id);
+    }
+
+    pub(crate) fn reset_revision_epoch_for_test(&self, chat_id: &str) {
+        self.reset_revision_epoch(chat_id);
+    }
 }

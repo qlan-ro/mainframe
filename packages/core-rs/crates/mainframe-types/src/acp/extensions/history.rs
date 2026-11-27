@@ -54,6 +54,48 @@ pub struct HistoryPageResult {
     pub stale: Option<bool>,
 }
 
+/// `_mainframe.dev/history_around`: a page of items centred on one item,
+/// independent of the connection's history floor.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryAroundParams {
+    pub session_id: String,
+    pub item_id: String,
+    /// Items before the target; defaults to 20, clamps to 0..=200.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<i64>,
+    /// Items after the target; defaults to 20, clamps to 0..=200.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryAroundResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updates: Option<Vec<SessionUpdate>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batches: Option<Vec<ReplayBatchParams>>,
+    /// Whether the transcript holds items before `firstItemId`.
+    pub has_before: bool,
+    /// Whether the transcript holds items after `lastItemId`.
+    pub has_after: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_item_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_item_id: Option<String>,
+    /// The item the request resolved to (a container id resolves to its first
+    /// item, a tool-use id to its tool-call item).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_item_id: Option<String>,
+    /// Ancestors of the first items (such as a sub-agent's parent tool call)
+    /// sent only so the page renders; they precede `firstItemId`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_item_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistorySearchParams {
