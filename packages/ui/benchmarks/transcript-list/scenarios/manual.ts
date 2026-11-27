@@ -6,8 +6,8 @@
  */
 import { Recorder, frame, viewport } from '../probe';
 import { params } from '../params';
-import { store } from '../store';
 import { ready } from './setup';
+import { installOlderPageLoader, pickReaderAnchor } from './older-page';
 
 function show(text: string) {
   let hud = document.querySelector<HTMLDivElement>('.rig-manual');
@@ -20,26 +20,22 @@ function show(text: string) {
   hud.textContent = text;
 }
 
-async function measureLoad(recorder: Recorder, el: HTMLElement) {
-  const box = el.getBoundingClientRect();
-  // A short window may leave the viewport centre empty; fall back to the newest visible row.
-  const centre = document.elementFromPoint(box.left + el.clientWidth / 2, box.top + el.clientHeight / 2);
-  const rows = el.querySelectorAll('[data-message-id]');
-  recorder.anchor(
-    centre && el.contains(centre) && centre.closest('[data-message-id]') ? centre : rows[rows.length - 1]!,
-  );
-  // The page arrives after a daemon-like delay; the reader keeps scrolling meanwhile.
-  if (params.pageDelay > 0) {
-    const wait = params.pageDelay * (0.7 + Math.random() * 0.6);
-    await new Promise((resolve) => setTimeout(resolve, wait));
+/**
+ * The largest single-frame step of the reader's anchor over the load. An anchor that is gone (not
+ * mounted) counts as a jump (Infinity, shown as "lost"), never as a missing sample: dropping
+ * non-finite samples hid the jumps where the anchor left the viewport or was unmounted.
+ */
+export function largestStep(tops: (number | null)[]) {
+  let max = 0;
+  for (let i = 1; i < tops.length; i++) {
+    const from = tops[i - 1] ?? null;
+    const to = tops[i] ?? null;
+    max = Math.max(max, from === null || to === null ? Infinity : Math.abs(to - from));
   }
-  const from = recorder.samples.length;
-  store.prependPage();
-  for (let i = 0; i < 14; i++) await frame();
-  const window = recorder.samples.slice(from);
-  const steps = window.slice(1).map((s, i) => Math.abs((s.top ?? NaN) - (window[i]!.top ?? NaN)));
-  return Math.max(0, ...steps.filter(Number.isFinite));
+  return max;
 }
+
+const shown = (step: number) => (Number.isFinite(step) ? String(Math.round(step * 10) / 10) : 'lost');
 
 export async function startManual() {
   await ready();
@@ -48,28 +44,17 @@ export async function startManual() {
   recorder.anchor(el.querySelector('[data-message-id]')!);
   recorder.start();
   const steps: number[] = [];
-  let busy = false;
   show(`flick up: a page loads near the top (${params.pageDelay} ms ±30%)`);
-  // The app's rule (EarlierMessages `useOlderPageGesture`): an upward gesture arms a load, which
-  // fires once the reader is within one viewport of the top. A short window that doesn't fill the
-  // viewport has no scroll events, so the gesture itself must be able to fire the load.
-  let armed = false;
-  const check = () => {
-    if (!armed || busy || !store.hasMore() || el.scrollTop > el.clientHeight) return;
-    armed = false;
-    busy = true;
-    void measureLoad(recorder, el).then((step) => {
-      steps.push(Math.round(step * 10) / 10);
-      show(`loads ${steps.length} · steps ${steps.join(', ')} px · max ${Math.max(...steps)}`);
-      busy = false;
-    });
-  };
-  const gesture = (event: Event) => {
-    if (event instanceof WheelEvent && event.deltaY >= 0) return;
-    if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) return;
-    armed = true;
-    check();
-  };
-  for (const name of ['wheel', 'touchmove', 'keydown']) el.addEventListener(name, gesture, { passive: true });
-  el.addEventListener('scroll', check, { passive: true });
+  installOlderPageLoader(el, {
+    onRequest: () => pickReaderAnchor(recorder, el),
+    onLanded: () => {
+      const from = recorder.samples.length;
+      void (async () => {
+        for (let i = 0; i < 14; i++) await frame();
+        steps.push(largestStep(recorder.samples.slice(from).map((s) => s.top)));
+        const worst = Math.max(...steps);
+        show(`loads ${steps.length} · steps ${steps.map(shown).join(', ')} px · max ${shown(worst)}`);
+      })();
+    },
+  });
 }

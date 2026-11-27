@@ -5,6 +5,7 @@ import { params } from './params';
 import { CHAT_ID } from './store';
 
 export function openSomeTurns() {
+  if (params.shape === 'real') return;
   for (let i = 0; i < params.totalTurns; i += 3) {
     turnDisclosureStore.set(JSON.stringify([CHAT_ID, [], `t${i}-a1`]), 'open');
     disclosureStore.set(JSON.stringify([CHAT_ID, [], `t${i}-a1`, `tool:t${i}-read`]), true);

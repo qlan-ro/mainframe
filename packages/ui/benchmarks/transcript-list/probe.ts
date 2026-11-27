@@ -116,7 +116,8 @@ function readout(sample: Sample, samples: Sample[]) {
   const drift = sample.top === null ? Infinity : Math.abs(sample.top - base);
   const max = Math.max(Number(hud.dataset.max ?? 0), drift);
   hud.dataset.max = String(max);
-  hud.textContent = `drift ${drift.toFixed(1)} · max ${max.toFixed(1)} · gap ${sample.gap.toFixed(1)}`;
+  const text = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : 'lost');
+  hud.textContent = `drift ${text(drift)} · max ${text(max)} · gap ${sample.gap.toFixed(1)}`;
 }
 
 /** Largest |top - first top| per anchor. */

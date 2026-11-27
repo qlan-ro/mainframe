@@ -34,6 +34,13 @@ export const params = {
    * (after a compaction). The first upward scroll then has to load a page. Unset = `groups` turns.
    */
   windowItems: query.has('window') ? number('window', 2) : 0,
+  /**
+   * `shape=real`: the measured shape of a real tool-heavy chat's first window instead of the fixture's
+   * tall turns. It holds the newest 80 items, two folded turns (33 tool calls, 5 texts and 2 thoughts;
+   * 24 tool calls, 5 texts and 5 thoughts) between five short user messages, about one viewport tall,
+   * and each older page of 80 items adds about one more (`fixture-real.ts`).
+   */
+  shape: query.get('shape') === 'real' ? ('real' as const) : ('default' as const),
   pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
   /** Manual mode: the app's overlay scrollbar thumb, as in the app (it shows while scrolling or hovered). Off with `scrollbar=0`. */
   scrollbar: query.get('scrollbar') !== '0',
@@ -45,4 +52,6 @@ export const params = {
   /** Which react-dom the bundle was built with (`RIG_PROFILE=0` builds plain). */
   react: __RIG_REACT__,
   progressive: query.get('progressive') === '1',
+  /** v1: the owner with the short-window fix (`v1+fix`); `fix=2` is a scratch experiment. */
+  fixOwner: Number(query.get('fix') ?? 0),
 };

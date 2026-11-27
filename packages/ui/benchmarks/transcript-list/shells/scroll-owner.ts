@@ -16,6 +16,7 @@
  *   regroups; and on engines without `overflow-anchor`.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { params } from '../params';
 
 const PREPEND_EVENT = 'mainframe:history-prepend';
 const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
@@ -61,7 +62,12 @@ function listenForInput(viewport: HTMLElement, release: () => void, jump: () => 
 export function useScrollOwner() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const state = useRef({ following: true, movedDown: false, restore: null as null | ReturnType<typeof readerAnchor> });
+  const state = useRef({
+    following: true,
+    movedDown: false,
+    restore: null as null | ReturnType<typeof readerAnchor>,
+    shift: null as null | { row: HTMLElement; at: number; until: number },
+  });
   const jump = useCallback(() => {
     const viewport = viewportRef.current;
     state.current.following = true;
@@ -77,12 +83,44 @@ export function useScrollOwner() {
     const onResize = () => {
       const pending = current.restore;
       current.restore = null;
+      const shifting = current.shift;
+      if (shifting) {
+        const moved = shifting.row.isConnected
+          ? shifting.row.getBoundingClientRect().top - content.getBoundingClientRect().top - shifting.at
+          : 0;
+        if (Math.abs(moved) >= 0.5 || performance.now() > shifting.until || !shifting.row.isConnected) {
+          if (!current.following && shifting.row.isConnected) viewport.scrollTop += moved;
+          viewport.style.overflowAnchor = '';
+          current.shift = null;
+        }
+      }
       if (current.following) viewport.scrollTop = viewport.scrollHeight;
       else if (pending?.row.isConnected)
         viewport.scrollTop +=
           pending.row.getBoundingClientRect().top - viewport.getBoundingClientRect().top - pending.offset;
     };
     const beforePrepend = () => {
+      // FIX (short window): the browser does not hold the reader when a page lands while the reader is
+      // at or near offset 0 and still moving (WebKit's momentum). Take over for this landing: switch the
+      // browser's anchoring off, remember where the reader's block sits in the content, and after
+      // layout move scrollTop by exactly how far that block moved. The shift is measured in content
+      // coordinates, so scroll the reader did meanwhile is kept, unlike a restore of a viewport offset.
+      if (params.fixOwner === 1 && !current.following) {
+        const hit = readerAnchor(viewport);
+        if (hit) {
+          current.shift = {
+            row: hit.row,
+            at: hit.row.getBoundingClientRect().top - content.getBoundingClientRect().top,
+            until: performance.now() + 1000,
+          };
+          viewport.style.overflowAnchor = 'none';
+        }
+        return;
+      }
+      if (params.fixOwner === 2 && !current.following && viewport.scrollTop < viewport.clientHeight) {
+        current.restore = readerAnchor(viewport);
+        return;
+      }
       if (!current.following && (!anchoring || viewport.scrollTop < 1)) current.restore = readerAnchor(viewport);
     };
     const onScroll = () => {
