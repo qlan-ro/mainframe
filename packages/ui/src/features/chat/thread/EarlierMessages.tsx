@@ -104,7 +104,7 @@ function OwnedBoundary({
       tabIndex={-1}
       data-testid="chat-history-boundary"
       data-state={state}
-      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground outline-none"
+      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground outline-none focus-visible:focus-line"
       aria-live="polite"
       aria-busy={held}
     >
