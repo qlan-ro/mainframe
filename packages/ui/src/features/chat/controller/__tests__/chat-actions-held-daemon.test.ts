@@ -26,6 +26,7 @@ it('records an in-flight held send on its starting daemon and leaves the remaini
     dispatch: vi.fn(),
     load: () => Promise.resolve(),
     sendPrompt,
+    announceUserSend: vi.fn(),
   };
 
   try {
