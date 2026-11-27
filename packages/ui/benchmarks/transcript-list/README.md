@@ -13,6 +13,7 @@ No app, daemon, or provider is involved, and nothing in `src/` changes. The page
 | `v1s` | Plain rows as `MessageScroller.Item`s | shadcn Message Scroller, `@shadcn/react` 0.3.1 | On (the library relies on it) |
 | `v1s-patched` | The same, from the vendored copy in `vendor/` (MIT, see its `LICENSE.md`) with two marked patches: only an upward wheel releases follow, and follow runs inside the ResizeObserver callback | shadcn Message Scroller, patched | On |
 | `v1+fix`      | As `v1`, with the short-window fix in `shells/scroll-owner.ts` (`?fix=1`)                                                                                                                   | As `v1`, plus: when a page is about to land and the reader is not following, take over the landing: anchoring off for it, shift `scrollTop` by how far the reader's block moved in the content | Off for the landing, on otherwise |
+| `app` | The app's own list behind Settings › Chat: the real `use-scroll-owner.ts`, `PlainMessages` (tail-first mount) and `EarlierMessages` (with its loading state) in a viewport laid out as `OwnedChatThreadViewport` lays it out, composer stubbed | `features/chat/thread/use-scroll-owner.ts` | On |
 | `v1+near` | As `v1`, with the near-top correction (`?near=1`): a relative `scrollBy` after layout when the browser did not hold a page landing within a viewport of the top | `shells/scroll-owner.ts` | On |
 | `v2` | LegendList 3.7.2, one row per message (the fixture cuts a turn into messages of one or two parts) | LegendList | n/a (it positions rows itself) |
 

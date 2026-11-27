@@ -20,6 +20,7 @@ import { createAttachmentAdapter } from '../attachment-adapter';
 import { useComposerSegments } from '../segments/segment-store';
 import { ComposerEditProvider } from '../edit/composer-edit-context';
 import { useThreadBottomPin } from '../../thread/use-thread-bottom-pin';
+import { useScrollOwner } from '../../thread/use-scroll-owner';
 import { createViewport, installPinDoubles } from '../../thread/__tests__/pin-viewport-fixture';
 import { CHAT_ID, makeController, userMessageUpdate } from '../../controller/__tests__/acp-test-kit';
 import { findField, pressKey, typeInto } from './composer-field-driver';
@@ -132,16 +133,32 @@ function mountScrolledUpPin() {
   return { viewport, pin: () => hook.result.current };
 }
 
+/** The plain list's scroll owner on the same viewport, scrolled up the same way. */
+function mountScrolledUpOwner() {
+  const viewport = createViewport();
+  const hook = renderHook(() => useScrollOwner(CHAT_ID, undefined));
+  act(() => {
+    hook.result.current.setViewport(viewport.element);
+    hook.result.current.setContent(document.createElement('div'));
+  });
+  act(() => viewport.scrollTo(250));
+  expect(hook.result.current.isPinned()).toBe(false);
+  return { viewport, pin: () => hook.result.current };
+}
+
 beforeEach(() => {
   localStorage.clear();
   useComposerSegments.setState({ byThread: {} });
 });
 afterEach(() => vi.clearAllMocks());
 
-describe('composer submit re-pins the transcript', () => {
+describe.each([
+  ['the virtualized list’s bottom pin', mountScrolledUpPin],
+  ['the plain list’s scroll owner', mountScrolledUpOwner],
+])('composer submit re-pins the transcript (%s)', (_name, mountScrolledUp) => {
   it('jumps a reader who scrolled up to the end when they send from the composer', async () => {
     const rig = makeController();
-    const { viewport, pin } = mountScrolledUpPin();
+    const { viewport, pin } = mountScrolledUp();
     render(<Harness ctrl={rig.ctrl} />);
     const field = await findField();
 
@@ -156,7 +173,7 @@ describe('composer submit re-pins the transcript', () => {
   it('leaves the reader where they are when an agent-sent prompt arrives', async () => {
     const rig = makeController();
     await rig.ctrl.load();
-    const { viewport, pin } = mountScrolledUpPin();
+    const { viewport, pin } = mountScrolledUp();
 
     // Another agent's prompt, or one the daemon dispatches itself, is a transcript update, not a user send.
     act(() => rig.acpClient.emitUpdate(CHAT_ID, userMessageUpdate('m1', 'prompt from another agent')));

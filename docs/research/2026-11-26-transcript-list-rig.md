@@ -632,3 +632,24 @@ The ledger's noise floor for `v1+near` is 0/0/0 px. P1 to P5 in the same pass, o
 So "pass" in the table means the owner held the landing in every run. The two cells above can show a 60 to 240 px ledger artifact under load, and any gate that reads them should repeat the cell and look at the landing frame. The three real-shape cells and the parked cells passed in all four runs.
 
 **What this closes and what it does not.** The owner's case, a real-shape first window with momentum flicks at the top, now holds (0 px against 537 px), and the owner holds every other S-top cell it held before. Not covered: Chromium and Playwright WebKit for the fix (WKWebView only, as the owner's rule says), a real trackpad, and `v1+progressive` with the fix (step 2 re-anchors per slice).
+
+### 9.8 The app's own list in the rig (#461 step 3)
+
+The rig now mounts the code the app ships. The `app` variant (`?v=app`, `shells/AppShell.tsx`) uses the real scroll owner (`features/chat/thread/use-scroll-owner.ts`), the real plain list with its tail-first mount (`PlainMessages`), the real boundary row (`EarlierMessages`, including its loading spinner, which the rig now drives: the older-page loader and P1 and P2 set `historyWindow.loading` while a page is in flight) and the real `TurnTranscript`, in a viewport laid out as the app lays it out. Only the composer is a stub. `v1`'s shell and owner stay as the proof's reference.
+
+**WKWebView, one pass per cell, load average 2.6 to 15.8 (recorded, not waited out):**
+
+| Case | `app` |
+| --- | --- |
+| P1 / P1 at offset 0 | pass 0.2 px / pass 0.8 px |
+| P2 | pass, end 0.2 px, against 0 px (control 0 px) |
+| P3 | pass, image 0/0, code 0/0, fold 0.3/0.3 |
+| P4 | pass, follow gap 0 px, the upward wheel releases and the jump takes 1 frame; the downward wheel keeps following (repetitions below) |
+| P5 | pass, rows at the tail on the first visible frame, 0 hidden frames, 58 ms to the tail (the one-shot mount took 342 to 553 ms) |
+| S-top `window=2`, from the tail, -60 / -300 / flicks | pass 0.2 / pass 0.2 / pass 0.2 |
+| S-top `window=2`, parked at 0, -60 / -300 / flicks | pass 0.8 / pass 0.8 / pass 0.8 |
+| **S-top real shape, -60 / -300 / momentum flicks** | **pass 0 (4 loads) / pass 0 (2 loads) / pass 0, pinned 0 (3 loads)** |
+
+Ledger noise floor: 0/0/0 px. Three repetitions of the same cells gave the real-shape and parked cells the same result every time. `window=2` from the tail repeated as in 9.7: -60 px steps showed 60.2 px in 1 of 3, and -300 px steps 291.2 px in 3 of 3, both with an end residual of 0.2. The trace of the -300 case shows the anchor at -15.19 against a baseline of -15 in the landing frame, then a single 591 px frame after a 75 ms main-thread stall (the 51-message page, 17,499 px, mounts in that frame while two wheel events queue and are applied together), which is the ledger's lag limit and not a landing the owner lost. The stall is the cost of a page that large; #462's bound on the window is what keeps it down. The loading spinner appears and goes in the same runs with no effect on the result: the boundary row is 48 px in every state. P4 downward wheel kept following in 2 of 2 completed repetitions (the third lost its web process, and part 1's single pass lost it once, an error record in the JSON). Raw results: [`results/app-wk.json`](../../packages/ui/benchmarks/transcript-list/results/app-wk.json).
+
+**Manual mode** (`?manual=1`) no longer draws the overlay scrollbar thumb by default, as the app's transcript has none (it jumped and resized as pages landed); `scrollbar=1` brings it back.

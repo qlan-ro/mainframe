@@ -135,6 +135,7 @@ export function useScrollOwner(threadId: string | null, chatId: string | undefin
   useEffect(() => {
     if (!viewport || !content) return;
     const current = state.current;
+    current.lastTop = viewport.scrollTop;
     const onResize = () => {
       if (viewport.clientHeight === 0) return;
       const pending = current.restore;

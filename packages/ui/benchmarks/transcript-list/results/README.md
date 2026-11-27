@@ -13,3 +13,4 @@ The JSON behind every cell of [the report](../../../../../docs/research/2026-11-
 
 Summarize with `node ../driver/summarize.mjs matrix-chromium.json` (add `ab-980-*.json` for the A/B).
 | `s-top-near-wk.json` | The near-top correction (`v1+near`, report section 9.7): one pass of P1 to P5, S-top and S-noise, then three repetitions of S-top and P4, with plain `v1` on two cells for comparison. WKWebView, load average 9.7 to 10.7 | profiling |
+| `app-wk.json` | The app's own list (`?v=app`, report section 9.8): one pass of P1 to P5, S-top and S-noise, then three repetitions of S-top and P4. WKWebView, load average 2.6 to 15.8 | profiling |
