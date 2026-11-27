@@ -193,3 +193,33 @@ it.each([
     vi.unstubAllGlobals();
   }
 });
+
+it('fills a short first window and the page lands with the reader still at the bottom', () => {
+  const frames = new Map<number, FrameRequestCallback>();
+  let id = 0;
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++id, callback);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame));
+  try {
+    Object.defineProperty(viewport, 'scrollHeight', { value: 600, configurable: true });
+    const view = harness(true);
+    for (let i = 0; i < 5; i++)
+      act(() => {
+        const due = [...frames.values()];
+        frames.clear();
+        due.forEach((callback) => callback(0));
+      });
+    expect(f.load).toHaveBeenCalledTimes(1);
+    // The plane announces the page, then the container list grows above the reader.
+    act(() => window.dispatchEvent(new CustomEvent(HISTORY_PREPEND_EVENT, { detail: 'chat' })));
+    Object.defineProperty(viewport, 'scrollHeight', { value: 900, configurable: true });
+    viewport.scrollTop = 0;
+    view.prepend();
+    expect(viewport.scrollTop).toBe(900);
+    expect(view.release).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

@@ -6,6 +6,7 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
 
 import { usePrependAnchor } from './use-prepend-anchor';
+import { useFillShortWindow } from './use-fill-short-window';
 export { HISTORY_PREPEND_EVENT } from './use-prepend-anchor';
 
 const SCROLL_GESTURES = ['wheel', 'touchmove', 'keydown', SCROLLBAR_DRAG_EVENT];
@@ -17,6 +18,13 @@ export function EarlierMessages() {
   const anchoring = usePrependAnchor(firstId, extras?.state.chatId, history?.floorItemId);
   const loading = history?.loading === true || anchoring;
   useOlderPageGesture(extras?.loadEarlier, history?.hasMore === true, loading);
+  useFillShortWindow(
+    extras?.state.chatId,
+    extras?.loadEarlier,
+    history?.hasMore === true,
+    loading,
+    history?.floorItemId,
+  );
   if (!firstId) return null;
   return (
     <div
