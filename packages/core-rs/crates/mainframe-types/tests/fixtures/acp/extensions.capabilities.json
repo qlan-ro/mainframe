@@ -14,5 +14,6 @@
   "historySearch": true,
   "historyAround": true,
   "historyAroundDescendants": true,
-  "lazyToolImages": true
+  "lazyToolImages": true,
+  "binaryHistoryFrames": true
 }

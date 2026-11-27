@@ -8,7 +8,7 @@ import { RpcConnection, type AcpSocketLike } from '../acp-rpc-connection';
 
 class FakeSocket implements AcpSocketLike {
   onopen: (() => void) | null = null;
-  onmessage: ((ev: { data: string }) => void) | null = null;
+  onmessage: ((ev: { data: string | ArrayBuffer }) => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
   sent: unknown[] = [];

@@ -158,6 +158,8 @@ async fn dispatch_fallback(
         .is_some_and(|params| mainframe_acp::client_opts_into_compressed_replay(Some(params)));
     let windowed = initialize_params(&frame)
         .is_some_and(|params| mainframe_acp::client_opts_into_windowed_history(Some(params)));
+    let binary_history = initialize_params(&frame)
+        .is_some_and(|params| mainframe_acp::client_opts_into_binary_history_frames(Some(params)));
     let lazy_images = initialize_params(&frame)
         .is_some_and(|params| params["_meta"]["_mainframe.dev"]["lazyToolImages"] == true);
     let outcome = dispatch_with_prompt(frame, daemon, ports, connection.is_negotiated()).await;
@@ -165,6 +167,9 @@ async fn dispatch_fallback(
         connection.mark_negotiated();
         if lazy_images {
             connection.mark_lazy_tool_images_opted_in();
+        }
+        if binary_history {
+            connection.mark_binary_history_frames_opted_in();
         }
         if windowed {
             connection.mark_windowed_history_opted_in();

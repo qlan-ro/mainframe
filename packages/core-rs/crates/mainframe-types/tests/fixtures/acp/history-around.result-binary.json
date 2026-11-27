@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic",
+  "batchFrames": 1,
+  "hasBefore": true,
+  "hasAfter": false,
+  "firstItemId": "message:0:top:m3",
+  "lastItemId": "tool:call-9",
+  "targetItemId": "tool:call-7"
+}

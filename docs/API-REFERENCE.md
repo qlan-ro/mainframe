@@ -832,7 +832,8 @@ route uses. `?token=` works exactly as it does on `/`.
 response's `_meta["_mainframe.dev"]` carries `MainframeCapabilities`
 (`richPermissionAnswers`, `queuedPrompts`, `retryMarkers`,
 `heartbeatIntervalMs`, `itemCreationMarkers`, `replayComplete`,
-`revisionCursors`, `replayResultPreviews`, `compressedReplay`) — a generic ACP
+`revisionCursors`, `replayResultPreviews`, `compressedReplay`,
+`binaryHistoryFrames`, …) — a generic ACP
 client that ignores this namespace gets a degraded but coherent experience
 (plain option-only gates, no queued-turn metadata, no staged replay, item
 cursors only, full uncompressed replays).
@@ -873,6 +874,47 @@ frames are never batched. The daemon's WebSocket stack has no
 permessage-deflate, so this is where the replay's five-to-tenfold
 compression lives.
 
+**Binary history frames (todo #489).** A client opts in with its
+`initialize` request `_meta["_mainframe.dev"]`: `{binaryHistoryFrames: true}`
+(the daemon advertises `binaryHistoryFrames: true`). It changes how
+`_mainframe.dev/history_page`, `history_around` and `subagent_history_page`
+carry their updates, and nothing else: `session/resume` replays and live
+frames keep their form. For an opted-in connection the JSON-RPC result has
+`batchFrames: N` in place of `updates` and `batches`, and the N batches
+(each up to 256 `session/update` payloads, a zlib-deflated JSON array, the same
+bytes `replay_batch` base64-encodes) travel as separate **binary WebSocket
+messages** tied to the response by request id. `N` is `0` for a page with no
+updates. A client inflates with the platform decoder (`DecompressionStream`,
+format `deflate`) and applies the updates exactly as for `batches`.
+
+Frame layout, big-endian, pinned by
+`mainframe-types/tests/fixtures/acp/binary-frame.golden.hex`:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | version, `1` |
+| 1 | 1 | encoding, `1` = zlib-deflated JSON array |
+| 2 | 2 | this frame's index in the response, from `0` |
+| 4 | 2 | frames in the response (equals `batchFrames`) |
+| 6 | 2 | updates in this frame |
+| 8 | 2 | request id length `n` in bytes |
+| 10 | `n` | request id, UTF-8 (a number as its decimal string) |
+| 10 + `n` | rest | the compressed bytes |
+
+The daemon sends a response's frames before the response, but the two travel on
+separate queues and other messages may sit between them, so a client must pair
+them by id and index in either order and treat a response as complete only when
+all `N` frames are in. It must fail that request whole, never apply part of it,
+when a frame does not inflate, does not parse as an array, repeats an index or
+disagrees about the total; a frame for a request that is no longer waiting is
+dropped. Messages that follow a binary response on the wire must not overtake
+it (the reference client holds them while the response inflates). A client
+that does not opt in gets exactly the `batches` or `updates` form and never
+receives a binary message; a daemon that does not advertise the capability
+ignores the opt-in and answers with `batches`, so a client reads both forms.
+Request ids that do not fit the header (over 65535 bytes) get an error reply.
+Mobile keeps working unchanged: it never sets the key.
+
 **Methods and notifications (shipped grammar):**
 
 | Method / notification | Direction | Purpose |
@@ -882,7 +924,7 @@ compression lives.
 | `session/cancel` | client → daemon (notification) | End the turn with a cancelled stop reason; cancels open gates. |
 | `session/resume` | client → daemon | Replay from an opaque `replayFrom` cursor (`{type:"start"}`, `{type:"item",itemId}`, or — for an opted-in connection, todo #377 — `{type:"revision",epoch,revision}`); the response's `_meta["_mainframe.dev"].itemCount` is the size of the server's full snapshot (a client holding items refuses an `itemCount: 0` blanking re-seed — the "no history session yet" degenerate read); an unknown/pre-compaction cursor, an unknown epoch, or a revision outside the retained range falls back to a full replay adding `fullReplay: true`. An opted-in connection's reply also carries `_meta["_mainframe.dev"].cursor: {epoch, revision}` regardless of which cursor shape the request used — the boundary the reply's updates converge the client to. |
 | `_mainframe.dev/cursor` | daemon → client (notification) | `{sessionId, epoch, revision}` (todo #377) — sent only to a connection that opted into revision cursors, after the `session/update` frames of the display revision it describes (same per-session throttle FIFO, coalesced to the last cursor per flushed batch). Receiving it means the client now holds every change through `revision`; the client advances its durable cursor only then, never ahead of applied data. |
-| `_mainframe.dev/history_page` | client → daemon | On a `windowedHistory` connection: `{sessionId, before, containers?, untilItemId?}` returns `{updates? , batches?, hasMore, floorItemId?, stale?}`. `before` must be the attached session's current floor. Counts default to 40 and clamp to 1..200; pages snap backward to a user prompt within eight containers. `untilItemId` loads the whole gap through its container without a count limit, working on a copy of the list rather than holding the cache lock. An unknown floor or target returns `stale:true` without changing the window. Compressed connections receive `batches` using the `replay_batch` payload. The page is seeded and replied before buffered live changes are delivered. |
+| `_mainframe.dev/history_page` | client → daemon | On a `windowedHistory` connection: `{sessionId, before, containers?, untilItemId?}` returns `{updates? , batches?, hasMore, floorItemId?, stale?}`. `before` must be the attached session's current floor. Counts default to 40 and clamp to 1..200; pages snap backward to a user prompt within eight containers. `untilItemId` loads the whole gap through its container without a count limit, working on a copy of the list rather than holding the cache lock. An unknown floor or target returns `stale:true` without changing the window. Compressed connections receive `batches` using the `replay_batch` payload; with `binaryHistoryFrames` they receive `batchFrames` and binary frames instead. The page is seeded and replied before buffered live changes are delivered. |
 | `_mainframe.dev/history_around` | client → daemon | Advertised as `historyAround: true`. `{sessionId, itemId, before?, after?, includeDescendants?}` returns `{updates?, batches?, hasBefore, hasAfter, firstItemId?, lastItemId?, targetItemId?, contextItemIds?, hasMoreDescendants?, stale?}`: the items from `before` items ahead of the target through `after` items past it (counts default to 20 and clamp to 0..200, so one request never exceeds 401 items). `itemId` is an item id, a tool-use id, or a container id (which resolves to its first item). The window is cut by item, so it may start or end inside a container and may cross turn boundaries; when the cut separates a sub-agent's item from its parent tool call, the ancestors precede `firstItemId` and are listed in `contextItemIds`. The call is stateless: it does not read or move the connection's history floor, so `history_page` keeps working from the floor it had, and it needs no `windowedHistory` opt-in. `hasBefore` and `hasAfter` say whether more items exist outside the window. An unknown id returns `stale:true`. Previews, lazy images and compressed `batches` follow the connection's opt-ins, as for `history_page`. Served from the cached display list without copying it; a panic while serving returns an internal error and leaves the chat's live stream untouched. `includeDescendants: true` (advertised as `historyAroundDescendants: true`) also returns the target's descendants whatever `after` says: a sub-agent's steps are items of the target's container that name their parent by `parentToolCallId`, and the transitive chain is included (nested agents too), up to 400 items. `hasMoreDescendants: true` says the cap cut them short: the newest 400 are kept, and the window then starts at the oldest kept descendant, which replaces the `before` context (the target arrives as a `contextItemIds` ancestor). `hasAfter` still reports items beyond the last returned one. A client that cannot rely on the capability must not assume the steps came. A window is a snapshot, not a live range. The connection's stream drops changes that land below its history floor, so a client holding a window must re-fetch it on `resync`, compaction, or turn end. A running sub-agent's parent Task call can sit below the floor, so a sub-agent tab built from this call must re-fetch or its status freezes. Follow-up windows repeat the anchor, and `contextItemIds` items reappear in later windows, so merge by item id. `hasAfter` (and `hasBefore`) can be true when only queued containers, which have no items yet, remain beyond the window. A container id that exists but is queued is valid, not stale: it returns no items, `firstItemId` absent and `stale` absent. |
 | `_mainframe.dev/subagent_history_page` | client → daemon | `{sessionId, agentId, before?, containers?, untilItemId?}` returns the same shape as `history_page`. `agentId` accepts the Claude agent ID or the parent Agent/Task tool-use ID. Omit `before` to open the latest page. Use the returned `floorItemId` as `before` for earlier pages. The child cursor is independent of the parent connection's history floor. |
 | `_mainframe.dev/subagent_history_search` | client → daemon | `{sessionId, agentId, query}` returns the same shape as `history_search`, scoped to the selected child. |

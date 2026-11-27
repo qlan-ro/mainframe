@@ -12,17 +12,33 @@ import {
   type HistorySearchResult,
 } from '@qlan-ro/mainframe-types';
 import type { RpcConnection } from './acp-rpc-connection';
-import { decodeReplayBatch } from './acp-replay-batch';
+import { decodeReplayBatch, validateBatchUpdates } from './acp-replay-batch';
 
 export type SubagentPageParams = SubagentHistoryPageParams;
 
-/** Folds a result's compressed `batches` into `updates`, checking them against the session. */
-function decodeBatches<T extends { updates?: unknown[]; batches?: Parameters<typeof decodeReplayBatch>[0][] }>(
-  page: T,
-  sessionId: string,
-  what: string,
-): void {
-  if (page.updates && page.batches) throw new Error(`${what} has two update encodings`);
+/**
+ * Folds a result's compressed batches into `updates`, checking them against
+ * the session: base64 `batches` from an older daemon, or `inflatedBatches` the
+ * transport inflated from binary frames. Either way an unusable batch fails
+ * the whole page.
+ */
+function decodeBatches<
+  T extends {
+    updates?: unknown[];
+    batches?: Parameters<typeof decodeReplayBatch>[0][];
+    inflatedBatches?: { count: number; updates: unknown[] }[];
+  },
+>(page: T, sessionId: string, what: string): void {
+  const encodings = [page.updates, page.batches, page.inflatedBatches].filter((value) => value !== undefined);
+  if (encodings.length > 1) throw new Error(`${what} has two update encodings`);
+  if (page.inflatedBatches) {
+    page.updates = page.inflatedBatches.flatMap((batch) => {
+      const updates = validateBatchUpdates(batch.updates, batch.count);
+      if (updates.length !== batch.count) throw new Error(`Invalid ${what.toLowerCase()} batch`);
+      return updates;
+    });
+    return;
+  }
   if (!page.batches) return;
   page.updates = page.batches.flatMap((batch) => {
     const updates = decodeReplayBatch(batch);

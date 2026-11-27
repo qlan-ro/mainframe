@@ -171,7 +171,10 @@ function branchFit(branch: JsonSchemaNode, value: Record<string, unknown>): numb
 
 /** The best-matching object-shaped branch, or `undefined` if every branch is open (`z.unknown()`, a bare `null` arm) and the key set is unconstrained by construction. */
 function branchFor(branches: JsonSchemaNode[], value: Record<string, unknown>): JsonSchemaNode | undefined {
-  const candidates = branches.filter((branch) => branch.properties);
+  // A nested tagged union (`update.ts`'s `state_update` family) contributes its own branches.
+  const flatten = (nodes: JsonSchemaNode[]): JsonSchemaNode[] =>
+    nodes.flatMap((node) => ((node.oneOf ?? node.anyOf) ? flatten((node.oneOf ?? node.anyOf)!) : [node]));
+  const candidates = flatten(branches).filter((branch) => branch.properties);
   if (candidates.length === 0) return undefined;
   const [best] = candidates.map((branch) => [branch, branchFit(branch, value)] as const).sort(([, a], [, b]) => b - a);
   return best?.[0];

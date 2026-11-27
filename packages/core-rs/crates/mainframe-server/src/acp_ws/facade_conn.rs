@@ -24,6 +24,10 @@ pub use slots::{PendingGate, SessionLockWait};
 pub struct FacadeConnection {
     pub profile: String,
     tx: mpsc::UnboundedSender<String>,
+    /// Binary history frames, drained by the same socket loop as `tx`. The
+    /// receiver is taken once by that loop (`take_binary_frames`).
+    binary_tx: mpsc::UnboundedSender<Vec<u8>>,
+    binary_rx: Mutex<Option<mpsc::UnboundedReceiver<Vec<u8>>>>,
     sessions: Mutex<HashMap<String, SessionSlot>>,
     pending_gates: Mutex<HashMap<String, PendingGate>>,
     /// Set once a successful `initialize` negotiates the pinned protocol
@@ -46,6 +50,7 @@ pub struct FacadeConnection {
     compressed_replay_opted_in: AtomicBool,
     windowed_history_opted_in: AtomicBool,
     lazy_tool_images_opted_in: AtomicBool,
+    binary_history_frames_opted_in: AtomicBool,
     /// One `tokio::sync::Mutex` per session, held for the duration of a spawned
     /// `session/prompt`. Serializes concurrent prompts for the SAME session —
     /// queue position and the queue's tail ordering both depend on which of two
@@ -61,9 +66,12 @@ pub struct FacadeConnection {
 
 impl FacadeConnection {
     pub(super) fn new(profile: String, tx: mpsc::UnboundedSender<String>) -> Self {
+        let (binary_tx, binary_rx) = mpsc::unbounded_channel();
         Self {
             profile,
             tx,
+            binary_tx,
+            binary_rx: Mutex::new(Some(binary_rx)),
             sessions: Mutex::new(HashMap::new()),
             pending_gates: Mutex::new(HashMap::new()),
             negotiated: AtomicBool::new(false),
@@ -72,6 +80,7 @@ impl FacadeConnection {
             compressed_replay_opted_in: AtomicBool::new(false),
             windowed_history_opted_in: AtomicBool::new(false),
             lazy_tool_images_opted_in: AtomicBool::new(false),
+            binary_history_frames_opted_in: AtomicBool::new(false),
             prompt_locks: mainframe_runtime::sync::KeyedMutex::default(),
             resume_failures: Mutex::new(HashMap::new()),
         }

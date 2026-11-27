@@ -92,10 +92,45 @@ async fn handle_incoming(
 
 /// One hub-pushed outbound frame. Returns whether the socket loop should
 /// break.
-async fn handle_outbound(frame: Option<String>, socket: &mut WebSocket) -> bool {
+///
+/// Binary history frames queued before this text frame go out first, so the
+/// frames of a history response precede the response itself on the wire.
+async fn handle_outbound(
+    frame: Option<String>,
+    binary: &mut Option<tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>>,
+    socket: &mut WebSocket,
+) -> bool {
+    let Some(payload) = frame else {
+        return true;
+    };
+    if let Some(queue) = binary {
+        while let Ok(frame) = queue.try_recv() {
+            if socket.send(Message::Binary(frame.into())).await.is_err() {
+                return true;
+            }
+        }
+    }
+    socket.send(Message::Text(payload.into())).await.is_err()
+}
+
+/// The next binary history frame, or never when the channel is gone.
+async fn recv_binary(
+    binary: &mut Option<tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>>,
+) -> Option<Vec<u8>> {
+    match binary {
+        Some(receiver) => match receiver.recv().await {
+            Some(frame) => Some(frame),
+            None => std::future::pending().await,
+        },
+        None => std::future::pending().await,
+    }
+}
+
+/// One binary history frame. Returns whether the socket loop should break.
+async fn handle_binary(frame: Option<Vec<u8>>, socket: &mut WebSocket) -> bool {
     match frame {
-        Some(payload) => socket.send(Message::Text(payload.into())).await.is_err(),
-        None => true,
+        Some(payload) => socket.send(Message::Binary(payload.into())).await.is_err(),
+        None => false,
     }
 }
 
@@ -113,6 +148,7 @@ async fn handle_heartbeat_tick(sequence: u64, socket: &mut WebSocket) -> bool {
 /// heartbeat ticker, and the throttle flush tick until either side closes.
 async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: String) {
     let (client_id, connection, mut outbound) = ctx.chat.facade_hub.register(profile);
+    let mut binary = connection.take_binary_frames();
 
     let daemon = DaemonInfo {
         version: ctx.core.version.clone(),
@@ -127,7 +163,8 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
             incoming = socket.recv() => {
                 handle_incoming(incoming, &daemon, &ctx, &connection, &mut socket).await
             }
-            frame = outbound.recv() => handle_outbound(frame, &mut socket).await,
+            frame = outbound.recv() => handle_outbound(frame, &mut binary, &mut socket).await,
+            frame = recv_binary(&mut binary) => handle_binary(frame, &mut socket).await,
             _ = heartbeat.tick() => {
                 sequence += 1;
                 handle_heartbeat_tick(sequence, &mut socket).await

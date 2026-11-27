@@ -76,3 +76,20 @@ fn batches_are_much_smaller_than_the_frames_they_replace() {
         .sum();
     assert!(batched * 5 < plain, "plain {plain} vs batched {batched}");
 }
+
+#[test]
+fn frames_are_cut_like_batches_and_inflate_to_the_same_updates() {
+    let updates: Vec<_> = (0..REPLAY_BATCH_MAX_UPDATES * 2 + 5).map(chunk).collect();
+    let frames = replay_batch_frames("chat_1", &updates);
+    let batches = replay_batch_notifications("chat_1", &updates);
+    assert_eq!(
+        frames.iter().map(|frame| frame.count).collect::<Vec<_>>(),
+        [REPLAY_BATCH_MAX_UPDATES, REPLAY_BATCH_MAX_UPDATES, 5]
+    );
+    for (frame, note) in frames.iter().zip(&batches) {
+        let params = note.params.as_ref().unwrap();
+        let from_text = STANDARD.decode(params["data"].as_str().unwrap()).unwrap();
+        assert_eq!(frame.bytes, from_text);
+    }
+    assert!(replay_batch_frames("chat_1", &[]).is_empty());
+}
