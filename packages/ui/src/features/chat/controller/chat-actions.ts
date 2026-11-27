@@ -228,12 +228,13 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
       const { messageId, content, attachmentIds } = row;
       // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
       if (!held.startSending(chatId, messageId, press)) continue;
+      // Once, as the first row starts going out and before the prompt resolves, like `sendChatMessage`:
+      // a CLI cold start must not land the jump on a reader who has since scrolled on.
+      if (!announced) host.announceUserSend();
+      announced = true;
       let queuedMessageId: string | undefined;
       try {
         ({ queuedMessageId } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));
-        // Once, with the first row the daemon has: the press went out.
-        if (!announced) host.announceUserSend();
-        announced = true;
       } catch (error) {
         const reason = sendRefusal(error);
         if (reason !== undefined) {

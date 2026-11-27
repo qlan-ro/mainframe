@@ -92,6 +92,21 @@ describe('AcpChatController — the user’s own sends', () => {
     expect(heard).toHaveBeenCalledOnce();
   });
 
+  it('Send now announces as the row starts going out, before the daemon answers', async () => {
+    const { ctrl, acpClient } = makeController();
+    useHeldQueue.getState().hold(CHAT_ID, queuedRef);
+    let release: () => void = () => {};
+    vi.spyOn(acpClient, 'prompt').mockImplementationOnce(
+      () => new Promise((resolve) => (release = () => resolve({ stopReason: 'end_turn' }))),
+    );
+    const sent = ctrl.sendHeld('q1');
+    await vi.waitFor(() => expect(heard).toHaveBeenCalledOnce());
+    expect(acpClient.prompt).toHaveBeenCalledOnce();
+    release();
+    await sent;
+    expect(heard).toHaveBeenCalledOnce();
+  });
+
   it('Resume on a paused queue', async () => {
     const { ctrl } = makeController();
     await ctrl.resumeQueue();
@@ -121,14 +136,6 @@ describe('AcpChatController — nothing went out, nothing is announced', () => {
   it('Send now when another press already claimed the rows', async () => {
     const { ctrl } = makeController();
     await ctrl.sendHeld('missing-row');
-    expect(heard).not.toHaveBeenCalled();
-  });
-
-  it('Send now when the daemon refuses the prompt', async () => {
-    const { ctrl, acpClient } = makeController();
-    useHeldQueue.getState().hold(CHAT_ID, queuedRef);
-    vi.spyOn(acpClient, 'prompt').mockRejectedValueOnce(new Error('refused'));
-    await ctrl.sendHeld('q1').catch(() => {});
     expect(heard).not.toHaveBeenCalled();
   });
 
