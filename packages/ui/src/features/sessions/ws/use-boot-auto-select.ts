@@ -37,6 +37,7 @@ export function useBootAutoSelect(
   mainThreadId: string | null,
   threads: Threads,
   newThreadSwitchPending: boolean,
+  listLoading: boolean,
 ): void {
   const didAutoSelectRef = useRef(false);
   useEffect(() => {
@@ -65,10 +66,13 @@ export function useBootAutoSelect(
   }, [items, mainThreadId, threads, newThreadSwitchPending]);
 
   // No chats to open (first run, or the remembered one was the last and is gone), or the
-  // list failed: the guess has nothing to hand over to.
+  // list failed: the guess has nothing to hand over to. `loaded` latches inside the adapter,
+  // a moment before the runtime publishes the items, so it takes the runtime's own
+  // `isLoading` going false to say the list really is empty.
   const listLoaded = useSessionListLoadState((s) => s.loaded);
   const listFailed = useSessionListLoadState((s) => s.failed);
   useEffect(() => {
-    if ((listLoaded && items.length === 0) || (listFailed && !listLoaded)) settleBootPrewarm(null, new Set());
-  }, [listLoaded, listFailed, items.length]);
+    if (listLoading || items.length > 0) return;
+    if (listLoaded || listFailed) settleBootPrewarm(null, new Set());
+  }, [listLoading, listLoaded, listFailed, items.length]);
 }

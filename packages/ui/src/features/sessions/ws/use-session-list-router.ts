@@ -175,6 +175,7 @@ export function useSessionListRouter(): void {
   }, [threads]);
 
   const isLoading = useAuiState((s) => s.threads.isLoading);
+  useBootAutoSelect(items, mainThreadId, threads, newThreadSwitchPending, isLoading);
   useEffect(() => {
     if (isLoading) return;
     const reload = reloadAfterBootLoadRef.current;
@@ -265,8 +266,6 @@ export function useSessionListRouter(): void {
     rememberActiveSession(active);
     clearFilterOnCrossProject(active);
   }, [mainThreadId, items, threadItems, threads, newThreadSwitchPending]);
-
-  useBootAutoSelect(items, mainThreadId, threads, newThreadSwitchPending);
 
   // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
   useGhostChatPrune(items, threads);

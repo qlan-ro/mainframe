@@ -16,10 +16,12 @@ function item(id: string, updatedAt: number, status = 'regular', projectId = 'p1
 const switchToThread = vi.fn();
 const threads = { switchToThread } as never;
 
-function boot(items: SessionItem[], main: string | null = '__LOCALID_boot', pending = false) {
-  return renderHook((props: { items: SessionItem[] }) => useBootAutoSelect(props.items, main, threads, pending), {
-    initialProps: { items },
-  });
+function boot(items: SessionItem[], main: string | null = '__LOCALID_boot', pending = false, loading = false) {
+  return renderHook(
+    (props: { items: SessionItem[]; loading: boolean }) =>
+      useBootAutoSelect(props.items, main, threads, pending, props.loading),
+    { initialProps: { items, loading } },
+  );
 }
 
 beforeEach(() => {
@@ -82,16 +84,32 @@ it('settles with nothing once an empty list has loaded (first run)', () => {
   expect(settle).toHaveBeenCalledWith(null, new Set());
 });
 
+it('does not read an empty list while the runtime is still publishing the loaded one', () => {
+  // The adapter latches `loaded` before the runtime's items and `isLoading` catch up.
+  const view = boot([], '__LOCALID_boot', false, true);
+  act(() => useSessionListLoadState.getState().markLoaded());
+  expect(settle).not.toHaveBeenCalled();
+  view.rerender({ items: [item('old', 1)], loading: false });
+  expect(settle).toHaveBeenCalledTimes(1);
+  expect(settle).toHaveBeenCalledWith('old', new Set(['old']));
+});
+
 it('settles with nothing when the list failed before ever loading', () => {
   boot([]);
   act(() => useSessionListLoadState.getState().setFailed(true));
   expect(settle).toHaveBeenCalledWith(null, new Set());
 });
 
+it('waits out a list that is still loading even after a failure was recorded', () => {
+  boot([], '__LOCALID_boot', false, true);
+  act(() => useSessionListLoadState.getState().setFailed(true));
+  expect(settle).not.toHaveBeenCalled();
+});
+
 it('decides once: a later list change does not settle or switch again', () => {
   useLastSessionStore.setState({ lastSessionId: 'a' });
   const view = boot([item('a', 1)]);
-  view.rerender({ items: [item('a', 1), item('b', 9)] });
+  view.rerender({ items: [item('a', 1), item('b', 9)], loading: false });
   expect(switchToThread).toHaveBeenCalledTimes(1);
   expect(settle).toHaveBeenCalledTimes(1);
 });
