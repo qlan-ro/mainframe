@@ -234,6 +234,7 @@ export class AcpHistory {
     const start = this.host.newestPageStart(useUiPrefs.getState().historyTurns);
     if (!start) return false;
     const client = this.host.client();
+    const generation = this.generation;
     const connection = client.connectionGeneration;
     const reply = await client.historyTrim!({ sessionId: this.host.chatId(), floorItemId: start });
     // The daemon's floor cannot be put back. A reload or a send that came meanwhile (the generation)
@@ -241,7 +242,8 @@ export class AcpHistory {
     // starts from its own floor) or the window no longer holds that item.
     if (reply.stale || client !== this.host.client() || connection !== client.connectionGeneration) return false;
     if (!this.host.hasItem(start)) return false;
-    this.host.trimTo(start, refresh);
+    // The reader may have come back to the tail meanwhile, and what they see must follow the cut.
+    this.host.trimTo(start, refresh || generation !== this.generation);
     this.state = { hasMore: true, floorItemId: start, loading: false };
     this.host.changed(this.view());
     return true;
@@ -250,6 +252,7 @@ export class AcpHistory {
   /**
    * A stale page carries the daemon's own floor. When it is a later item the window holds (a trim
    * the daemon accepted and the client did not apply), cut the window there so the retry asks `before` it.
+   * On this recovery path the rows above that item disappear from the screen and are fetched again by the retry.
    */
   private adoptFloor(page: HistoryPageResult): void {
     const id = page.floorItemId;

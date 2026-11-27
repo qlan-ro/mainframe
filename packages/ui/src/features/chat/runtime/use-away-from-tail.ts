@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import type { AcpChatController } from '../controller/acp-chat-controller';
 import { useChatExtras } from './chat-extras';
@@ -17,8 +17,10 @@ export function useChatController(): AcpChatController | undefined {
  */
 export function useAwayFromTail(): boolean {
   const controller = useChatController();
-  return useSyncExternalStore(
-    controller ? (listener) => controller.subscribeState(listener) : noSubscription,
-    () => controller?.getState().windowMessages != null,
+  const subscribe = useCallback(
+    (listener: () => void) => (controller ? controller.subscribeState(listener) : noSubscription()),
+    [controller],
   );
+  const snapshot = useCallback(() => controller?.getState().windowMessages != null, [controller]);
+  return useSyncExternalStore(subscribe, snapshot);
 }

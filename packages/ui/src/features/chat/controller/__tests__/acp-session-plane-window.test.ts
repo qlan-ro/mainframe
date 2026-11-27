@@ -323,6 +323,23 @@ describe('a jump to an unloaded item', () => {
     expect(h.liveIds()).toEqual(['u3', 'a3', 'u4', 'a4', 'u5', 'a5', 'u6', 'a6']);
   });
 
+  it('shows the cut when the trim a jump asked for is accepted after the reader came back', async () => {
+    const h = await harness({ live: [3, 4, 5, 6] });
+    let reply!: (value: object) => void;
+    h.historyTrim.mockImplementationOnce(() => new Promise((resolve) => (reply = resolve)));
+    h.historyAround.mockResolvedValue(around([1, 2], { hasBefore: false, hasAfter: true }, 'a1'));
+    const jump = h.plane.history.load('a1');
+    await vi.waitFor(() => expect(h.historyTrim).toHaveBeenCalledTimes(1));
+    // The reader is back at the tail (a send, a resync) before the daemon answers.
+    h.plane.history.invalidate();
+    h.daemon.floor = 'u5';
+    reply({ hasMore: true, floorItemId: 'u5' });
+    await jump;
+    expect(h.plane.history.isDetached).toBe(false);
+    expect(h.liveIds()).toEqual(['u5', 'a5', 'u6', 'a6']);
+    expect(h.history()).toMatchObject({ floorItemId: 'u5' });
+  });
+
   it('keeps the live window whole on a daemon that cannot raise its floor', async () => {
     const h = await harness({ live: [4, 5, 6], noTrim: true });
     h.historyAround.mockResolvedValue(around([2, 3], { hasBefore: true, hasAfter: true }, 'a2'));
