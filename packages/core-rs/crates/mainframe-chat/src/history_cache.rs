@@ -96,6 +96,9 @@ pub(crate) struct HistorySnapshotCache {
         std::sync::Mutex<std::collections::BTreeMap<String, crate::HistoryValidation>>,
     pub(crate) served:
         std::sync::Mutex<std::collections::BTreeMap<String, crate::HistoryValidation>>,
+    /// The tail a paged first window showed, per chat, until the full load
+    /// that follows it settles whether the client must resync.
+    windows: std::sync::Mutex<std::collections::BTreeMap<String, Vec<crate::window_marker::Mark>>>,
     dir: PathBuf,
     pub(crate) max_snapshots: usize,
 }
@@ -105,6 +108,7 @@ impl HistorySnapshotCache {
         Self {
             validated: std::sync::Mutex::default(),
             served: std::sync::Mutex::default(),
+            windows: std::sync::Mutex::default(),
             dir,
             max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             #[cfg(test)]
@@ -117,10 +121,38 @@ impl HistorySnapshotCache {
         Self {
             validated: std::sync::Mutex::default(),
             served: std::sync::Mutex::default(),
+            windows: std::sync::Mutex::default(),
             dir,
             max_snapshots,
             writes: std::sync::Mutex::default(),
         }
+    }
+
+    /// Whether a snapshot file exists for `chat_id`, valid or not. A cheap
+    /// stand-in for a hit: a stale one costs the full read it would have cost
+    /// anyway, a missing one is what paged reads are for.
+    pub(crate) async fn has_snapshot(&self, chat_id: &str) -> bool {
+        tokio::fs::metadata(self.snapshot_path(chat_id))
+            .await
+            .is_ok()
+    }
+
+    pub(crate) fn mark_window(&self, chat_id: &str, marker: Vec<crate::window_marker::Mark>) {
+        let mut windows = self.windows.lock().unwrap_or_else(|e| e.into_inner());
+        if windows.len() >= self.max_snapshots
+            && !windows.contains_key(chat_id)
+            && let Some(id) = windows.keys().next().cloned()
+        {
+            windows.remove(&id);
+        }
+        windows.insert(chat_id.to_owned(), marker);
+    }
+
+    pub(crate) fn take_window(&self, chat_id: &str) -> Option<Vec<crate::window_marker::Mark>> {
+        self.windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(chat_id)
     }
 
     pub(super) fn snapshot_path(&self, chat_id: &str) -> PathBuf {

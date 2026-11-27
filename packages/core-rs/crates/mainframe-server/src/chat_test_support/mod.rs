@@ -5,13 +5,12 @@
 //! touching a real CLI process.
 #![cfg(test)]
 
-use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
-    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, ImageInput, SessionSink,
-    StopBackgroundTaskResult,
+    Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, HistoryPageFuture, ImageInput,
+    StopBackgroundTaskResult, WindowRequest,
 };
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, AdapterProcess, AdapterProcessStatus, ControlResponse,
@@ -23,6 +22,9 @@ use mainframe_types::settings::ExecutionMode;
 use mainframe_types::transcript::TranscriptLocation;
 
 mod app_ctx;
+mod live;
+mod paged;
+pub(crate) use live::LiveStub;
 
 pub(crate) use app_ctx::build_test_context;
 
@@ -46,25 +48,8 @@ pub(crate) struct StubAdapter {
     pub(crate) live: Option<Arc<LiveStub>>,
     /// What every session's `load_subagent_history` returns; `None` fails it.
     pub(crate) subagent_rows: Option<Arc<Vec<ChatMessage>>>,
-}
-
-/// What a live stub's sessions share with the test driving them.
-#[derive(Default)]
-pub(crate) struct LiveStub {
-    sinks: Mutex<HashMap<String, Arc<dyn SessionSink>>>,
-    answers: Mutex<Vec<ControlResponse>>,
-}
-
-impl LiveStub {
-    /// The sink of the session spawned for `chat_id`.
-    pub(crate) fn sink(&self, chat_id: &str) -> Arc<dyn SessionSink> {
-        self.sinks.lock().unwrap()[chat_id].clone()
-    }
-
-    /// Every permission answer the sessions received, oldest first.
-    pub(crate) fn answers(&self) -> Vec<ControlResponse> {
-        self.answers.lock().unwrap().clone()
-    }
+    /// Pages `load_history_page` serves; see `paged.rs`.
+    pub(crate) pager: Option<Arc<mainframe_adapter_api::test_support::FakePages>>,
 }
 
 impl StubAdapter {
@@ -78,6 +63,7 @@ impl StubAdapter {
             kills: Arc::new(AtomicUsize::new(0)),
             live: None,
             subagent_rows: None,
+            pager: None,
         })
     }
 
@@ -91,6 +77,7 @@ impl StubAdapter {
             kills: Arc::new(AtomicUsize::new(0)),
             live: Some(Arc::default()),
             subagent_rows: None,
+            pager: None,
         })
     }
 }
@@ -155,6 +142,7 @@ impl Adapter for StubAdapter {
             live: self.live.clone(),
             spawned: AtomicBool::new(false),
             subagent_rows: self.subagent_rows.clone(),
+            pager: self.pager.clone(),
         })
     }
     fn kill_all(&self) {}
@@ -169,6 +157,7 @@ struct StubSession {
     live: Option<Arc<LiveStub>>,
     spawned: AtomicBool,
     subagent_rows: Option<Arc<Vec<ChatMessage>>>,
+    pager: Option<Arc<mainframe_adapter_api::test_support::FakePages>>,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -266,6 +255,9 @@ impl AdapterSession for StubSession {
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
+        paged::window(self.pager.as_deref(), req)
     }
     fn load_subagent_history(
         &self,

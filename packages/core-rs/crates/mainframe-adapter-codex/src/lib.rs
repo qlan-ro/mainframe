@@ -41,6 +41,7 @@ pub(crate) mod history_collab;
 pub(crate) mod history_collab_resolve;
 pub(crate) mod history_convert;
 pub(crate) mod history_load;
+pub(crate) mod history_page;
 pub(crate) mod image_generation_history;
 pub(crate) mod image_generation_render;
 pub mod item_types;

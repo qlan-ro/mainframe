@@ -73,7 +73,7 @@ impl ChatManager {
         HistorySnapshotCache::validate(session.as_ref(), context.as_deref(), validation).await
     }
 
-    fn initial_history_eligible(&self, chat_id: &str) -> bool {
+    pub(super) fn initial_history_eligible(&self, chat_id: &str) -> bool {
         !self.is_chat_running(chat_id) && self.idle_history_eligible(chat_id)
     }
 

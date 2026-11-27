@@ -70,7 +70,10 @@ pub struct LoadedSkill {
 
 mod adapter_session;
 mod session_sink;
-pub use adapter_session::{AdapterSession, CollectedHistoryFiles, HistoryFiles};
+pub use adapter_session::{
+    AdapterSession, CollectedHistoryFiles, HistoryFiles, HistoryPage, HistoryPageFuture,
+    WindowRequest,
+};
 pub use session_sink::SessionSink;
 
 /// Input to `Adapter::pin_fork_point` — everything an adapter needs to pin a

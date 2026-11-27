@@ -46,6 +46,8 @@ pub struct FakeSession {
     /// Configurable history returned by `load_history` (empty by default).
     pub history: Vec<ChatMessage>,
     pub history_gate: Option<Arc<(tokio::sync::Notify, tokio::sync::Notify)>>,
+    /// What `load_history_page` serves; empty pages mean "cannot page".
+    pub pager: super::fake_pages::FakePages,
     /// When set, every `load_history` call bumps it — how a test proves a
     /// path loads the transcript once rather than twice.
     pub history_loads: Option<Arc<AtomicUsize>>,
@@ -69,35 +71,6 @@ pub struct FakeSession {
     /// The options of the last `spawn` call, recorded before `spawn_ok` is
     /// consulted so a test can inspect what a spawn would have carried.
     pub spawn_options: Mutex<Option<SessionSpawnOptions>>,
-}
-
-impl FakeSession {
-    pub fn spawned() -> Self {
-        Self {
-            spawned: true,
-            set_model_ok: true,
-            set_permission_mode_ok: true,
-            set_plan_mode_ok: true,
-            ..Self::default()
-        }
-    }
-
-    pub fn with_activity(spawned: bool, activity: Option<i64>) -> Arc<Self> {
-        Arc::new(Self {
-            spawned,
-            activity,
-            ..Self::default()
-        })
-    }
-
-    pub fn kills(&self) -> usize {
-        self.kill_count.load(Ordering::SeqCst)
-    }
-
-    /// Bump "last activity" to `ts` — see `activity_override`.
-    pub fn bump_activity(&self, ts: i64) {
-        *self.activity_override.lock_recover() = Some(ts);
-    }
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -254,6 +227,12 @@ impl AdapterSession for FakeSession {
             }
             Ok(history)
         })
+    }
+    fn load_history_window<'a>(
+        &'a self,
+        req: crate::WindowRequest<'a>,
+    ) -> crate::HistoryPageFuture<'a> {
+        self.pager.window(req)
     }
     fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
         let sources = self.history_sources.clone();

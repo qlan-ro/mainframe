@@ -63,6 +63,38 @@ impl CodexSession {
             }
         }
     }
+    /// The newest turns through `thread/turns/list`, or `None` when this
+    /// session cannot be paged (a fork that has not sent, a thread that is not
+    /// yet started, or a CLI without the method).
+    pub(super) async fn load_history_window_inner(
+        &self,
+        req: mainframe_adapter_api::WindowRequest<'_>,
+    ) -> Result<Option<mainframe_adapter_api::HistoryPage>, AdapterError> {
+        let ThreadTarget::Resume(thread_id) = self.resolve_target(false).await else {
+            return Ok(None);
+        };
+        let executable = self.history_executable.lock_recover().clone();
+        if crate::history_page::known_to_lack(&executable) {
+            return Ok(None);
+        }
+        let temp = match spawn_temp_app_server(
+            &executable,
+            Some(Path::new(&self.project_path)),
+            true,
+            self.resolved_path.as_str(),
+        )
+        .await
+        {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::warn!(error = %err, thread_id = %thread_id, "failed to page history");
+                return Ok(None);
+            }
+        };
+        let window = crate::history_page::load_window(&temp, &executable, &thread_id, req).await;
+        temp.close();
+        window
+    }
     pub(super) async fn load_scan_records_inner(&self) -> Result<Vec<ChatMessage>, AdapterError> {
         let Some(thread_id) = self.resume_thread_id.clone() else {
             return Ok(Vec::new());
@@ -90,4 +122,12 @@ pub(super) async fn rollout_scan_records(
     let rollout_path = meta.get(thread_id)?.rollout_path.clone()?;
     crate::rollout_turns::read_rollout_history(&rollout_path, thread_id, deps.map(|d| &d.rollout))
         .await
+}
+
+/// What `stop_background_task` answers: Codex has no background tasks to stop.
+pub(super) async fn unsupported_stop() -> Result<StopBackgroundTaskResult, AdapterError> {
+    Ok(StopBackgroundTaskResult {
+        ok: false,
+        error: Some("unsupported".to_string()),
+    })
 }

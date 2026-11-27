@@ -49,6 +49,7 @@ use crate::types::ActiveChat;
 use crate::worktree_offer::{OfferError, WorktreeOfferRegistry};
 use mainframe_types::worktree_offer::WorktreeSwitchOffer;
 
+mod adapter_window;
 mod capabilities;
 #[cfg(test)]
 mod codex_idle_mapping_tests;
