@@ -16,6 +16,7 @@ import { p1, p2, p3 } from './scenarios/anchor';
 import { p4follow, p4release } from './scenarios/follow';
 import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
+import { installOverlayScrollbars } from '@/lib/overlay-scrollbars/manager';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
 import { V1sShell } from './shells/V1sShell';
@@ -53,6 +54,8 @@ function Rig() {
 const start = performance.now();
 tail.start = start;
 const boot = watchBoot(start);
+// Manual mode draws the app's own overlay scrollbar thumb (native bars are hidden app-wide).
+if (params.manual && params.scrollbar) installOverlayScrollbars();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Rig />

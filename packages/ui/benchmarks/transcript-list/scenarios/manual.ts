@@ -5,6 +5,7 @@
  * steps stay at 2 px or less over five loads, three times, and nothing visibly jumps.
  */
 import { Recorder, frame, viewport } from '../probe';
+import { params } from '../params';
 import { store } from '../store';
 import { ready } from './setup';
 
@@ -22,6 +23,11 @@ function show(text: string) {
 async function measureLoad(recorder: Recorder, el: HTMLElement) {
   const box = el.getBoundingClientRect();
   recorder.anchor(document.elementFromPoint(box.left + el.clientWidth / 2, box.top + el.clientHeight / 2)!);
+  // The page arrives after a daemon-like delay; the reader keeps scrolling meanwhile.
+  if (params.pageDelay > 0) {
+    const wait = params.pageDelay * (0.7 + Math.random() * 0.6);
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
   const from = recorder.samples.length;
   store.prependPage();
   for (let i = 0; i < 14; i++) await frame();
@@ -38,7 +44,7 @@ export async function startManual() {
   recorder.start();
   const steps: number[] = [];
   let busy = false;
-  show('flick up: a page loads near the top');
+  show(`flick up: a page loads near the top (${params.pageDelay} ms ±30%)`);
   el.addEventListener(
     'scroll',
     () => {

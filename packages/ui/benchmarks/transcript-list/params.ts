@@ -24,6 +24,14 @@ export const params = {
   live: query.get('live') === '1',
   /** P7 by hand: pages load near the top and the readout shows the step at each load. */
   manual: query.get('manual') === '1',
+  /**
+   * Manual mode: how long an older page takes to arrive, in ms, like a daemon `history_page`
+   * reply. Default 60, from the corrected benchmark (an older page shows ~80 ms after the
+   * request, about 25 ms of which is rendering); each load varies ±30%. `delay=0` lands at once.
+   */
+  pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
+  /** Manual mode: the app's overlay scrollbar thumb, as in the app (it shows while scrolling or hovered). Off with `scrollbar=0`. */
+  scrollbar: query.get('scrollbar') !== '0',
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */
