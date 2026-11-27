@@ -6,7 +6,9 @@ use mainframe_types::acp::extensions::{
 };
 use mainframe_types::display::DisplayMessage;
 
-use crate::{EncodedItem, SessionState, history_window, replay_previews};
+use crate::{
+    EncodedItem, ResumePort, SessionState, history_window, replay_previews, resume::with_messages,
+};
 
 #[path = "history_page_items.rs"]
 mod items;
@@ -24,6 +26,22 @@ pub struct PageOptions {
     pub previews: bool,
     pub compressed: bool,
     pub lazy_tool_images: bool,
+}
+
+/// Serve a page from the chat's list in place. `inspect` sees the same
+/// borrowed list first (the server seeds its revision log from it); `None` if
+/// the port could not read it.
+pub async fn prepare_chat(
+    port: &dyn ResumePort,
+    params: &HistoryPageParams,
+    options: PageOptions,
+    inspect: impl FnOnce(&[DisplayMessage]) + Send,
+) -> Option<PreparedPage> {
+    with_messages(port, &params.session_id, |messages| {
+        inspect(messages);
+        prepare(messages, params, options)
+    })
+    .await
 }
 
 pub fn prepare(
@@ -130,10 +148,24 @@ fn prepare_content(
     agent: Option<&str>,
     page: &mut PreparedPage,
 ) {
+    render(messages.len(), &params.session_id, options, agent, page);
+    if params.items.is_none() {
+        page.result.history = history_window::state(page.start, &page.containers);
+    }
+}
+
+/// Turn `page.containers` into `page.result`'s updates or batches. `total` is
+/// the transcript's container count: only the newest containers keep full
+/// tool results when `options.previews` is set.
+pub(crate) fn render(
+    total: usize,
+    session_id: &str,
+    options: PageOptions,
+    agent: Option<&str>,
+    page: &mut PreparedPage,
+) {
     if options.previews {
-        let old = messages
-            .len()
-            .saturating_sub(replay_previews::FULL_RESULT_CONTAINERS);
+        let old = total.saturating_sub(replay_previews::FULL_RESULT_CONTAINERS);
         let count = old.saturating_sub(page.start).min(page.containers.len());
         let mut candidates = page.containers[..count].to_vec();
         candidates.resize_with(count + replay_previews::FULL_RESULT_CONTAINERS, Vec::new);
@@ -144,19 +176,17 @@ fn prepare_content(
     state.set_previews(page.previews.clone());
     let mut updates = state.diff(&items);
     if options.lazy_tool_images {
-        let chat = &params.session_id;
         for update in &mut updates {
             match agent {
-                Some(agent) => crate::tool_images::reference_subagent_images(chat, agent, update),
-                None => crate::tool_images::reference_images(chat, update),
+                Some(agent) => {
+                    crate::tool_images::reference_subagent_images(session_id, agent, update)
+                }
+                None => crate::tool_images::reference_images(session_id, update),
             }
         }
     }
-    if params.items.is_none() {
-        page.result.history = history_window::state(page.start, &page.containers);
-    }
     if options.compressed {
-        page.result.batches = Some(batch_params(&params.session_id, &updates));
+        page.result.batches = Some(batch_params(session_id, &updates));
     } else {
         page.result.updates = Some(updates);
     }

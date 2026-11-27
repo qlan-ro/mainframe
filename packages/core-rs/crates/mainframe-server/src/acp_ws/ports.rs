@@ -128,6 +128,23 @@ impl ResumePort for ManagerPorts {
         })
     }
 
+    fn read_messages<'a>(
+        &'a self,
+        session_id: &'a str,
+        read: mainframe_acp::resume::MessageReader<'a>,
+    ) -> mainframe_acp::resume::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            match &self.manager {
+                Some(manager) => {
+                    manager
+                        .read_resume_snapshot(session_id, |messages, _, _| read(messages))
+                        .await
+                }
+                None => read(&[]),
+            }
+        })
+    }
+
     fn resume_snapshot<'a>(
         &'a self,
         session_id: &'a str,

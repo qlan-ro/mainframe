@@ -16,6 +16,8 @@ import {
   HistoryStateSchema,
   HistoryPageParamsSchema,
   HistoryPageResultSchema,
+  HistoryAroundParamsSchema,
+  HistoryAroundResultSchema,
   HistorySearchParamsSchema,
   HistorySearchResultSchema,
   CursorParamsSchema,
@@ -75,6 +77,8 @@ function schemaFor(name: string): z.ZodType {
   if (name === 'history-state.json') return HistoryStateSchema;
   if (name === 'history-page.params.json') return HistoryPageParamsSchema;
   if (name.startsWith('history-page.')) return HistoryPageResultSchema;
+  if (name === 'history-around.params.json') return HistoryAroundParamsSchema;
+  if (name.startsWith('history-around.')) return HistoryAroundResultSchema;
   if (name === 'history-search.params.json') return HistorySearchParamsSchema;
   if (name === 'history-search.result.json') return HistorySearchResultSchema;
   if (name === 'queue-state.notification.json') return JsonRpcNotificationSchema;

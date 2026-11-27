@@ -7,9 +7,18 @@ use mainframe_types::acp::extensions::{
 use mainframe_types::display::{DisplayMessage, DisplayMessageType};
 use mainframe_types::message_markers::visible_prose_text;
 
-use crate::{EncodedItem, encoder};
+use crate::{EncodedItem, ResumePort, encoder, resume::with_messages};
 
 pub const MAX_MATCHES: usize = 2000;
+
+/// Search the chat's list in place; `None` if the port could not read it.
+pub async fn search_chat(
+    port: &dyn ResumePort,
+    session_id: &str,
+    query: &str,
+) -> Option<HistorySearchResult> {
+    with_messages(port, session_id, |messages| search(messages, query)).await
+}
 
 pub fn search(messages: &[DisplayMessage], query: &str) -> HistorySearchResult {
     if query.is_empty() {

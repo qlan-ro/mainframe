@@ -129,6 +129,8 @@ export const MainframeCapabilitiesSchema = z
     compressedReplay: z.boolean().optional(),
     windowedHistory: z.boolean().optional(),
     historySearch: z.boolean().optional(),
+    /** Whether `_mainframe.dev/history_around` is available. */
+    historyAround: z.boolean().optional(),
     lazyToolImages: z.boolean().optional(),
   })
   .loose();

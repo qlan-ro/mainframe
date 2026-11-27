@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use mainframe_acp::{ResumePort, rpc};
-use mainframe_types::acp::extensions::{HistoryPageParams, HistorySearchParams};
+use mainframe_types::acp::extensions::{
+    HistoryAroundParams, HistoryPageParams, HistorySearchParams,
+};
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use serde::de::DeserializeOwned;
 use tracing::error;
@@ -49,6 +51,8 @@ pub(super) fn start(
             subagent_history::handle(request, &ctx, &connection).await;
         } else if request.method == "_mainframe.dev/history_search" {
             search(request, &connection, port.as_ref()).await;
+        } else if request.method == "_mainframe.dev/history_around" {
+            around(request, &connection, port.as_ref()).await;
         } else {
             page(request, &ctx, &connection, port).await;
         }
@@ -69,19 +73,41 @@ async fn search(request: JsonRpcRequest, connection: &FacadeConnection, port: &d
             return;
         }
     };
-    let snapshot = port.resume_snapshot(&params.session_id).await;
-    let result = tokio::task::spawn_blocking(move || {
-        mainframe_acp::history_search::search(&snapshot.messages, &params.query)
-    })
-    .await;
-    let response = match result {
-        Ok(result) => rpc::success_response(request.id, serde_json::json!(result)),
-        Err(err) => {
-            error!(error = %err, chat_id = params.session_id, "history search failed");
-            rpc::error_response(request.id, rpc::internal_error("history search failed"))
+    let result =
+        mainframe_acp::history_search::search_chat(port, &params.session_id, &params.query).await;
+    reply(connection, request.id, result, "history search");
+}
+
+async fn around(request: JsonRpcRequest, connection: &FacadeConnection, port: &dyn ResumePort) {
+    let params: HistoryAroundParams = match parse(&request) {
+        Ok(params) => params,
+        Err(error) => {
+            connection.send_json(&error);
+            return;
         }
     };
-    connection.send_json(&response);
+    let options = mainframe_acp::history_page::PageOptions {
+        previews: connection.is_replay_result_previews_opted_in(),
+        compressed: connection.is_compressed_replay_opted_in(),
+        lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+    };
+    let result = mainframe_acp::history_around::around_chat(port, &params, options).await;
+    reply(connection, request.id, result, "history around");
+}
+
+fn reply<T: serde::Serialize>(
+    connection: &FacadeConnection,
+    id: Option<mainframe_types::acp::jsonrpc::RequestId>,
+    result: Option<T>,
+    what: &str,
+) {
+    connection.send_json(&match result {
+        Some(result) => rpc::success_response(id, serde_json::json!(result)),
+        None => {
+            error!(what, "history read produced no result");
+            rpc::error_response(id, rpc::internal_error(&format!("{what} failed")))
+        }
+    });
 }
 
 async fn page(
@@ -112,16 +138,15 @@ async fn page(
     };
     let seed_hub = Arc::clone(&ctx.chat.facade_hub);
     let result = tokio::spawn(async move {
-        let snapshot = port.resume_snapshot(&params.session_id).await;
-        tokio::task::spawn_blocking(move || {
-            seed_hub.seed_history_snapshot(&params.session_id, &snapshot.messages);
-            mainframe_acp::history_page::prepare(&snapshot.messages, &params, options)
+        let chat_id = params.session_id.clone();
+        mainframe_acp::history_page::prepare_chat(port.as_ref(), &params, options, |messages| {
+            seed_hub.seed_history_snapshot(&chat_id, messages);
         })
         .await
     })
     .await;
     match result {
-        Ok(Ok(page)) => hub.finish_history_page(connection, &chat_id, request.id, stream, page),
+        Ok(Some(page)) => hub.finish_history_page(connection, &chat_id, request.id, stream, page),
         other => {
             error!(chat_id, error = ?other.err(), "history page failed");
             connection.forget_chat(&chat_id);
