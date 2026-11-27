@@ -92,7 +92,7 @@ vi.mock('../../features/automations/AutomationsSurface', () => ({ AutomationsSur
 vi.mock('../../features/setup-advisor/AdvisorSurface', () => ({ AdvisorSurface: counted('AdvisorSurface') }));
 vi.mock('../../features/settings/SettingsSurface', () => ({ SettingsSurface: counted('SettingsSurface') }));
 vi.mock('../../components/overlays/ConfirmDialogHost', () => ({ ConfirmDialogHost: counted('ConfirmDialogHost') }));
-vi.mock('../../features/review/ReviewPanel', () => ({ ReviewPanel: counted('ReviewPanel') }));
+vi.mock('../../features/review/LazyReviewPanel', () => ({ LazyReviewPanel: counted('ReviewPanel') }));
 vi.mock('../../features/tour/TutorialOverlay', () => ({ TutorialOverlay: counted('TutorialOverlay') }));
 vi.mock('../../features/shortcuts/ShortcutsCheatSheet', () => ({
   ShortcutsCheatSheet: counted('ShortcutsCheatSheet'),

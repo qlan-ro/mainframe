@@ -22,7 +22,30 @@ impl ChatShared {
     pub(crate) fn merge_idle_provenance(
         &self,
         chat_id: &str,
+        history: Vec<ChatMessage>,
+    ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
+        self.merge_idle_provenance_in(chat_id, history, false)
+    }
+
+    /// As [`Self::merge_idle_provenance`] for the newest part of a history
+    /// (`older`: turns before it exist). A marker the full list would settle
+    /// before the page is left out: one whose transcript boundary lies before
+    /// the page (the full merge renames that boundary to the marker's id, so
+    /// no marker is inserted), and one stamped before the page's first message.
+    pub(crate) fn merge_idle_window(
+        &self,
+        chat_id: &str,
+        history: Vec<ChatMessage>,
+        older: bool,
+    ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
+        self.merge_idle_provenance_in(chat_id, history, older)
+    }
+
+    fn merge_idle_provenance_in(
+        &self,
+        chat_id: &str,
         mut history: Vec<ChatMessage>,
+        older: bool,
     ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
         let commands = self.deps.idle_commands(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message(
@@ -35,16 +58,28 @@ impl ChatShared {
             )
         })?;
         merge(&mut history, &commands, &metadata);
+        let first = history.first().map(|m| m.timestamp.clone());
         for marker in self.deps.idle_markers(chat_id).map_err(|_| {
             mainframe_adapter_api::AdapterError::Message("Idle markers unavailable".into())
         })? {
-            if !history.iter().any(|m| m.id == marker.id) {
-                let index = history
-                    .iter()
-                    .position(|m| m.timestamp > marker.timestamp)
-                    .unwrap_or(history.len());
-                history.insert(index, marker);
+            if history.iter().any(|m| m.id == marker.id) {
+                continue;
             }
+            let before_page = older
+                && (first
+                    .as_ref()
+                    .is_some_and(|first| marker.timestamp < *first)
+                    || metadata
+                        .iter()
+                        .any(|m| m.request_id == marker.id && m.vendor_id.is_some()));
+            if before_page {
+                continue;
+            }
+            let index = history
+                .iter()
+                .position(|m| m.timestamp > marker.timestamp)
+                .unwrap_or(history.len());
+            history.insert(index, marker);
         }
         Ok(history)
     }

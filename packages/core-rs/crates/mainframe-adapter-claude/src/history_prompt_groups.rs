@@ -124,6 +124,30 @@ impl PromptGroups {
         }
     }
 
+    /// Whether a message tracked at index `from` or later has an ancestor
+    /// chain that names a record this read never saw. Read from the end of a
+    /// file, such a chain may reach its prompt before where the read began, so
+    /// the group the full read finds cannot be told.
+    pub(crate) fn chains_leave_records(&self, from: usize) -> bool {
+        self.tracked
+            .iter()
+            .filter(|(index, _)| *index >= from)
+            .any(|(_, uuid)| {
+                let mut visited: HashSet<&str> = HashSet::new();
+                let mut cursor = Some(uuid.as_str());
+                while let Some(current) = cursor {
+                    let Some(record) = self.records.get(current) else {
+                        return true;
+                    };
+                    if record.prompt.is_some() || !visited.insert(current) {
+                        return false;
+                    }
+                    cursor = record.parent.as_deref();
+                }
+                false
+            })
+    }
+
     fn resolve(&self, uuid: &str, memo: &mut HashMap<String, Option<Prompt>>) -> Option<Prompt> {
         let mut path: Vec<&str> = Vec::new();
         let mut visited: HashSet<&str> = HashSet::new();

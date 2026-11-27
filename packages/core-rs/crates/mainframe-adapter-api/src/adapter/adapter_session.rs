@@ -156,6 +156,11 @@ pub trait AdapterSession: Send + Sync {
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;
+    /// `load_history` for a read nobody is waiting on (the turn-end refresh):
+    /// an adapter may use fewer resources so a foreground load keeps priority.
+    fn load_history_background(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
+        self.load_history()
+    }
     /// The newest part of the history, read page by page (`req.turns` turns a
     /// page, newest first) until `req.enough` accepts the messages gathered so
     /// far or the transcript starts. The messages are converted together, so

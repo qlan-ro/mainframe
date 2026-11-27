@@ -162,3 +162,6 @@ async fn a_full_load_that_differs_from_the_window_resyncs() {
 
     assert_eq!(resyncs_after_window_then_load(full).await, 1);
 }
+
+#[path = "chat_manager_tests_claude_tail.rs"]
+mod claude_tail;

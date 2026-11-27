@@ -55,6 +55,7 @@ function makeHost(opts: { running?: boolean; queued?: QueuedMessageRef[]; tempor
     },
     load: () => Promise.resolve(),
     sendPrompt,
+    announceUserSend: vi.fn(),
   };
   return { host, events, sendPrompt };
 }

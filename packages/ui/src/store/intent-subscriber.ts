@@ -26,7 +26,7 @@
  *  - reveal-file: ensure the workspace is visible and stash the path in
  *    useFilesStore.revealTarget; FileTree auto-expands ancestors and scrolls.
  */
-import { pickViewerKind } from '@/features/viewers/viewer-router';
+import { pickViewerKind } from '@/features/viewers/viewer-kind';
 import { toFileRef } from '@/lib/files/file-ref';
 import { getFileTree, type FileTreeEntry } from '@/lib/api/files';
 import { getActiveDaemon } from '@/lib/daemon/active-daemon';

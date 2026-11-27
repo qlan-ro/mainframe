@@ -16,7 +16,7 @@ fn history() -> ChatMessage {
 
 /// A manager whose `c1` always loads cold, backed by one stat-able fake
 /// transcript file and a cache dir this test alone owns.
-async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<FakeDeps>, ChatManager, PathBuf) {
+pub(super) async fn cold_manager(dir: &tempfile::TempDir) -> (Arc<FakeDeps>, ChatManager, PathBuf) {
     let transcript = dir.path().join("session.jsonl");
     tokio::fs::write(&transcript, "{\"line\":1}\n")
         .await
@@ -157,7 +157,7 @@ fn reply() -> ChatMessage {
 }
 
 /// A turn appends to the transcript; the adapter now parses one more message.
-async fn run_a_turn(deps: &FakeDeps, transcript: &std::path::Path) {
+pub(super) async fn run_a_turn(deps: &FakeDeps, transcript: &std::path::Path) {
     tokio::fs::write(transcript, "{\"line\":1}\n{\"line\":2}\n")
         .await
         .unwrap();
@@ -293,3 +293,6 @@ async fn a_refresh_leaves_the_held_prompt_queue_alone() {
 
 #[path = "chat_manager_tests_history_validation.rs"]
 mod validation;
+
+#[path = "chat_manager_tests_history_refresh_mode.rs"]
+mod refresh_mode;

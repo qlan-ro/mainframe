@@ -48,6 +48,7 @@ function makeHost(sendPrompt = vi.fn().mockResolvedValue({ queued: false }), cha
     },
     load: () => Promise.resolve(),
     sendPrompt,
+    announceUserSend: vi.fn(),
   };
   return { host, pending: () => Object.values(state.pendingUserMessages)[0] };
 }
