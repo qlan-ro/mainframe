@@ -15,6 +15,7 @@
     )
 )]
 
+pub mod binary_frame;
 pub mod capabilities;
 pub mod connection;
 mod container_index;
@@ -39,12 +40,12 @@ pub mod tool_images;
 
 pub use capabilities::client_opts_into_windowed_history;
 pub use capabilities::{
-    DEFAULT_HEARTBEAT_INTERVAL_MS, client_opts_into_compressed_replay,
-    client_opts_into_replay_result_previews, client_opts_into_revision_cursors,
-    compaction_notification, cursor_notification, gate_resolved_notification,
-    heartbeat_notification, mainframe_capabilities, queue_state_notification,
-    replay_complete_notification, resync_notification, retry_status_notification,
-    transcript_cleared_notification,
+    DEFAULT_HEARTBEAT_INTERVAL_MS, client_opts_into_binary_history_frames,
+    client_opts_into_compressed_replay, client_opts_into_replay_result_previews,
+    client_opts_into_revision_cursors, compaction_notification, cursor_notification,
+    gate_resolved_notification, heartbeat_notification, mainframe_capabilities,
+    queue_state_notification, replay_complete_notification, resync_notification,
+    retry_status_notification, transcript_cleared_notification,
 };
 pub use connection::{
     DaemonInfo, DispatchOutcome, dispatch_with_prompt, handle_frame_with_prompt,

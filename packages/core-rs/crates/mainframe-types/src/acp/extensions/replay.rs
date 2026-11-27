@@ -34,3 +34,13 @@ pub struct ReplayBatchParams {
     pub count: usize,
     pub data: String,
 }
+
+/// One compressed batch of a history response bound for a binary frame: the
+/// zlib-deflated JSON array of `count` `session/update` payloads. Never
+/// serialized with the result; the sender frames it (see
+/// `mainframe_acp::binary_frame`) and ties it to the response's request id.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BatchFrame {
+    pub count: usize,
+    pub bytes: Vec<u8>,
+}

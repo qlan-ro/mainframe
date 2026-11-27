@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::acp_ws::dispatch::handle_inbound;
 use crate::{AppCtx, Db};
 
-async fn chat_with_history() -> (tempfile::TempDir, Arc<AppCtx>, String) {
+pub(super) async fn chat_with_history() -> (tempfile::TempDir, Arc<AppCtx>, String) {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("session.jsonl");
     let contents: String = (0..100)
@@ -61,8 +61,21 @@ async fn chat_with_history() -> (tempfile::TempDir, Arc<AppCtx>, String) {
 }
 
 async fn call(ctx: &Arc<AppCtx>, method: &str, params: Value) -> Value {
+    call_with(ctx, method, params, |_| {}).await.0
+}
+
+/// The reply plus every binary frame the call produced, for a connection
+/// `setup` has configured.
+pub(super) async fn call_with(
+    ctx: &Arc<AppCtx>,
+    method: &str,
+    params: Value,
+    setup: impl FnOnce(&crate::acp_ws::facade_conn::FacadeConnection),
+) -> (Value, Vec<Vec<u8>>) {
     let (_, conn, mut rx) = ctx.chat.facade_hub.register("claude".into());
     conn.mark_negotiated();
+    setup(&conn);
+    let mut binary = conn.take_binary_frames().unwrap();
     let daemon = mainframe_acp::DaemonInfo {
         version: "test".into(),
         heartbeat_interval_ms: 15000,
@@ -73,7 +86,8 @@ async fn call(ctx: &Arc<AppCtx>, method: &str, params: Value) -> Value {
         .await
         .unwrap()
         .unwrap();
-    serde_json::from_str(&reply).unwrap()
+    let frames = std::iter::from_fn(|| binary.try_recv().ok()).collect();
+    (serde_json::from_str(&reply).unwrap(), frames)
 }
 
 #[tokio::test]

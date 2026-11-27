@@ -62,10 +62,14 @@ pub(super) async fn handle(request: JsonRpcRequest, ctx: &AppCtx, connection: &F
         previews: connection.is_replay_result_previews_opted_in(),
         compressed: connection.is_compressed_replay_opted_in(),
         lazy_tool_images: connection.is_lazy_tool_images_opted_in(),
+        binary: connection.is_binary_history_frames_opted_in(),
     };
     let result = tokio::task::spawn_blocking(move || render(&messages, op, options)).await;
     let reply = match result {
-        Ok(value) => rpc::success_response(request.id, value),
+        Ok((value, frames)) => {
+            connection.send_result(request.id, value, frames);
+            return;
+        }
         Err(err) => {
             error!(error = %err, chat_id = target.session_id, "sub-agent history worker failed");
             rpc::error_response(
@@ -96,14 +100,20 @@ fn render(
     messages: &[DisplayMessage],
     op: Operation,
     options: mainframe_acp::history_page::PageOptions,
-) -> serde_json::Value {
+) -> (
+    serde_json::Value,
+    Vec<mainframe_types::acp::extensions::BatchFrame>,
+) {
     match op {
-        Operation::Page(params) => serde_json::json!(mainframe_acp::history_page::subagent_page(
-            messages, params, options
-        )),
-        Operation::Search(query) => {
-            serde_json::json!(mainframe_acp::history_search::search(messages, &query))
+        Operation::Page(params) => {
+            let mut page = mainframe_acp::history_page::subagent_page(messages, params, options);
+            let frames = std::mem::take(&mut page.frames);
+            (serde_json::json!(page), frames)
         }
+        Operation::Search(query) => (
+            serde_json::json!(mainframe_acp::history_search::search(messages, &query)),
+            Vec::new(),
+        ),
         Operation::Export => unreachable!("export is handled before rendering"),
     }
 }
@@ -203,6 +213,16 @@ mod tests {
     use mainframe_types::content::LeafContent;
     use mainframe_types::display::{DisplayContent, DisplayMessageType};
 
+    fn params_for_binary() -> SubagentHistoryPageParams {
+        SubagentHistoryPageParams {
+            session_id: "parent".into(),
+            agent_id: "tool-agent".into(),
+            before: None,
+            containers: Some(2),
+            until_item_id: None,
+        }
+    }
+
     #[tokio::test]
     async fn pages_and_search_and_export_use_child_content() {
         let messages: Vec<_> = (0..4)
@@ -226,15 +246,24 @@ mod tests {
             until_item_id: None,
         };
         let options = Default::default();
-        let initial = render(&messages, Operation::Page(params.clone()), options);
+        let (initial, _) = render(&messages, Operation::Page(params.clone()), options);
         assert_eq!(initial["hasMore"], true);
         assert_eq!(initial["updates"].as_array().unwrap().len(), 2);
         params.before = Some(initial["floorItemId"].as_str().unwrap().into());
-        let earlier = render(&messages, Operation::Page(params), options);
+        let (earlier, _) = render(&messages, Operation::Page(params), options);
         assert_eq!(earlier["hasMore"], false);
         assert_eq!(earlier["updates"].as_array().unwrap().len(), 2);
-        let search = render(&messages, Operation::Search("message 1".into()), options);
+        let (search, _) = render(&messages, Operation::Search("message 1".into()), options);
         assert_eq!(search["matches"][0]["containerId"], "child-1");
+        let binary = mainframe_acp::history_page::PageOptions {
+            binary: true,
+            ..Default::default()
+        };
+        let (value, frames) = render(&messages, Operation::Page(params_for_binary()), binary);
+        assert_eq!(value["batchFrames"], 1);
+        assert!(value.get("updates").is_none() && value.get("batches").is_none());
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].count, 2);
         let mut ancestors = vec![];
         let markdown = export(&messages, &mut ancestors, &|_| async {
             Err::<Vec<DisplayMessage>, _>(())

@@ -1,7 +1,75 @@
 use super::FacadeConnection;
+use mainframe_acp::binary_frame;
+use mainframe_acp::rpc;
+use mainframe_types::acp::extensions::BatchFrame;
+use mainframe_types::acp::jsonrpc::RequestId;
 use mainframe_types::acp::update::SessionUpdate;
+use tokio::sync::mpsc;
 
 impl FacadeConnection {
+    /// The receiving end of the binary frame channel, for the socket loop
+    /// that owns this connection. Taken once; later calls get `None`.
+    pub(crate) fn take_binary_frames(&self) -> Option<mpsc::UnboundedReceiver<Vec<u8>>> {
+        use mainframe_types::sync::LockExt as _;
+        self.binary_rx.lock_recover().take()
+    }
+
+    /// A successful response; one whose `result` says `batchFrames` also
+    /// sends the frames, anything else carries no frames.
+    pub(crate) fn send_result(
+        &self,
+        id: Option<RequestId>,
+        result: serde_json::Value,
+        frames: Vec<BatchFrame>,
+    ) {
+        if result.get("batchFrames").is_some() {
+            self.send_result_with_frames(id, result, frames);
+        } else {
+            self.send_json(&rpc::success_response(id, result));
+        }
+    }
+
+    /// A successful response whose `result` says `batchFrames: N`, followed
+    /// by its N binary frames tied to `id`. The text and binary channels are
+    /// independent, so the response and its frames may reach the client in
+    /// either order, interleaved with other messages; the client pairs them
+    /// by id and index. A frame that cannot be framed turns the whole reply
+    /// into an error, so the client never waits for a batch that will not come.
+    pub(crate) fn send_result_with_frames(
+        &self,
+        id: Option<RequestId>,
+        result: serde_json::Value,
+        frames: Vec<BatchFrame>,
+    ) {
+        let Some(request_id) = id.as_ref().map(binary_frame::id_text) else {
+            self.send_json(&rpc::success_response(id, result));
+            return;
+        };
+        let total = frames.len();
+        let encoded: Option<Vec<Vec<u8>>> = frames
+            .iter()
+            .enumerate()
+            .map(|(index, frame)| binary_frame::encode_frame(&request_id, index, total, frame))
+            .collect();
+        let Some(encoded) = encoded else {
+            tracing::warn!(
+                request_id,
+                total,
+                "history frames did not fit the frame header"
+            );
+            self.send_json(&rpc::error_response(
+                id,
+                rpc::internal_error("history frames could not be encoded"),
+            ));
+            return;
+        };
+        for frame in encoded {
+            // A send error means the socket loop is gone, as for text frames.
+            let _ = self.binary_tx.send(frame);
+        }
+        self.send_json(&rpc::success_response(id, result));
+    }
+
     pub(crate) fn send_replay(&self, chat_id: &str, mut updates: Vec<SessionUpdate>) {
         if self.is_lazy_tool_images_opted_in() {
             for update in &mut updates {

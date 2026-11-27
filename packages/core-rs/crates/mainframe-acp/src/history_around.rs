@@ -226,6 +226,8 @@ pub fn prepare(
     HistoryAroundResult {
         updates: page.result.updates,
         batches: page.result.batches,
+        batch_frames: page.result.batch_frames,
+        frames: page.result.frames,
         has_before: block.lo > 0 || start > 0,
         has_after: block.hi + 1 < messages.len() || end < total,
         first_item_id: first_id,

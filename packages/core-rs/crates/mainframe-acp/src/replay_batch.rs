@@ -17,7 +17,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use mainframe_types::acp::extensions::{REPLAY_BATCH_ENCODING, ReplayBatchParams};
+use mainframe_types::acp::extensions::{BatchFrame, REPLAY_BATCH_ENCODING, ReplayBatchParams};
 use mainframe_types::acp::jsonrpc::JsonRpcNotification;
 use mainframe_types::acp::update::SessionUpdate;
 
@@ -55,13 +55,37 @@ pub(crate) enum EncodeBatchError {
     Deflate(#[from] std::io::Error),
 }
 
-/// The payload for one batch: base64 of the zlib-deflated JSON array.
-pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, EncodeBatchError> {
+/// The zlib-deflated JSON array of one batch, the bytes both the base64 text
+/// form and a binary frame carry.
+pub(crate) fn deflate_batch(updates: &[SessionUpdate]) -> Result<Vec<u8>, EncodeBatchError> {
     let json = serde_json::to_vec(updates)?;
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
     encoder.write_all(&json)?;
-    let bytes = encoder.finish()?;
-    Ok(STANDARD.encode(bytes))
+    Ok(encoder.finish()?)
+}
+
+/// The payload for one batch: base64 of the zlib-deflated JSON array.
+pub(crate) fn encode_batch(updates: &[SessionUpdate]) -> Result<String, EncodeBatchError> {
+    Ok(STANDARD.encode(deflate_batch(updates)?))
+}
+
+/// The replay `updates` as binary-frame batches, cut like
+/// [`replay_batch_notifications`]; one that fails to compress is logged and
+/// skipped.
+pub fn replay_batch_frames(session_id: &str, updates: &[SessionUpdate]) -> Vec<BatchFrame> {
+    updates
+        .chunks(REPLAY_BATCH_MAX_UPDATES)
+        .filter_map(|chunk| match deflate_batch(chunk) {
+            Ok(bytes) => Some(BatchFrame {
+                count: chunk.len(),
+                bytes,
+            }),
+            Err(err) => {
+                tracing::warn!(error = %err, session_id, count = chunk.len(), "dropped a history frame");
+                None
+            }
+        })
+        .collect()
 }
 
 fn notification(session_id: &str, count: usize, data: String) -> JsonRpcNotification {

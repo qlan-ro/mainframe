@@ -172,3 +172,41 @@ async fn a_failed_initialize_does_not_mark_the_opt_in() {
     assert!(!connection.is_negotiated());
     assert!(!connection.is_revision_cursors_opted_in());
 }
+
+fn binary_initialize(opt_in: serde_json::Value) -> String {
+    let mut request = initialize_request(1, None);
+    request.params.as_mut().unwrap()["_meta"] =
+        json!({ "_mainframe.dev": { "binaryHistoryFrames": opt_in } });
+    serde_json::to_string(&request).unwrap()
+}
+
+/// Binary history frames are negotiated like the other opt-ins: only a client
+/// that sets the key to `true` in a successful `initialize` gets them, and
+/// the daemon advertises the capability so a client can tell.
+#[tokio::test]
+async fn binary_history_frames_are_opt_in_per_connection() {
+    let ctx = AppCtx::test_ctx();
+    for (opt_in, expected) in [
+        (json!(true), true),
+        (json!(false), false),
+        (json!("yes"), false),
+    ] {
+        let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
+        let reply = handle_inbound(&binary_initialize(opt_in), &daemon(), &ctx, &connection).await;
+        assert_eq!(connection.is_binary_history_frames_opted_in(), expected);
+        let reply: serde_json::Value = serde_json::from_str(&reply.unwrap()).unwrap();
+        assert_eq!(
+            reply["result"]["_meta"]["_mainframe.dev"]["binaryHistoryFrames"],
+            true
+        );
+    }
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("mock-cli".to_string());
+    handle_inbound(
+        &serde_json::to_string(&initialize_request(1, None)).unwrap(),
+        &daemon(),
+        &ctx,
+        &connection,
+    )
+    .await;
+    assert!(!connection.is_binary_history_frames_opted_in());
+}
