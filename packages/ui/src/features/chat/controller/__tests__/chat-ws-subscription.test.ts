@@ -219,6 +219,19 @@ describe('ChatWsSubscription — reconnect', () => {
   });
 });
 
+describe('ChatWsSubscription — warm-up failure on an open socket', () => {
+  it('retries once, and stops after that', async () => {
+    vi.mocked(resumeChat).mockReset().mockRejectedValue(new Error('daemon busy'));
+    const ws = makeFakeWs(true);
+    const sub = new ChatWsSubscription(makeHost(ws));
+    sub.attach();
+    await sub.whenTranscriptReady();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(resumeChat).toHaveBeenCalledTimes(2);
+    vi.mocked(resumeChat).mockReset().mockResolvedValue(undefined);
+  });
+});
+
 describe('ChatWsSubscription.detach', () => {
   it('unsubscribes and stops forwarding further events', () => {
     const ws = makeFakeWs();

@@ -3,8 +3,9 @@ import { chatControllerRegistry } from '../chat-controller-registry';
 import { handOverBootPrewarm, resetBootPrewarm, settleBootPrewarm, startBootChatPrewarm } from '../boot-chat-prewarm';
 import { useLastSessionStore } from '@/store/last-session';
 
-function fakeController(order: string[], id = 'c') {
+function fakeController(order: string[], id = 'c', inUse = false) {
   return {
+    isInUse: () => inUse,
     subscribeLive: vi.fn(() => {
       order.push(`${id}:live`);
       return () => order.push(`${id}:unlive`);
@@ -78,6 +79,14 @@ it('releases and drops the controller when the remembered chat is gone from the 
   settleBootPrewarm('chat-2', new Set(['chat-2']));
   expect(order.slice(2)).toEqual(['chat-1:unlive', 'chat-1:release']);
   expect(dispose).toHaveBeenCalledWith('chat-1');
+});
+
+it('keeps a controller another view still holds, even when the list does not show the chat', () => {
+  controllers.set('chat-1', fakeController(order, 'chat-1', true));
+  startBootChatPrewarm(31415, 'chat-1');
+  settleBootPrewarm('chat-2', new Set(['chat-2']));
+  expect(order.slice(2)).toEqual(['chat-1:unlive', 'chat-1:release']);
+  expect(dispose).not.toHaveBeenCalled();
 });
 
 it('releases but keeps the controller when the chat is listed and the router opened another', () => {

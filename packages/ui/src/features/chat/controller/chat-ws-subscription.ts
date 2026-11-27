@@ -32,6 +32,8 @@ export class ChatWsSubscription {
   private warm: Promise<void> = Promise.resolve();
   /** The last warm-up request failed, so the next open of the socket asks again. */
   private warmFailed = false;
+  /** The failed warm-up was already retried on an open socket. */
+  private retried = false;
   /** The socket was seen down since the last subscribe. */
   private sawDrop = false;
 
@@ -81,12 +83,25 @@ export class ChatWsSubscription {
 
   private subscribeAndWarm(): void {
     this.sawDrop = false;
-    this.warmFailed = false;
+    this.retried = false;
     this.host.ws.subscribe(this.host.chatId);
+    this.warmUp();
+  }
+
+  /**
+   * The history request. One that fails after the socket is already open has no later open to
+   * retry on, so it is retried once here; one that fails before it retries on the first open.
+   */
+  private warmUp(): void {
+    this.warmFailed = false;
     this.warm = resumeChat(this.host.port, this.host.chatId, { waitFor: 'transcript', initialWindow: true }).catch(
       (err: unknown) => {
         this.warmFailed = true;
         console.warn('[chat-ws] resumeChat failed', err);
+        if (this.host.ws.connected && !this.retried && !this.host.isDisposed()) {
+          this.retried = true;
+          this.warmUp();
+        }
       },
     );
   }

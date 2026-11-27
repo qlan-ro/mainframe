@@ -15,7 +15,8 @@
  *   the selection takes its own holds, so the plane never detaches in between;
  * - the router opened another chat, or none (deleted, archived, empty list,
  *   list failed): `settleBootPrewarm` releases the guess, and drops the
- *   controller when the chat is not in the list any more;
+ *   controller when the chat is not in the list any more and no other view
+ *   holds it;
  * - nothing settles it: it releases itself after `EXPIRY_MS`.
  */
 import { useLastSessionStore } from '@/store/last-session';
@@ -25,7 +26,7 @@ const EXPIRY_MS = 15_000;
 
 interface Guess {
   chatId: string;
-  controller: object;
+  controller: { isInUse(): boolean };
   release: () => void;
 }
 
@@ -71,7 +72,10 @@ export function handOverBootPrewarm(controller: object): void {
 export function settleBootPrewarm(keepChatId: string | null, listedChatIds: ReadonlySet<string>): void {
   if (!current || current.chatId === keepChatId) return;
   const guess = stopGuess();
-  if (guess && !listedChatIds.has(guess.chatId)) chatControllerRegistry.dispose(guess.chatId);
+  // A restored workspace tab may hold the chat even when the list does not show it as a session.
+  if (guess && !listedChatIds.has(guess.chatId) && !guess.controller.isInUse()) {
+    chatControllerRegistry.dispose(guess.chatId);
+  }
 }
 
 /** A daemon switch drops the controllers; drop the guess with them. */

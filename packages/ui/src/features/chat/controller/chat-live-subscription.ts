@@ -26,6 +26,11 @@ export class ChatLiveSubscription {
 
   constructor(private readonly host: ChatLiveSubscriptionHost) {}
 
+  /** Some view still holds the side-band subscription. */
+  get isSubscribed(): boolean {
+    return this.liveRefs > 0;
+  }
+
   async whenTranscriptReady(): Promise<void> {
     let current: ChatWsSubscription | null;
     do {
