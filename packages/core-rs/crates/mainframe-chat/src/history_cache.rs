@@ -7,7 +7,8 @@ use mainframe_types::chat::ChatMessage;
 use serde::{Deserialize, Serialize};
 
 // Version 4 replaces inlined Claude child histories with parent row facts.
-const FORMAT_VERSION: u32 = 4;
+// Version 5 adds the sub-agent ids carried by those rows' agent facts.
+const FORMAT_VERSION: u32 = 5;
 
 /// How many chats' snapshots the cache directory keeps. Bounds disk use for
 /// installs with a long chat history; newest-by-mtime wins a prune.
@@ -185,12 +186,14 @@ impl HistorySnapshotCache {
         drop(handle);
     }
 
-    async fn write_logged(&self, chat_id: &str, snapshot: Snapshot) -> bool {
+    /// Writes `snapshot` and hands its messages back, so a caller that wants
+    /// them afterwards never needs a second copy kept alive during the write.
+    async fn write_logged(&self, chat_id: &str, snapshot: Snapshot) -> Option<Vec<ChatMessage>> {
         match self.write_snapshot(chat_id, snapshot).await {
-            Ok(()) => true,
+            Ok(messages) => Some(messages),
             Err(err) => {
                 tracing::warn!(error = %err, chat_id, "write failed");
-                false
+                None
             }
         }
     }
@@ -221,20 +224,31 @@ impl HistorySnapshotCache {
             },
         )
         .await
+        .map(drop)
     }
 
+    /// Streams the snapshot straight into its file (the messages are
+    /// borrowed by the serializer; neither a second copy of them nor the
+    /// serialized text is ever held whole) and returns the messages once the
+    /// file is written.
     async fn write_snapshot(
         &self,
         chat_id: &str,
         snapshot: Snapshot,
-    ) -> Result<(), SnapshotWriteError> {
+    ) -> Result<Vec<ChatMessage>, SnapshotWriteError> {
         tokio::fs::create_dir_all(&self.dir).await?;
-        let json = tokio::task::spawn_blocking(move || serde_json::to_vec(&snapshot))
-            .await
-            .map_err(|error| std::io::Error::other(error.to_string()))??;
-        mainframe_runtime::fs::write_atomic(&self.snapshot_path(chat_id), &json, false).await?;
+        let snapshot = Arc::new(snapshot);
+        let streamed = Arc::clone(&snapshot);
+        mainframe_runtime::fs::write_atomic_streaming(
+            &self.snapshot_path(chat_id),
+            false,
+            move |writer| serde_json::to_writer(writer, &*streamed).map_err(std::io::Error::from),
+        )
+        .await?;
         self.prune().await;
-        Ok(())
+        let snapshot = Arc::into_inner(snapshot)
+            .ok_or_else(|| std::io::Error::other("snapshot still shared after its write"))?;
+        Ok(snapshot.messages)
     }
 
     /// Keeps only the newest `max_snapshots` `*.json` files by mtime. Runs

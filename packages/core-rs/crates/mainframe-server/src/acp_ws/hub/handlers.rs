@@ -189,6 +189,7 @@ impl FacadeHub {
             entry.value().forget_chat(chat_id);
         }
         self.drop_revision_log(chat_id);
+        self.forget_history_refresh(chat_id);
     }
 }
 

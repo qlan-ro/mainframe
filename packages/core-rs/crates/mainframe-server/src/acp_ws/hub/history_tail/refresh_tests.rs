@@ -39,6 +39,19 @@ async fn snapshot_len(fixture: &Fixture) -> Option<u64> {
     snapshot["fingerprint"]["sources"][0]["len"].as_u64()
 }
 
+/// The transcript length the stored tail manifest is pinned to. The tail
+/// writes after the snapshot, so this is the last signal a refresh gives.
+async fn tail_len(fixture: &Fixture) -> Option<u64> {
+    let path = fixture
+        .directory
+        .path()
+        .join("data/tails")
+        .join(format!("{}.meta.json", fixture.chat_id));
+    let bytes = tokio::fs::read(path).await.ok()?;
+    let manifest: Value = serde_json::from_slice(&bytes).ok()?;
+    manifest["validation"]["fingerprint"]["sources"][0]["len"].as_u64()
+}
+
 async fn transcript_len(fixture: &Fixture) -> u64 {
     tokio::fs::metadata(&fixture.source).await.unwrap().len()
 }
@@ -95,7 +108,7 @@ async fn a_finished_turn_rewrites_the_tail_and_snapshot_for_the_next_start() {
         std::time::Duration::from_millis(20),
         async || {
             snapshot_len(&fixture).await == Some(expected)
-                && restart_and_replay(&fixture).await.is_some()
+                && tail_len(&fixture).await == Some(expected)
         },
     )
     .await
@@ -171,4 +184,61 @@ async fn shutdown_with_no_finished_turn_writes_nothing() {
         .await;
     assert_eq!(snapshot_len(&fixture).await, None);
     fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn nothing_refreshes_once_shutdown_has_begun() {
+    let fixture = fixture().await;
+    persist(&fixture).await;
+    let ctx = &fixture.ctx;
+    ctx.chat
+        .facade_hub
+        .attach_history_refresh(&ctx.chat.chat_manager);
+    ctx.chat
+        .facade_hub
+        .flush_history_refreshes(std::time::Duration::from_secs(5))
+        .await;
+    run_a_turn(&fixture, 100).await;
+
+    finish_turn(ctx, &fixture.chat_id);
+    assert!(!refresh_started_within_half_a_second(&fixture).await);
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn a_deleted_chat_is_not_refreshed() {
+    let fixture = fixture().await;
+    persist(&fixture).await;
+    let ctx = &fixture.ctx;
+    ctx.chat
+        .facade_hub
+        .attach_history_refresh(&ctx.chat.chat_manager);
+    run_a_turn(&fixture, 100).await;
+
+    finish_turn(ctx, &fixture.chat_id);
+    ctx.chat
+        .facade_hub
+        .on_chat_surface_event(ChatSurfaceEvent::ChatEnded {
+            chat_id: fixture.chat_id.clone(),
+        });
+    assert!(!refresh_started_within_half_a_second(&fixture).await);
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+/// Whether a refresh of the fixture's chat began, watching a few times the
+/// refresh delay (a refresh that was going to run would have started by then).
+async fn refresh_started_within_half_a_second(fixture: &Fixture) -> bool {
+    mainframe_runtime::test_support::poll_until(
+        std::time::Duration::from_millis(500),
+        std::time::Duration::from_millis(20),
+        async || {
+            fixture
+                .ctx
+                .chat
+                .facade_hub
+                .history_refresh_started(&fixture.chat_id)
+        },
+    )
+    .await
+    .is_ok()
 }

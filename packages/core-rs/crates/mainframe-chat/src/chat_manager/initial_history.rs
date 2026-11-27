@@ -86,6 +86,7 @@ impl ChatManager {
             return false;
         };
         !self.is_chat_working(chat_id)
+            && !self.shared.maintenance.active(chat_id)
             && !self.shared.permissions.lock_recover().has_pending(chat_id)
             && chat.process_state != Some(Some(mainframe_types::chat::ProcessState::Working))
             && !chat.temporary

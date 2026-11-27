@@ -11,6 +11,13 @@ pub struct RefreshedHistory {
 }
 
 impl ChatManager {
+    /// Whether refreshing this chat starts a helper process to read its
+    /// history (Codex runs a temporary app-server per read).
+    pub fn history_refresh_spawns_process(&self, chat_id: &str) -> bool {
+        self.get_chat(chat_id)
+            .is_none_or(|chat| chat.adapter_id == "codex")
+    }
+
     /// Reparses an idle chat's transcript from disk and rewrites its history
     /// snapshot, so the next daemon start restores it without a full read.
     /// The in-memory cache is not touched: the result reflects the files, not

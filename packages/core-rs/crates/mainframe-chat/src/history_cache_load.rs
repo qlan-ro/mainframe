@@ -78,11 +78,8 @@ impl HistorySnapshotCache {
                 return None;
             }
         };
-        let (validation, snapshot) =
-            Self::settled(session, context, before, messages.clone()).await?;
-        if !self.write_logged(chat_id, snapshot).await {
-            return None;
-        }
+        let (validation, snapshot) = Self::settled(session, context, before, messages).await?;
+        let messages = self.write_logged(chat_id, snapshot).await?;
         Some(ParsedHistory {
             messages,
             validation,
