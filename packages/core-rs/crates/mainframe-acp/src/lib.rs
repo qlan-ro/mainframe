@@ -21,6 +21,7 @@ mod container_index;
 pub mod encoder;
 pub mod gate_registry;
 pub mod gates;
+pub mod history_around;
 pub mod history_page;
 pub mod history_search;
 pub mod history_window;
@@ -67,5 +68,7 @@ pub use session_state::SessionState;
 pub use stream::SessionStream;
 pub use throttle::{Throttle, ThrottledFrame};
 
+#[cfg(test)]
+mod history_around_tests;
 #[cfg(test)]
 mod reference_measurement_tests;

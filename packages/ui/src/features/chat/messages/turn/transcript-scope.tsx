@@ -12,6 +12,8 @@ export interface TranscriptScope {
   live?: boolean;
   /** The agent whose steps these are was stopped. */
   cancelled?: boolean;
+  /** The saved sub-agent whose transcript these rows are; its tool results and images live there. */
+  subagentId?: string;
 }
 const empty: TranscriptScope = { rootThreadId: '', ancestors: [], pendingToolIds: new Set() };
 const Context = createContext<TranscriptScope>(empty);
@@ -43,6 +45,16 @@ export function RootTranscriptScope({ children }: { children: ReactNode }) {
   return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
 }
 
+/**
+ * Rows read from a saved sub-agent's own transcript. Left out, the rows are the
+ * chat's own (or an enclosing sub-agent's, when that one is passed through).
+ */
+export function SubagentTranscriptScope({ subagentId, children }: { subagentId?: string; children: ReactNode }) {
+  const parent = useTranscriptScope();
+  const value = useMemo(() => ({ ...parent, subagentId }), [parent, subagentId]);
+  return <TranscriptScopeProvider value={value}>{children}</TranscriptScopeProvider>;
+}
+
 export interface NestedScope {
   messageId: string;
   toolCallId: string;
@@ -71,6 +83,7 @@ export function NestedTranscriptScope({
       live,
       cancelled,
       chatId: chatId ?? parent.chatId,
+      subagentId: chatId ? undefined : parent.subagentId,
       pendingToolIds: pendingToolIds ?? parent.pendingToolIds,
       ancestors: [...parent.ancestors, JSON.stringify([messageId, toolCallId])],
     }),

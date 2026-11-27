@@ -2,7 +2,7 @@ import type { ToolResultImage } from '@qlan-ro/mainframe-types';
 import { apiBase, request } from './http';
 import { subscribeActiveDaemon } from '../daemon/active-daemon';
 
-const IMAGE_REFERENCE = /^\/api\/chats\/[\w-]+\/tool-result\/[\w-]+\/images\/\d+\?v=[a-f0-9]{16}$/;
+const IMAGE_REFERENCE = /^\/api\/chats\/[\w-]+\/tool-result\/[\w-]+\/images\/\d+\?v=[a-f0-9]{16}(&agent=[\w-]+)?$/;
 const MAX_CACHE_CHARS = 16 * 1024 * 1024;
 const cache = new Map<string, { pending: Promise<ToolResultImage>; chars: number }>();
 subscribeActiveDaemon(() => cache.clear());

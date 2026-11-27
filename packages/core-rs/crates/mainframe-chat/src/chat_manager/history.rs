@@ -201,7 +201,7 @@ impl ChatManager {
 
     /// Build a stateless history-load session using the chat's worktree,
     /// scratch directory, or project path.
-    fn history_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
+    pub(super) fn history_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
         let chat = self.get_chat(chat_id)?;
         build_history_session(&self.shared.deps, &chat, chat_id)
     }

@@ -112,8 +112,11 @@ impl AgentFacts {
                         .cloned()
                         .or_else(|| tail(paths.get(id.as_str())?))
                         .unwrap_or_else(|| json!({"status":"unknown"}));
-                    if files.is_none() {
-                        fact["nativeAgentId"] = json!(native_ids.get(id));
+                    // A parent row names the agent file only when its mapping is known;
+                    // without it the client falls back to the tool-call id.
+                    let native = native_ids.get(id).map(|agent| json!(agent));
+                    if native.is_some() || files.is_none() {
+                        fact["nativeAgentId"] = native.unwrap_or_default();
                     }
                     Some((id, fact))
                 })
@@ -277,6 +280,8 @@ mod tests {
         assert_eq!(rows["notified"]["source"], "notification");
         assert_eq!(rows["tail"]["durationMs"], 42);
         assert_eq!(rows["tail"]["source"], "tail");
+        assert_eq!(rows["tail"]["nativeAgentId"], "child");
+        assert!(rows["final"].get("nativeAgentId").is_none());
         assert_eq!(rows["unknown"]["status"], "unknown");
     }
 

@@ -37,10 +37,16 @@ async fn codex_tool_result_without_path_uses_adapter_rollout_and_persists_it() {
     ctx.core.adapter_registry.register(adapter);
     let id = seed_tool_result_chat(&ctx, "codex").await;
 
-    let (status, body) =
-        read(tool_result(State(ctx.clone()), Path((id.clone(), "call_1".into()))).await)
-            .await
-            .unwrap();
+    let (status, body) = read(
+        tool_result(
+            State(ctx.clone()),
+            Path((id.clone(), "call_1".into())),
+            Query(Default::default()),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["content"], "codex result");
     let stored = ctx
@@ -61,10 +67,16 @@ async fn codex_tool_result_without_transcript_keeps_path_absent() {
         .register(StubAdapter::new("codex", false));
     let id = seed_tool_result_chat(&ctx, "codex").await;
 
-    let (status, body) =
-        read(tool_result(State(ctx.clone()), Path((id.clone(), "call_1".into()))).await)
-            .await
-            .unwrap();
+    let (status, body) = read(
+        tool_result(
+            State(ctx.clone()),
+            Path((id.clone(), "call_1".into())),
+            Query(Default::default()),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "No session file for chat");
     let stored = ctx
@@ -93,10 +105,16 @@ async fn claude_tool_result_without_path_uses_adapter_jsonl() {
     ctx.core.adapter_registry.register(adapter);
     let id = seed_tool_result_chat(&ctx, "claude").await;
 
-    let (status, body) =
-        read(tool_result(State(ctx.clone()), Path((id.clone(), "tool_1".into()))).await)
-            .await
-            .unwrap();
+    let (status, body) = read(
+        tool_result(
+            State(ctx.clone()),
+            Path((id.clone(), "tool_1".into())),
+            Query(Default::default()),
+        )
+        .await,
+    )
+    .await
+    .unwrap();
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["data"]["content"], "claude result");
     let stored = ctx

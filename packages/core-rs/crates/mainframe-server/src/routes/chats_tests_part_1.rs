@@ -5,6 +5,7 @@ use mainframe_types::chat_patch::ChatPatch;
 use std::collections::HashMap;
 
 use crate::test_support::read_json as read;
+use mainframe_types::transcript::TranscriptLocation;
 
 /// Seeds the chats-filter fixture and returns the label→id map (ids are nanoid,
 /// so the `c1..c5` labels are captured, not asserted literally).
@@ -247,7 +248,12 @@ async fn set_effort_accepts_ultra_past_validation() {
 #[tokio::test]
 async fn tool_result_rejects_bad_tool_use_id_400() {
     let ctx = AppCtx::test_ctx();
-    let resp = tool_result(State(ctx.clone()), Path(("c".into(), "bad id!".into()))).await;
+    let resp = tool_result(
+        State(ctx.clone()),
+        Path(("c".into(), "bad id!".into())),
+        Query(Default::default()),
+    )
+    .await;
     let (status, _) = read(resp).await.unwrap();
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -255,7 +261,12 @@ async fn tool_result_rejects_bad_tool_use_id_400() {
 #[tokio::test]
 async fn tool_result_missing_chat_404() {
     let ctx = AppCtx::test_ctx();
-    let resp = tool_result(State(ctx.clone()), Path(("nope".into(), "abc".into()))).await;
+    let resp = tool_result(
+        State(ctx.clone()),
+        Path(("nope".into(), "abc".into())),
+        Query(Default::default()),
+    )
+    .await;
     let (status, body) = read(resp).await.unwrap();
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["error"], "Chat not found");
