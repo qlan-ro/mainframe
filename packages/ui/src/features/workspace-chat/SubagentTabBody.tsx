@@ -52,12 +52,15 @@ function usePlace(
   messages: readonly ThreadMessage[],
   state: ChatThreadState,
   world: AgentWorld,
-  /** The call is a copy from outside the parent's window. */
-  detached: boolean,
+  /** The parent's window, when the call is a copy from outside it. */
+  window: readonly ThreadMessage[] | null,
 ): Place | null {
   const cache = useMemo(() => new TurnCache(), []);
   const pending = useMemo(() => pendingCalls(state), [state]);
-  const turns = useMemo(() => chatTurns(messages, state, cache, detached), [messages, state, cache, detached]);
+  const turns = useMemo(
+    () => chatTurns(messages, state, cache, window && call ? { window, messageId: call.messageId } : null),
+    [messages, state, cache, window, call],
+  );
   return useMemo(() => {
     if (call === null) return null;
     const partLive = holderLive(turns, call, pending, world);
@@ -193,7 +196,7 @@ export function SubagentTabBody({
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
   const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
-  const place = usePlace(call, callMessages, state, world, detached);
+  const place = usePlace(call, callMessages, state, world, detached ? messages : null);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;

@@ -87,6 +87,8 @@ interface Shape {
   title?: string;
   /** The daemon cut the oldest steps short. */
   more?: boolean;
+  /** When the call's message was made. */
+  at?: string;
 }
 function around({
   done = false,
@@ -94,6 +96,7 @@ function around({
   facts = false,
   title = 'Agent',
   more = false,
+  at,
 }: Shape = {}): HistoryAroundResult {
   const subagentFacts = facts
     ? { 'call-1': { status: 'completed', summary: 'Found two races.', nativeAgentId: 'a1', title: 'Review the diff' } }
@@ -109,6 +112,7 @@ function around({
       [META]: {
         created: true,
         subagent: true,
+        ...(at && { timestamp: at }),
         sourceToolCallId: 'call-1',
         ...(subagentFacts && { messageMeta: { subagentFacts } }),
       },
@@ -473,9 +477,41 @@ describe('a daemon without history_around, once the call leaves the window', () 
   });
 });
 
-describe('a copy from an earlier turn', () => {
-  it('is not running while a later turn runs, even when the run cannot be placed', async () => {
-    world.state = state({ runState: { type: 'running' }, run: null });
+describe('a copy outside the window and the run in progress', () => {
+  const started = Date.parse('2026-01-01T00:00:10Z');
+  const running = (run: object | null) =>
+    (world.state = state({ runState: { type: 'running', startedAtMs: started }, run }));
+
+  it('is running when the whole chat is the run', async () => {
+    running({ after: null, confirmed: true });
+    render(tab());
+    await settle();
+    expect(status()).toBe('running');
+  });
+
+  it('is not running when the run began after a message the window holds', async () => {
+    world.live = [{ id: 'u-late', role: 'user', content: [], metadata: { custom: {} } }];
+    running({ after: 'u-late', confirmed: true });
+    render(tab());
+    await settle();
+    expect(status()).not.toBe('running');
+  });
+
+  it('is told by its own time against the turn’s start when the run cannot be placed', async () => {
+    running({ after: 'gone', confirmed: true });
+    controller.subagentHistory.around.mockResolvedValue(around({ at: '2026-01-01T00:00:12Z' }));
+    const view = render(tab());
+    await settle();
+    expect(status()).toBe('running');
+    view.unmount();
+    controller.subagentHistory.around.mockResolvedValue(around({ at: '2026-01-01T00:00:03Z' }));
+    render(tab());
+    await settle();
+    expect(status()).not.toBe('running');
+  });
+
+  it('is not running when either time is unknown', async () => {
+    running(null);
     render(tab());
     await settle();
     expect(status()).not.toBe('running');

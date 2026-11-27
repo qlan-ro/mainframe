@@ -51,9 +51,13 @@ export function useSubagentCall(options: Options): ResolvedCall {
   const own = useOwnSubagentCall({ controller, state, toolCallId, enabled, taskKey, active });
   const fallback = enabled && own.kind === 'unsupported';
 
-  // The last copy the stream had, kept while a call that left the window is fetched.
-  const [lastLive, setLastLive] = useState<{ call: SubagentCall; messages: readonly ThreadMessage[] } | null>(null);
-  if (liveCall && lastLive?.call !== liveCall) setLastLive({ call: liveCall, messages });
+  // The last copy the stream had, kept while a call that left the window is fetched. It is kept
+  // with the message that holds it, which changes only when the call's own message does.
+  const container = liveCall ? messages.find(({ id }) => id === liveCall.messageId) : undefined;
+  const [lastLive, setLastLive] = useState<{ call: SubagentCall; container: ThreadMessage | undefined } | null>(null);
+  if (liveCall && (lastLive?.call !== liveCall || lastLive.container !== container)) {
+    setLastLive({ call: liveCall, container });
+  }
 
   const ownCall = enabled && own.kind === 'call' ? own : null;
   const call = useMemo<SubagentCall | null>(() => {
@@ -66,7 +70,8 @@ export function useSubagentCall(options: Options): ResolvedCall {
     return ownCall?.call ?? lastLive?.call ?? null;
   }, [savedNestedCall, messageId, toolCallId, liveCall, partial, ownCall, lastLive]);
 
-  const detached = !nested && !liveCall && ownCall != null;
+  // A copy kept for a call that left the window is as old as the window's first turn.
+  const detached = !nested && !liveCall && (ownCall != null || lastLive != null);
   // The paging fallback looks for the call in the window itself, so it runs again when the call leaves it.
   const fallbackError = useLoadParentCall(controller, state, messages, liveCall, {
     toolCallId,
@@ -80,7 +85,8 @@ export function useSubagentCall(options: Options): ResolvedCall {
   else if (own.kind === 'missing') error = 'Not in this transcript';
   return {
     call,
-    messages: detached ? ownCall.messages : !liveCall && lastLive ? lastLive.messages : messages,
+    messages:
+      ownCall && detached ? ownCall.messages : !liveCall && lastLive?.container ? [lastLive.container] : messages,
     detached,
     omitted: ownCall?.omitted ?? false,
     error,

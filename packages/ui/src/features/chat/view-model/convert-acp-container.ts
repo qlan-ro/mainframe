@@ -12,13 +12,13 @@
  * because two items cannot.
  */
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import { ExportedMessageRepository } from '@assistant-ui/react';
 import type { ItemMeta } from '@qlan-ro/mainframe-types';
 import type { ContentBlock } from '@qlan-ro/mainframe-types';
 import type { AccumulatedItem } from './acp-item-accumulator';
 import { type ContentPart, ensureNonEmpty, toJsonArgs } from './content';
 import { convertUserContainer } from './convert-acp-user';
 import type { MainframeMessageMeta } from './message-meta';
+import { normalizeNativeRepository } from './normalize-native-messages';
 import { toolCallResult } from './tool-call-result';
 import { mapPresentationSources } from './transcript-presentation';
 import { projectToolLifecycle } from './tool-call-lifecycle';
@@ -121,7 +121,8 @@ function subagentMessages(task: Extract<AccumulatedItem, { kind: 'tool-call' }>,
     content: ensureNonEmpty(parts),
     ...(mainframe && { metadata: { custom: { mainframe } } }),
   });
-  return ExportedMessageRepository.fromArray(likes).messages.map((m) => m.message);
+  // Normalized, so blank parts drop with their keys and sources re-indexed.
+  return normalizeNativeRepository(likes).messages.map((m) => m.message);
 }
 
 /** Items → parts in item order, plus where each part came from. */

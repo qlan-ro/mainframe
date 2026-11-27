@@ -30,11 +30,19 @@ function join(fetched: ThreadMessage, live: ThreadMessage): ThreadMessage {
   const newer = entriesOf(live);
   if (!older || !newer || live.role !== 'assistant') return live;
   const liveByKey = new Map(newer.map((entry) => [entry.key, entry]));
-  const known = new Set(older.map(({ key }) => key));
-  const joined = [
-    ...older.map((entry) => liveByKey.get(entry.key) ?? entry),
-    ...newer.filter(({ key }) => !known.has(key)),
-  ];
+  const joined = older.map((entry) => liveByKey.get(entry.key) ?? entry);
+  // A part only the stream has goes right after the part before it in the stream.
+  let anchor = -1;
+  for (const entry of newer) {
+    const at = joined.findIndex(({ key }) => key === entry.key);
+    if (at >= 0) {
+      anchor = at;
+      continue;
+    }
+    // With no shared part before it, the stream's part is newer than everything fetched.
+    anchor = anchor < 0 ? joined.length : anchor + 1;
+    joined.splice(anchor, 0, entry);
+  }
   const sources: Record<number, readonly NativePartSource[]> = {};
   joined.forEach(({ sources: found }, index) => {
     if (found) sources[index] = found;
