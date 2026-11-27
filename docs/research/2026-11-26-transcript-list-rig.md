@@ -595,7 +595,40 @@ An experiment that widened the owner's gate to "within a viewport of the top" (`
 ### 9.6 What was not tested
 
 - Chromium and Playwright WebKit at full set, three repetitions, and `v2` and `v1+progressive` (scoped out for this pass); one repetition per cell here, so cells near a boundary (the `v1s` 17 px, the 5 px real flick) could flip.
-- P1-P4 after the fix: not rerun, so "nothing else breaks" is not shown.
+- P1-P4 after the fix: not rerun in this pass; 9.7 reruns them with `v1+near`.
 - Safari itself, and a real trackpad: momentum is the harness's synthetic phases.
 - Whether anchoring is suppressed at offset 0 or during momentum (9.3), and the near-top gate experiment (`?fix=2`, hung).
 - The real compaction marker (the `shape=real` fixture has none), and the daemon's real page latency distribution (60 ms ±30% only).
+
+### 9.7 The near-top correction closes the hole (27 November 2026, #461 step 1)
+
+`v1+near` (`?near=1`, `shells/scroll-owner.ts`) is the fix the 9.4 conclusion asked for. It leaves browser anchoring on, and it adds a correction only when a page lands while the reader is not following and is within a viewport of the top:
+
+1. Before the commit, record the reader's block (the one a third of the way down) in **content** coordinates, not viewport ones, and the `scrollTop` read then.
+2. After layout, in the resize callback, measure how far the block moved in the content (`moved`). If `scrollTop` has followed the content by more than half of that, the browser held the reader and nothing is written.
+3. Otherwise add the missing shift with `scrollBy({ top: moved, behavior: 'instant' })`.
+
+The two things 9.3 and 9.4 found are both addressed. The gate no longer depends on the main thread reading exactly 0 (a read of 22 or 64 during momentum is inside it). And the write is relative, so the wheel input in flight is kept: the first prototype set an absolute `scrollTop` and lost it, `scrollBy` does not. It is about 20 lines. Content coordinates make the shift independent of the scroll the reader did meanwhile, and the "held" test makes it a no-op wherever the browser already holds, which is why the cells that passed before still pass.
+
+The cause of the browser's miss is still not separated (suppression at offset 0, or suspended anchoring during momentum). The trace is consistent with the first: the failing landing had `scrollTop` 64 one frame before and 22 in the landing frame. The fix does not depend on which it is.
+
+**Result, WKWebView, one pass per cell, load average 9.7 to 10.7 (recorded, not waited out):**
+
+| Case | v1 (9.2) | v1+fix (9.2) | v1+near |
+| --- | --- | --- | --- |
+| window=2, from the tail, -60 / -300 / flicks | pass / pass / pass | pass / pass / **fail** 168 | pass 0.2 / pass 0.2 / pass 0.2 |
+| window=2, parked at 0, -60 / -300 / flicks | pass / pass / pass | pass / pass / pass | pass 0.8 / pass 0.8 / pass 0.8 |
+| real shape, -60 px steps | pass | **fail** 60 | pass 0, loads 4 |
+| real shape, -300 px steps | pass | pass | pass 0, loads 2 |
+| **real shape, momentum flicks** | **fail** 537, pinned | **fail** 22 | **pass 0, end 0, pinned 0, loads 3** |
+
+The ledger's noise floor for `v1+near` is 0/0/0 px. P1 to P5 in the same pass, once each: P1 0.2 px, P1 at offset 0 0.8 px, P2 end 0.2 px against a 0 px control, P3 image 0/0, code 0/0, fold 0.3/0.3, P4 follow gap 0 px with the upward wheel releasing and the jump in 1 frame and the downward wheel still following, P5 at the end on the first visible frame with 0 hidden frames. All pass. The P6 mount row in the summary says "fail" only because it compares against `v0`, which this run did not include; the mount time is 484 ms under the load. Raw results: [`results/s-top-near-wk.json`](../../packages/ui/benchmarks/transcript-list/results/s-top-near-wk.json).
+
+**Repeatability.** Two more passes (three repetitions of the nine S-top cells and of P4, and plain `v1` on two cells for comparison) gave the same table with two exceptions, both a single event in a single repetition:
+
+- `window=2` from the tail at -60 px steps: 60.2 px in 3 of 3 repetitions of the second pass and in 1 of 3 for plain `v1`, with an end residual of 0.2. The trace of a failing landing shows the owner holding the anchor at the landing frame (offset -255.19, the baseline), and then a 60 px step later: the main thread stalled for 60 ms while the page mounted, three wheel events were applied together, and the ledger's prefix model forgave less than the step. That is the ledger's lag error, which plain `v1` shows too, not a landing the owner lost.
+- `window=2` from the tail with flicks: 181 and 147 px in one repetition each (the other repetitions 0.2). The trace again shows the anchor held at the landing frame (-191.19 against a baseline of -190) and a single 238 px frame after a 62 ms stall, with a -171 px momentum event in flight. This is the same ledger limit, with a larger event.
+
+So "pass" in the table means the owner held the landing in every run. The two cells above can show a 60 to 240 px ledger artifact under load, and any gate that reads them should repeat the cell and look at the landing frame. The three real-shape cells and the parked cells passed in all four runs.
+
+**What this closes and what it does not.** The owner's case, a real-shape first window with momentum flicks at the top, now holds (0 px against 537 px), and the owner holds every other S-top cell it held before. Not covered: Chromium and Playwright WebKit for the fix (WKWebView only, as the owner's rule says), a real trackpad, and `v1+progressive` with the fix (step 2 re-anchors per slice).

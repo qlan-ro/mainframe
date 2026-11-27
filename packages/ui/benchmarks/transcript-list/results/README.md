@@ -12,3 +12,4 @@ The JSON behind every cell of [the report](../../../../../docs/research/2026-11-
 `E-` cases for plain `v1` appear in the `wk` and `chromium` matrices from an earlier plan of the run: they start a scenario before the owner has settled and race its own mount, so the report does not use them. Cases listed in `summarize.mjs`'s `Errors` line are harness failures (the WKWebView process died); a cell is blank when every repetition failed.
 
 Summarize with `node ../driver/summarize.mjs matrix-chromium.json` (add `ab-980-*.json` for the A/B).
+| `s-top-near-wk.json` | The near-top correction (`v1+near`, report section 9.7): one pass of P1 to P5, S-top and S-noise, then three repetitions of S-top and P4, with plain `v1` on two cells for comparison. WKWebView, load average 9.7 to 10.7 | profiling |

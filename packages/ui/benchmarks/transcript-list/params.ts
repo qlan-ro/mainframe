@@ -52,6 +52,8 @@ export const params = {
   /** Which react-dom the bundle was built with (`RIG_PROFILE=0` builds plain). */
   react: __RIG_REACT__,
   progressive: query.get('progressive') === '1',
-  /** v1: the owner with the short-window fix (`v1+fix`); `fix=2` is a scratch experiment. */
+  /** v1: the owner with the first short-window prototype (`v1+fix`): an absolute `scrollTop` write. Fails, kept for the record. */
   fixOwner: Number(query.get('fix') ?? 0),
+  /** v1: the near-top correction (`v1+near`): relative `scrollBy` after layout, browser anchoring left on. */
+  nearFix: query.get('near') === '1',
 };
