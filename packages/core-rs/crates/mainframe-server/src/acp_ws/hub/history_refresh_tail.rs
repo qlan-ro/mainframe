@@ -27,6 +27,7 @@ pub(super) async fn write_tail(
     let options = ResumeOptions {
         result_previews: window.previews,
         windowed_history: true,
+        ..Default::default()
     };
     let request = first_window_request(chat_id, &window.window);
     let port = StoredHistory(messages);

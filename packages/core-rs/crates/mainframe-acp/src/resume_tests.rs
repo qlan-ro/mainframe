@@ -9,3 +9,6 @@ mod persisted;
 
 #[path = "resume_tests_turn_start.rs"]
 mod turn_start;
+
+#[path = "resume_tests_deferred_seed.rs"]
+mod deferred_seed;

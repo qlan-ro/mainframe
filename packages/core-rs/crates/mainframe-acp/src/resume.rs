@@ -84,6 +84,13 @@ pub struct ResumeOptions {
     /// [`replay_previews::FULL_RESULT_CONTAINERS`] containers as previews.
     pub result_previews: bool,
     pub windowed_history: bool,
+    /// A windowed first replay (no revision cursor) answers without seeding the
+    /// chat's revision log, which encodes the whole transcript to answer a
+    /// request for one window. The caller owns seeding the log afterwards;
+    /// until it does, the log reads as unseeded and every consumer already
+    /// handles that (a live delta records in full, a history page seeds first).
+    /// A revision-cursor resume still seeds, since its plan reads the log.
+    pub defer_log_seed: bool,
 }
 
 pub async fn dispatch_resume(

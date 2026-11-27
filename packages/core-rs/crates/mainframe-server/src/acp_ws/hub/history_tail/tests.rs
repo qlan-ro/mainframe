@@ -94,6 +94,7 @@ fn options() -> ResumeOptions {
     ResumeOptions {
         result_previews: true,
         windowed_history: true,
+        ..Default::default()
     }
 }
 

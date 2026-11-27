@@ -67,11 +67,13 @@ fn prepare(
     log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
     options: ResumeOptions,
 ) -> (JsonRpcResponse, ResumeReplay) {
-    seed_log(
-        log.as_ref().map(|(log, _)| *log),
-        &snapshot,
-        &resume.session_id,
-    );
+    if !defers_seed(&resume, options) {
+        seed_log(
+            log.as_ref().map(|(log, _)| *log),
+            &snapshot,
+            &resume.session_id,
+        );
+    }
     let started = std::time::Instant::now();
     let selection = Selection::new(
         &snapshot,
@@ -103,6 +105,21 @@ fn prepare(
         "prepared transcript window"
     );
     (response, replay)
+}
+
+/// Only a resume that never reads the log can leave it unseeded: a revision
+/// cursor is planned against the log's items and container positions.
+fn defers_seed(resume: &ResumeSessionRequest, options: ResumeOptions) -> bool {
+    options.defer_log_seed
+        && !matches!(
+            resume
+                .replay_from
+                .as_ref()
+                .and_then(
+                    |value| serde_json::from_value::<super::ReplayCursor>(value.clone()).ok()
+                ),
+            Some(super::ReplayCursor::Revision { .. })
+        )
 }
 
 fn seed_log(log: Option<&Mutex<RevisionLog>>, snapshot: &SnapshotView<'_>, chat_id: &str) {

@@ -17,6 +17,8 @@ use super::params_session_id;
 mod helpers;
 #[path = "resume_prepare.rs"]
 mod prepare;
+#[path = "resume_seed.rs"]
+mod seed;
 use helpers::{ResumeFailure, fail_resume, queued_for, redelivered_gate_id};
 use prepare::{PreparedResume, prepare_resume};
 
@@ -135,16 +137,16 @@ impl ResumeTask {
         // the connection's remaining life, silently. Run it as its own task
         // so `fail_resume` can answer for it.
         let delivery = tokio::spawn(async move {
-            // Zipped here, not threaded as two parameters, so the reply
+            // Paired here, not threaded as two parameters, so the reply
             // cursor can never drift from the log it was planned against.
-            let revision_log = revision_log.as_deref().zip(resume_boundary);
+            let log = DeliveryLog::new(revision_log, resume_boundary);
             deliver_resume(
                 request,
                 session_id,
                 &task_ctx,
                 &task_conn,
-                ports.as_ref(),
-                revision_log,
+                &ports,
+                log,
                 task_progress,
             )
             .await;
@@ -162,21 +164,41 @@ impl ResumeTask {
     }
 }
 
+/// The chat's revision log with `begin_resume`'s pre-snapshot boundary: one
+/// value, so the reply cursor cannot drift from the planned-against log. The
+/// log is owned, so it can be seeded once the reply is out.
+struct DeliveryLog {
+    log: Option<Arc<Mutex<RevisionLog>>>,
+    boundary: Option<RevisionCursor>,
+}
+
+impl DeliveryLog {
+    fn new(log: Option<Arc<Mutex<RevisionLog>>>, boundary: Option<RevisionCursor>) -> Self {
+        Self { log, boundary }
+    }
+}
+
+fn resume_options(connection: &FacadeConnection) -> ResumeOptions {
+    let windowed_history = connection.is_windowed_history_opted_in();
+    ResumeOptions {
+        result_previews: connection.is_replay_result_previews_opted_in(),
+        windowed_history,
+        // The reply goes out first; the log is seeded behind it (`resume_seed.rs`).
+        defer_log_seed: windowed_history,
+    }
+}
+
 async fn deliver_resume(
     request: JsonRpcRequest,
     session_id: Option<String>,
     ctx: &Arc<AppCtx>,
     connection: &Arc<FacadeConnection>,
-    ports: &dyn ResumePort,
-    // The log paired with `begin_resume`'s pre-snapshot boundary:
-    // one tuple, so the reply cursor cannot drift from the planned-against log.
-    revision_log: Option<(&Mutex<RevisionLog>, RevisionCursor)>,
+    ports: &Arc<dyn ResumePort>,
+    log: DeliveryLog,
     progress: DeliveryProgress,
 ) {
-    let options = ResumeOptions {
-        result_previews: connection.is_replay_result_previews_opted_in(),
-        windowed_history: connection.is_windowed_history_opted_in(),
-    };
+    let options = resume_options(connection);
+    let planned = log.log.as_deref().zip(log.boundary);
     let PreparedResume {
         cache_request,
         cache_validation,
@@ -187,8 +209,8 @@ async fn deliver_resume(
         request,
         session_id.as_deref(),
         ctx,
-        ports,
-        revision_log,
+        ports.as_ref(),
+        planned,
         options,
     )
     .await;
@@ -212,7 +234,12 @@ async fn deliver_resume(
     );
     connection.clear_resume_failures(&session_id);
     if options.windowed_history {
-        prepare::complete_history(Arc::clone(&ctx.chat.chat_manager), session_id);
+        prepare::complete_history(Arc::clone(&ctx.chat.chat_manager), session_id.clone());
+    }
+    // A cache hit leaves the log unseeded on purpose; only a resume that read
+    // the transcript has the work to do.
+    if !from_cache && let Some(log) = log.log {
+        seed::seed_after_reply(log, Arc::clone(ports), session_id.clone());
     }
     if !from_cache {
         ctx.chat.facade_hub.persist_resume(

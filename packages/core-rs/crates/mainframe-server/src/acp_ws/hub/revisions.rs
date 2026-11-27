@@ -156,7 +156,7 @@ impl FacadeHub {
     /// seeding against the log, which already happens under its own lock
     /// in `dispatch_resume`.
     #[cfg(test)]
-    pub(super) fn revision_boundary(&self, chat_id: &str) -> Option<RevisionCursor> {
+    pub(crate) fn revision_boundary(&self, chat_id: &str) -> Option<RevisionCursor> {
         let log = self.revisions.get(chat_id)?;
         Some(log.lock_recover().boundary())
     }

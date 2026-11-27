@@ -46,6 +46,7 @@ async fn windowed_replay_while_running_carries_the_recorded_start() {
         ResumeOptions {
             windowed_history: true,
             result_previews: false,
+            ..Default::default()
         },
     )
     .await;
