@@ -3,6 +3,7 @@
 use super::*;
 use mainframe_adapter_api::test_support::{FakePages, FakeSession};
 use serde_json::json;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn message(id: &str) -> ChatMessage {
     serde_json::from_value(json!({"id":id,"chatId":"c1","type":"user",
@@ -54,7 +55,7 @@ async fn the_window_is_the_newest_page_and_never_reads_the_whole_history() {
     let ids: Vec<_> = window.messages.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(ids, ["m10", "m11", "m12", "m13", "m14"]);
     assert!(window.has_older, "two older pages remain");
-    assert_eq!(*session.pager.requests.lock().unwrap(), [None]);
+    assert_eq!(*session.pager.requests.lock().unwrap(), [0]);
     assert!(
         manager.shared.messages.lock().unwrap().get("c1").is_none(),
         "a window never fills the chat's message cache"
@@ -71,10 +72,7 @@ async fn older_pages_are_read_by_cursor_until_the_window_is_full() {
     assert_eq!(window.messages.len(), 15);
     assert_eq!(window.messages[0].id, "m0");
     assert!(!window.has_older, "the oldest page ends the history");
-    assert_eq!(
-        *session.pager.requests.lock().unwrap(),
-        [None, Some("1".to_string()), Some("2".to_string())]
-    );
+    assert_eq!(*session.pager.requests.lock().unwrap(), [0, 1, 2]);
 }
 
 #[tokio::test]
@@ -119,4 +117,48 @@ async fn a_snapshot_keeps_serving_instead_of_pages() {
 
     assert!(manager.adapter_first_window("c1", 4).await.is_none());
     assert!(session.pager.requests.lock().unwrap().is_empty());
+}
+
+#[derive(Default)]
+struct Resyncs(AtomicUsize);
+impl crate::chat_surface::ChatSurface for Resyncs {
+    fn on_chat_surface_event(&self, event: crate::chat_surface::ChatSurfaceEvent) {
+        if matches!(event, crate::chat_surface::ChatSurfaceEvent::Resync { .. }) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+/// A chat whose pages are `pages(3, 5)` and whose whole history is `full`,
+/// opened through a window and then loaded in full, as a resume does.
+async fn resyncs_after_window_then_load(full: Vec<ChatMessage>) -> usize {
+    let session = Arc::new(FakeSession {
+        pager: FakePages {
+            pages: pages(3, 5),
+            ..Default::default()
+        },
+        history: full,
+        ..Default::default()
+    });
+    let (deps, _) = manager(session);
+    let surface = Arc::new(Resyncs::default());
+    let manager = ChatManager::new(deps).with_chat_surface(surface.clone());
+    assert!(manager.adapter_first_window("c1", 4).await.is_some());
+    manager.load_chat("c1").await;
+    surface.0.load(Ordering::SeqCst)
+}
+
+#[tokio::test]
+async fn a_full_load_that_matches_the_window_does_not_resync() {
+    let full: Vec<_> = (0..15).map(|n| message(&format!("m{n}"))).collect();
+
+    assert_eq!(resyncs_after_window_then_load(full).await, 0);
+}
+
+#[tokio::test]
+async fn a_full_load_that_differs_from_the_window_resyncs() {
+    let mut full: Vec<_> = (0..15).map(|n| message(&format!("m{n}"))).collect();
+    full.push(message("late"));
+
+    assert_eq!(resyncs_after_window_then_load(full).await, 1);
 }

@@ -8,13 +8,13 @@
 //! needs the whole history (search, older pages, plans, compaction, the PR
 //! scan, a send) ever sees a partial list.
 use super::*;
+use crate::window_marker;
+use mainframe_adapter_api::WindowRequest;
 use mainframe_types::sync::LockExt as _;
 
-/// Turns asked for per page. Large enough that a typical window is one page,
-/// small enough that a transcript of huge turns is not hydrated for it.
+/// Turns asked for per page: on the benchmark fixture one page of this size
+/// covers a window plus its snap margin.
 const PAGE_TURNS: usize = 16;
-/// Pages read at most before the window is answered with what it has.
-const MAX_PAGES: usize = 8;
 
 /// The newest part of a chat's display history, and whether older turns exist.
 pub struct AdapterWindow {
@@ -41,30 +41,28 @@ impl ChatManager {
         }
         let session = self.history_session(chat_id)?;
         let categories = self.shared.deps.get_tool_categories(chat_id);
-        let mut cursor = None;
-        let mut raw: Vec<ChatMessage> = Vec::new();
-        let mut older = true;
-        for _ in 0..MAX_PAGES {
-            let page = match session.load_history_page(cursor.clone(), PAGE_TURNS).await {
-                Ok(Some(page)) => page,
-                Ok(None) if cursor.is_none() => return None,
-                Ok(None) | Err(_) => break,
-            };
-            raw.splice(0..0, remap_history_for(page.messages, chat_id));
-            older = page.older.is_some();
-            if !older || self.display_of(chat_id, &raw, categories.as_ref()).len() >= containers {
-                break;
-            }
-            cursor = page.older;
-        }
-        // Held prompts the normal load would show, without its side effects.
-        if raw.is_empty() {
+        let full = |raw: &[ChatMessage]| {
+            self.display_of(chat_id, raw, categories.as_ref()).len() >= containers
+        };
+        let page = session
+            .load_history_window(WindowRequest {
+                turns: PAGE_TURNS,
+                enough: &move |messages| full(&remap_history_for(messages.to_vec(), chat_id)),
+            })
+            .await
+            .ok()??;
+        if page.messages.is_empty() {
             return None;
         }
-        let raw = self.shared.preview_idle_history(chat_id, raw).ok()?;
+        let raw = remap_history_for(page.messages, chat_id);
+        let messages = self.display_of(chat_id, &raw, categories.as_ref());
+        // The full load that follows decides whether this window held up.
+        self.shared
+            .history_cache
+            .mark_window(chat_id, window_marker::fingerprint(&messages));
         Some(AdapterWindow {
-            messages: self.display_of(chat_id, &raw, categories.as_ref()),
-            has_older: older,
+            messages,
+            has_older: page.older,
         })
     }
 

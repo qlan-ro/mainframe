@@ -228,12 +228,11 @@ impl AdapterSession for FakeSession {
             Ok(history)
         })
     }
-    fn load_history_page(
-        &self,
-        cursor: Option<String>,
-        _turns: usize,
-    ) -> crate::HistoryPageFuture<'_> {
-        self.pager.page(cursor)
+    fn load_history_window<'a>(
+        &'a self,
+        req: crate::WindowRequest<'a>,
+    ) -> crate::HistoryPageFuture<'a> {
+        self.pager.window(req)
     }
     fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
         let sources = self.history_sources.clone();

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use mainframe_adapter_api::{
     Adapter, AdapterError, AdapterSession, BoxFuture, ContextFiles, HistoryPageFuture, ImageInput,
-    StopBackgroundTaskResult,
+    StopBackgroundTaskResult, WindowRequest,
 };
 use mainframe_types::adapter::{
     AdapterCapabilities, AdapterModel, AdapterProcess, AdapterProcessStatus, ControlResponse,
@@ -256,8 +256,8 @@ impl AdapterSession for StubSession {
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
-    fn load_history_page(&self, cursor: Option<String>, _turns: usize) -> HistoryPageFuture<'_> {
-        paged::page(self.pager.as_deref(), cursor)
+    fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
+        paged::window(self.pager.as_deref(), req)
     }
     fn load_subagent_history(
         &self,

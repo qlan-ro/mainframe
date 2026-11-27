@@ -11,16 +11,22 @@ pub struct CollectedHistoryFiles {
     pub sources: Option<Vec<crate::HistoryDependency>>,
 }
 
-/// One page of an adapter's paginated history. `messages` are oldest first.
-/// `older` is the opaque cursor for the page before this one; `None` means
-/// this page reaches the start of the transcript.
+/// The newest part of an adapter's paginated history, oldest first. `older` is
+/// whether turns before it remain.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistoryPage {
     pub messages: Vec<ChatMessage>,
-    pub older: Option<String>,
+    pub older: bool,
 }
 
-/// What `AdapterSession::load_history_page` resolves to.
+/// What a window read is asked for: the page size, and when to stop paging.
+#[derive(Clone, Copy)]
+pub struct WindowRequest<'a> {
+    pub turns: usize,
+    pub enough: &'a (dyn Fn(&[ChatMessage]) -> bool + Send + Sync),
+}
+
+/// What `AdapterSession::load_history_window` resolves to.
 pub type HistoryPageFuture<'a> = BoxFuture<'a, Result<Option<HistoryPage>, AdapterError>>;
 
 #[derive(Default, Debug)]
@@ -150,13 +156,16 @@ pub trait AdapterSession: Send + Sync {
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;
-    /// The newest `turns` turns of the history (`cursor: None`), or the page of
-    /// turns older than `cursor`, without reading the rest of the transcript.
-    /// `Ok(None)` means the adapter cannot page this session (no such
-    /// protocol method, or a thread it cannot page): the caller reads the
-    /// whole history with `load_history` instead. Used for a first window
-    /// only; nothing may treat a page as the complete history.
-    fn load_history_page(&self, _cursor: Option<String>, _turns: usize) -> HistoryPageFuture<'_> {
+    /// The newest part of the history, read page by page (`req.turns` turns a
+    /// page, newest first) until `req.enough` accepts the messages gathered so
+    /// far or the transcript starts. The messages are converted together, so
+    /// state that spans turns (a sub-agent opened in one turn and awaited in
+    /// the next) resolves as in `load_history`. `Ok(None)` means the adapter
+    /// cannot page this session, or cannot do it faithfully: the caller reads
+    /// the whole history instead. A window is for the first resume reply only;
+    /// nothing may treat it as the complete history.
+    fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
+        let _ = req;
         Box::pin(async { Ok(None) })
     }
     fn load_subagent_history(

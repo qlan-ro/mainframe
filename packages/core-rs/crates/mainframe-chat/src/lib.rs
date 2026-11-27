@@ -72,6 +72,7 @@ pub mod worktree_offer_scan;
 mod history_cache;
 mod history_restore;
 mod history_validation;
+mod window_marker;
 pub use history_validation::HistoryValidation;
 
 #[cfg(any(test, feature = "test-support"))]

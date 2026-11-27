@@ -63,18 +63,20 @@ impl CodexSession {
             }
         }
     }
-    /// A page of the thread's turns through `thread/turns/list`, or `None`
-    /// when this session cannot be paged (a fork that has not sent, a thread
-    /// that is not yet started, or a CLI without the method).
-    pub(super) async fn load_history_page_inner(
+    /// The newest turns through `thread/turns/list`, or `None` when this
+    /// session cannot be paged (a fork that has not sent, a thread that is not
+    /// yet started, or a CLI without the method).
+    pub(super) async fn load_history_window_inner(
         &self,
-        cursor: Option<String>,
-        turns: usize,
+        req: mainframe_adapter_api::WindowRequest<'_>,
     ) -> Result<Option<mainframe_adapter_api::HistoryPage>, AdapterError> {
         let ThreadTarget::Resume(thread_id) = self.resolve_target(false).await else {
             return Ok(None);
         };
         let executable = self.history_executable.lock_recover().clone();
+        if crate::history_page::known_to_lack(&executable) {
+            return Ok(None);
+        }
         let temp = match spawn_temp_app_server(
             &executable,
             Some(Path::new(&self.project_path)),
@@ -89,10 +91,9 @@ impl CodexSession {
                 return Ok(None);
             }
         };
-        let page =
-            crate::history_page::load_page(&temp, &thread_id, cursor.as_deref(), turns).await;
+        let window = crate::history_page::load_window(&temp, &executable, &thread_id, req).await;
         temp.close();
-        page
+        window
     }
     pub(super) async fn load_scan_records_inner(&self) -> Result<Vec<ChatMessage>, AdapterError> {
         let Some(thread_id) = self.resume_thread_id.clone() else {

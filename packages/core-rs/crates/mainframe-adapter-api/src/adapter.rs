@@ -72,6 +72,7 @@ mod adapter_session;
 mod session_sink;
 pub use adapter_session::{
     AdapterSession, CollectedHistoryFiles, HistoryFiles, HistoryPage, HistoryPageFuture,
+    WindowRequest,
 };
 pub use session_sink::SessionSink;
 

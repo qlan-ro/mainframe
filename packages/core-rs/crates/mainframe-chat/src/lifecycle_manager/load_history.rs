@@ -99,15 +99,20 @@ impl ChatLifecycleManager {
         canonical: bool,
     ) -> RestoredHistory {
         let cold = self.shared.messages.lock_recover().get(chat_id).is_none();
+        let window = self.shared.history_cache.take_window(chat_id);
+        let mut window_held = false;
         let (scan_history, cache_reloaded) = match history {
             Some((messages, active_from)) => {
                 let (messages, changed) =
                     self.restore_loaded_history(chat_id, messages, active_from);
+                if let Some(window) = window.as_deref().filter(|_| changed) {
+                    window_held = self.window_held(chat_id, window, &messages);
+                }
                 (canonical.then_some(messages), changed)
             }
             None => (None, false),
         };
-        let served = self.shared.history_cache.consume_served(chat_id);
+        let served = self.shared.history_cache.consume_served(chat_id) || window_held;
         if cache_reloaded && !(cold && served) {
             chat_surface::notify(
                 self.chat_surface.get(),
@@ -121,6 +126,22 @@ impl ChatLifecycleManager {
             changed: cache_reloaded,
             files: None,
         }
+    }
+
+    /// Whether the client's paged first window is the tail of the history that
+    /// just loaded in full, so nothing needs replaying.
+    fn window_held(
+        &self,
+        chat_id: &str,
+        window: &[crate::window_marker::Mark],
+        full: &[ChatMessage],
+    ) -> bool {
+        let categories = self.shared.deps.get_tool_categories(chat_id);
+        let display =
+            self.shared
+                .deps
+                .prepare_messages_for_client(chat_id, full, categories.as_ref());
+        crate::window_marker::matches_tail(window, &display)
     }
 
     fn restore_loaded_history(

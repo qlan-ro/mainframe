@@ -1,5 +1,5 @@
 use super::*;
-use mainframe_adapter_api::HistoryPageFuture;
+use mainframe_adapter_api::{HistoryPageFuture, WindowRequest};
 use tracing::Instrument as _;
 impl AdapterSession for CodexSession {
     fn supports_native_compaction(&self) -> bool {
@@ -246,9 +246,9 @@ impl AdapterSession for CodexSession {
         Box::pin((self.load_history_inner()).instrument(self.span.clone()))
     }
 
-    fn load_history_page(&self, cursor: Option<String>, turns: usize) -> HistoryPageFuture<'_> {
+    fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
         Box::pin(
-            self.load_history_page_inner(cursor, turns)
+            self.load_history_window_inner(req)
                 .instrument(self.span.clone()),
         )
     }
@@ -295,6 +295,6 @@ impl AdapterSession for CodexSession {
         &self,
         _task_id: String,
     ) -> BoxFuture<'_, Result<StopBackgroundTaskResult, AdapterError>> {
-        Box::pin(super::history::unsupported_stop())
+        Box::pin(super::history::unsupported_stop().instrument(self.span.clone()))
     }
 }

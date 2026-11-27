@@ -69,9 +69,13 @@ fn request(chat_id: &str) -> JsonRpcRequest {
 }
 
 fn options() -> ResumeOptions {
+    // Spread from a default so a field a later change adds does not break this.
     ResumeOptions {
-        result_previews: true,
         windowed_history: true,
+        ..ResumeOptions {
+            result_previews: true,
+            ..Default::default()
+        }
     }
 }
 
