@@ -32,6 +32,7 @@ function redirectList(): Plugin {
 export default defineConfig({
   root: here,
   base: './',
+  define: { __RIG_REACT__: JSON.stringify(process.env.RIG_PROFILE === '0' ? 'plain' : 'profiling') },
   plugins: [redirectList(), tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
   // The profiling build of react-dom, so `<Profiler>` reports each commit's render time (P6).
   // `RIG_PROFILE=0` builds with plain react-dom, for mount times comparable with the app.

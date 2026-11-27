@@ -11,11 +11,20 @@ function fromLiveEdge(samples: Sample[]) {
   return { reachedAt: at, after: at < 0 ? [] : samples.slice(at) };
 }
 
-const worstGap = (samples: Sample[]) => round(Math.max(0, ...samples.map((s) => s.gap)));
+/** The worst bottom gap over some frames. No frames is no evidence, so it is Infinity (null in JSON), never 0. */
+const worstGap = (samples: Sample[]) => (samples.length ? round(Math.max(...samples.map((s) => s.gap))) : Infinity);
 
 /** 10 s at 30 chunks/s with a row every 250 ms, then the run ends and its work folds. */
-export async function p4follow({ seconds = 10, debug = false }: { seconds?: number; debug?: boolean }) {
-  await ready();
+export async function p4follow({
+  seconds = 10,
+  debug = false,
+  eager = false,
+}: {
+  seconds?: number;
+  debug?: boolean;
+  eager?: boolean;
+}) {
+  await ready(1500, eager);
   const el = viewport();
   const stats: StreamStats = { commits: [], marks: [] };
   const recorder = new Recorder(el);
@@ -36,6 +45,7 @@ export async function p4follow({ seconds = 10, debug = false }: { seconds?: numb
   const intervals = samples.slice(1).map((s, i) => s.t - samples[i]!.t);
   return {
     framesToLiveEdge: live.reachedAt,
+    reachedLiveEdge: live.reachedAt >= 0,
     worstGapStreaming: worstGap(live.after.slice(0, Math.max(0, endIndex - atSend - 2 - live.reachedAt))),
     worstGapAfterFold: worstGap(samples.slice(endIndex)),
     foldHeight: round(beforeFold - el.scrollHeight),
@@ -49,8 +59,8 @@ export async function p4follow({ seconds = 10, debug = false }: { seconds?: numb
 }
 
 /** A wheel while following: up 120 px must release (and stay released); down must not. Then the jump. */
-export async function p4release({ dy = -120 }: { dy?: number }) {
-  await ready();
+export async function p4release({ dy = -120, eager = false }: { dy?: number; eager?: boolean }) {
+  await ready(1500, eager);
   const el = viewport();
   const recorder = new Recorder(el);
   recorder.start();

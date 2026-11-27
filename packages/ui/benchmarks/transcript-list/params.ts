@@ -1,6 +1,8 @@
+declare const __RIG_REACT__: 'plain' | 'profiling';
+
 /** Query parameters: `?v=v0|v1|v1s|v2&groups=40&total=160&hold=31&live=1`. */
-export type Variant = 'v0' | 'v1' | 'v1s' | 'v2';
-const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v2'];
+export type Variant = 'v0' | 'v1' | 'v1s' | 'v1s-patched' | 'v2';
+const VARIANTS: Variant[] = ['v0', 'v1', 'v1s', 'v1s-patched', 'v2'];
 
 const query = new URLSearchParams(location.search);
 const number = (name: string, fallback: number) => {
@@ -25,5 +27,9 @@ export const params = {
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */
+  /** v1s: `preserveScrollOnPrepend={false}` on the Message Scroller viewport. */
+  noPreserve: query.get('nopreserve') === '1',
+  /** Which react-dom the bundle was built with (`RIG_PROFILE=0` builds plain). */
+  react: __RIG_REACT__,
   progressive: query.get('progressive') === '1',
 };

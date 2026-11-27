@@ -5,3 +5,5 @@ pnpm-lock.yaml
 *.md
 **/daemon.cjs
 **/resources/**
+packages/ui/benchmarks/transcript-list/vendor
+packages/ui/benchmarks/transcript-list/results

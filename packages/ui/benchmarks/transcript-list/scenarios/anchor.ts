@@ -26,22 +26,22 @@ async function watch(change: () => void | Promise<void>, ms = 2000) {
 }
 
 /** P1: a page of about 80 items lands above a parked reader (mid-history, or at offset 0). */
-export async function p1({ at = 'middle' }: { at?: 'middle' | 'top' }) {
-  await ready();
+export async function p1({ at = 'middle', eager = false }: { at?: 'middle' | 'top'; eager?: boolean }) {
+  await ready(1500, eager);
   const el = viewport();
-  await park(at === 'top' ? 0 : Math.round(el.scrollHeight * 0.35));
+  const parked = await park(at === 'top' ? 0 : Math.round(el.scrollHeight * 0.35), eager);
   let added = 0;
   const result = await watch(() => {
     added = store.prependPage();
   });
-  return { ...result, at, pageMessages: added };
+  return { ...result, at, pageMessages: added, parkedScrollTop: round(parked.scrollTop), parkedGap: round(parked.gap) };
 }
 
 /** P2: the page lands during 20 upward wheel events; run once with and once without the page. */
-export async function p2({ prepend = true }: { prepend?: boolean }) {
-  await ready();
+export async function p2({ prepend = true, eager = false }: { prepend?: boolean; eager?: boolean }) {
+  await ready(1500, eager);
   const el = viewport();
-  await park(Math.round(el.scrollHeight * 0.5));
+  await park(Math.round(el.scrollHeight * 0.5), eager);
   const recorder = new Recorder(el);
   recorder.anchor(pickAnchor(el, 0.6));
   recorder.start();
@@ -72,12 +72,14 @@ export async function p3({
   change,
   dir,
   turn,
+  eager = false,
 }: {
   change: 'image' | 'code' | 'fold';
   dir: 'up' | 'down';
   turn: number;
+  eager?: boolean;
 }) {
-  await ready(change === 'fold' ? 2500 : 1500);
+  await ready(change === 'fold' ? 2500 : 1500, eager);
   if (change === 'image') {
     const placed = await approach('img[src*="hold=1"]', 250, dir);
     return { change, dir, ...placed, ...(await watch(() => void fetch(`/rig-release?id=${turn}`))) };

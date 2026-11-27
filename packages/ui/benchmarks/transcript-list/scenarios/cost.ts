@@ -2,6 +2,7 @@
 import { Recorder, frame, percentile, round, sleep, viewport, type Sample } from '../probe';
 import { flick, wheel } from '../input';
 import { store } from '../store';
+import { summarizeTail, tail } from '../tail';
 import { ready } from './setup';
 
 /** Scripted scroll: 30 px up on every frame for 3 s, from the bottom. */
@@ -104,4 +105,11 @@ export async function p7proxy({
     largestStep: Math.max(0, ...perLoad.map((l) => l.largestStep)),
     around,
   };
+}
+
+/** Tail-first mount scored to completion: the time the whole window is in, and the longest task per slice. */
+export async function p6tail() {
+  for (let i = 0; i < 400 && Number.isNaN(tail.fullAt); i++) await sleep(25);
+  await sleep(600);
+  return summarizeTail();
 }

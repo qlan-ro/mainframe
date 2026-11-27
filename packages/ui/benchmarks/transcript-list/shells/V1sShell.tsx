@@ -1,6 +1,7 @@
 /** v1s: plain rows under shadcn's Message Scroller (`@shadcn/react` 0.3.1) as the scroll owner. */
 import { useEffect, useRef } from 'react';
-import { MessageScroller, useMessageScroller } from '@shadcn/react/message-scroller';
+import { MessageScroller, useMessageScroller } from '../lists/scroller-lib';
+import { params } from '../params';
 import { EarlierMessages } from '@/features/chat/thread/EarlierMessages';
 import { TurnTranscript } from '@/features/chat/messages/turn/TurnTranscript';
 import { controls } from '../controls';
@@ -27,6 +28,7 @@ export function V1sShell() {
             data-mf-chat-thread
             data-mf-chat-id={CHAT_ID}
             data-rig-viewport
+            preserveScrollOnPrepend={!params.noPreserve}
             className="flex flex-1 flex-col overflow-y-auto"
           >
             {/* Bottom padding lives on the scroller's Content (lists/scroller-rows.tsx): it follows the last item's end. */}

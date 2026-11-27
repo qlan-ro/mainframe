@@ -1,10 +1,12 @@
 /** v1s rows: each message is a Message Scroller item; a user prompt anchors its turn. */
-import { MessageScroller } from '@shadcn/react/message-scroller';
+import { MessageScroller } from './scroller-lib';
 import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
+import { useProgressiveRows } from './progressive';
 import { MessageRow, useRows, type MessageComponents } from './row';
 
 export function ScrollerRows({ components }: { components: MessageComponents }) {
-  const { rows, anchorId } = useRows();
+  const { rows: all, anchorId } = useRows();
+  const rows = useProgressiveRows(all);
   return (
     <DisclosureStateProvider>
       <MessageScroller.Content

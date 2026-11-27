@@ -10,10 +10,11 @@ import { store } from './store';
 import { buildLongTurn } from './fixture';
 import { controls } from './controls';
 import { commits } from './commits';
+import { tail } from './tail';
 import { watchBoot } from './scenarios/boot';
 import { p1, p2, p3 } from './scenarios/anchor';
 import { p4follow, p4release } from './scenarios/follow';
-import { p6scroll, p7proxy } from './scenarios/cost';
+import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
@@ -21,8 +22,8 @@ import { V1sShell } from './shells/V1sShell';
 import { V2Shell } from './shells/V2Shell';
 import { openSomeTurns } from './open-turns';
 
-const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, v2: V2Shell };
-const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p7proxy } as Record<
+const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell };
+const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy } as Record<
   string,
   (o: object) => Promise<unknown>
 >;
@@ -50,6 +51,7 @@ function Rig() {
 }
 
 const start = performance.now();
+tail.start = start;
 const boot = watchBoot(start);
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

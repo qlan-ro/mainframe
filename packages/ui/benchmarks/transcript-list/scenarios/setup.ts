@@ -2,8 +2,10 @@
 import { frames, gapOf, sleep, viewport } from '../probe';
 import { wheel } from '../input';
 
-export async function ready(settleMs = 1500) {
+/** `eager` starts the scenario as soon as rows exist, with no settle wait (slices of a tail-first mount may still be landing). */
+export async function ready(settleMs = 1500, eager = false) {
   for (let i = 0; i < 200 && !document.querySelector('[data-rig-viewport] [data-message-id]'); i++) await sleep(25);
+  if (eager) return;
   await document.fonts.ready;
   await sleep(settleMs);
   await frames(2);
@@ -63,12 +65,12 @@ export async function approach(selector: string, above: number, dir: 'up' | 'dow
 }
 
 /** Leaves the bottom with a wheel event (so every owner releases), then parks at `scrollTop`. */
-export async function park(scrollTop: number) {
+export async function park(scrollTop: number, eager = false) {
   const el = viewport();
   await wheel(-60);
   await frames(1);
   el.scrollTop = scrollTop;
-  await sleep(400);
+  if (!eager) await sleep(400);
   await frames(2);
   return { scrollTop: el.scrollTop, gap: gapOf(el) };
 }

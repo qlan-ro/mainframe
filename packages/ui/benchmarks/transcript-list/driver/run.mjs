@@ -1,6 +1,6 @@
 // Runs the rig: builds the production bundle, serves it, and plays every case on every variant and engine.
 //   node packages/ui/benchmarks/transcript-list/driver/run.mjs [--engines chromium,webkit,wk]
-//     [--variants v0,v1,v1s,v2,v1+cv] [--cases P1,P3-fold] [--repeat 2] [--synthetic] [--no-build] [--out file.json]
+//     [--variants v0,v1,v1s,v1s-patched,v2,v1+cv,v1+progressive,v1s+nopreserve] [--cases P1,P3-fold] [--repeat 2] [--synthetic] [--no-build] [--out file.json]
 //   --serve builds, serves the page and waits (P7 by hand: open http://127.0.0.1:5199/?v=v1&manual=1 in Safari).
 // A variant written `v1+cv` adds `&cv=1` (content-visibility on rows).
 import { execFileSync } from 'node:child_process';
@@ -28,6 +28,8 @@ const filters = arg('cases', '').split(',').filter(Boolean);
 const repeat = Number(arg('repeat', 1));
 const out = arg('out', path.join(work, `results-${Date.now()}.json`));
 const synthetic = flag('synthetic');
+// `--tag old` labels every record's variant `v0@old`: two builds of the page in one comparison.
+const tag = arg('tag', '');
 const PORT = Number(arg('port', 5199));
 
 fs.mkdirSync(work, { recursive: true });
@@ -41,6 +43,9 @@ if (!flag('no-build')) {
     execFileSync('swiftc', ['-O', path.join(here, 'wkrig.swift'), '-o', wkBinary], { stdio: 'inherit' });
 }
 const server = await startServer(dist, PORT);
+// Raw results are committed: keep machine paths out of them (error strings can carry one).
+const scrub = (text) =>
+  [os.homedir(), os.tmpdir(), work].reduce((acc, p) => (p ? acc.split(p).join('<path>') : acc), text);
 const log = (line) => process.stdout.write(`${line}\n`);
 if (flag('serve')) {
   log(`serving http://127.0.0.1:${PORT}/?v=v1&manual=1 (Ctrl-C to stop)`);
@@ -54,6 +59,9 @@ for (const engineName of engines) {
   for (const variant of variants)
     for (const c of cases) {
       if (c.engines && !c.engines.includes(engineName)) continue;
+      if (c.onlyProgressive && !variant.includes('progressive')) continue;
+      // E- cases start before the slices land: only the tail-first variant has any.
+      if (c.only === 'tail' && !variant.includes('progressive')) continue;
       for (let r = 0; r < (c.run ? repeat : (c.repeat ?? 1)); r++) {
         const [name, ...extras] = variant.split('+');
         const url = `http://127.0.0.1:${PORT}/?v=${name}${extras.map((x) => `&${x}=1`).join('')}${c.query}`;
@@ -62,16 +70,33 @@ for (const engineName of engines) {
           try {
             await engine.open(url);
             const boot = await engine.call('return await window.__rig.boot');
+            const react = await engine.call('return window.__rig.params.react');
             const run = c.run
               ? await engine.call(
                   `return await window.__rig.run(${JSON.stringify(c.run)}, ${JSON.stringify(c.options)})`,
                 )
               : null;
-            record = { ...(run ?? { ok: true }), engine: engineName, variant, case: c.id, rep: r, boot };
+            record = {
+              ...(run ?? { ok: true }),
+              engine: engineName,
+              variant: tag ? `${variant}@${tag}` : variant,
+              case: c.id,
+              rep: r,
+              react,
+              boot,
+            };
             break;
           } catch (error) {
             // The harness can report a bare "JavaScript exception" while a load is still settling; retry once.
-            record = { engine: engineName, variant, case: c.id, rep: r, ok: false, error: String(error), attempt };
+            record = {
+              engine: engineName,
+              variant: tag ? `${variant}@${tag}` : variant,
+              case: c.id,
+              rep: r,
+              ok: false,
+              error: String(error),
+              attempt,
+            };
             // A web process that died or hung takes the harness with it: start a fresh one.
             if (/unreachable|timed out|crash/i.test(String(error))) {
               await engine.close().catch(() => {});
@@ -82,7 +107,10 @@ for (const engineName of engines) {
         await engine.closePage();
         results.push(record);
         log(JSON.stringify(record));
-        fs.writeFileSync(out, JSON.stringify({ engines: engineName, synthetic, results }, null, 1));
+        fs.writeFileSync(
+          out,
+          scrub(JSON.stringify({ engines: engineName, synthetic, load: os.loadavg(), results }, null, 1)),
+        );
       }
     }
   await engine.close();
