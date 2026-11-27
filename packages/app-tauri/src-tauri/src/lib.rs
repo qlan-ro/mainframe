@@ -59,15 +59,45 @@ fn external_daemon() -> bool {
 }
 
 /// Whether the system appearance is dark, asked before any window exists. macOS only: `defaults`
-/// exits non-zero when the appearance is light (the key is absent).
+/// exits non-zero when the appearance is light (the key is absent). Called by absolute path and
+/// given a short deadline, so a stuck `cfprefsd` can delay startup by at most that long.
 fn system_prefers_dark() -> bool {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("defaults")
+        use std::io::Read;
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+
+        const DEADLINE: Duration = Duration::from_millis(250);
+        let Ok(mut child) = Command::new("/usr/bin/defaults")
             .args(["read", "-g", "AppleInterfaceStyle"])
-            .output()
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().eq_ignore_ascii_case("dark"))
-            .unwrap_or(false)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return false;
+        };
+        let started = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    let mut out = String::new();
+                    if status.success() {
+                        if let Some(mut stdout) = child.stdout.take() {
+                            let _ = stdout.read_to_string(&mut out);
+                        }
+                    }
+                    return out.trim().eq_ignore_ascii_case("dark");
+                }
+                Ok(None) if started.elapsed() < DEADLINE => std::thread::sleep(Duration::from_millis(5)),
+                _ => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return false;
+                }
+            }
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {

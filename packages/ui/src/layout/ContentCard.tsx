@@ -51,6 +51,7 @@ export function ContentCard({ className, children, ...props }: ComponentProps<'d
     <div
       data-testid="content-card"
       data-boot-restoring={restoring ? '' : undefined}
+      aria-busy={restoring || undefined}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-tl-[10px] border-t border-l bg-background',
         className,

@@ -24,6 +24,7 @@ describe('ContentCard — boot restore hold', () => {
     const card = screen.getByTestId('content-card');
     const cover = screen.getByTestId('content-card-boot-cover');
     expect(card).toHaveAttribute('data-boot-restoring');
+    expect(card).toHaveAttribute('aria-busy', 'true');
     expect(cover).toHaveClass('absolute', 'inset-0', 'bg-background');
     // Marked as an overlay so a native preview webview steps aside for it.
     expect(cover).toHaveAttribute('data-preview-overlay');
@@ -34,6 +35,7 @@ describe('ContentCard — boot restore hold', () => {
     act(() => decideBootRestore(null));
     expect(screen.queryByTestId('content-card-boot-cover')).toBeNull();
     expect(card).not.toHaveAttribute('data-boot-restoring');
+    expect(card).not.toHaveAttribute('aria-busy');
   });
 
   it('keeps an autofocused composer focused under the cover', () => {

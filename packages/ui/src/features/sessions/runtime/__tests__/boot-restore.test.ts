@@ -218,6 +218,19 @@ describe('boot restore hold', () => {
       expect(isBootRestoring()).toBe(false);
     });
 
+    it('keeps waiting while the chat column is mounted with no transcript (initializing, first-run hero)', () => {
+      const column = document.createElement('div');
+      column.setAttribute('data-surface', 'chat');
+      document.body.append(column);
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(BOOT_HOLD_MAX_MS - 1);
+      expect(isBootRestoring()).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(isBootRestoring()).toBe(false);
+    });
+
     it('does not wait for a side chat’s spinner', () => {
       mountTranscript('chat-1');
       const spinner = document.createElement('div');

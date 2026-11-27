@@ -79,6 +79,11 @@ function mainTranscripts(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>('[data-surface="chat"] [data-mf-chat-thread]')];
 }
 
+/** No chat column at all: nothing on screen to settle. A mounted column with no transcript (initializing, the first-run hero) is not that. */
+function chatColumnUnmounted(): boolean {
+  return document.querySelector('[data-surface="chat"]') == null;
+}
+
 function atTail(el: HTMLElement): boolean {
   return el.scrollTop + el.clientHeight >= el.scrollHeight - TAIL_SLOP_PX;
 }
@@ -93,8 +98,9 @@ function atTail(el: HTMLElement): boolean {
  *
  * Until the chat column shows THIS chat's transcript the hold keeps waiting:
  * assistant-ui switches threads asynchronously, and for a moment the column
- * still holds the draft welcome. Only a column with no transcript at all has
- * nothing to settle.
+ * still holds the draft welcome, and "Initializing session…" and the first-run
+ * hero are a mounted column with no transcript. Only an unmounted column has
+ * nothing to settle; anything else runs to the deadline.
  */
 export function decideBootRestore(chatId: string | null): void {
   if (!isBootRestoring()) return;
@@ -114,7 +120,7 @@ export function decideBootRestore(chatId: string | null): void {
       if (mine != null) {
         atTailPolls = atTail(mine) ? atTailPolls + 1 : 0;
         if (atTailPolls >= TAIL_POLLS) return release();
-      } else if (column.length === 0 && Date.now() - loadedAt >= SETTLE_MS) {
+      } else if (chatColumnUnmounted() && Date.now() - loadedAt >= SETTLE_MS) {
         return release();
       }
     }
