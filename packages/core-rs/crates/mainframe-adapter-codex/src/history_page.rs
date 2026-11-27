@@ -29,6 +29,8 @@ use crate::types::ThreadReadTurn;
 
 /// Pages read at most before the window is answered with what it has.
 const MAX_PAGES: usize = 8;
+/// Pages read at most while chasing the turn that opened a sub-agent.
+const MAX_CHASE: usize = 3;
 
 /// Executables that answered `thread/turns/list` as an unknown method, so no
 /// later open spawns a process just to learn that again.
@@ -47,10 +49,11 @@ fn remember_lacking(executable: &str) {
     }
 }
 
-/// An old CLI rejects the unknown method by name; any other failure (a thread
-/// it will not page, a transient error) must not mark the whole CLI.
+/// Only a server's own rejection of the method marks the CLI. The client puts
+/// the method name in its timeout and write-failure texts too, so the name
+/// alone proves nothing; neither does a failure about one thread.
 fn is_unknown_method(message: &str) -> bool {
-    message.contains("thread/turns/list") || message.to_lowercase().contains("method not found")
+    message.contains("unknown variant") || message.to_lowercase().contains("method not found")
 }
 
 #[derive(Deserialize)]
@@ -59,6 +62,24 @@ struct TurnsPage {
     data: Vec<ThreadReadTurn>,
     #[serde(default)]
     next_cursor: Option<String>,
+}
+
+async fn fetch(
+    temp: &Arc<JsonRpcClient>,
+    thread_id: &str,
+    limit: usize,
+    cursor: Option<&str>,
+) -> Result<serde_json::Value, crate::jsonrpc::JsonRpcError> {
+    let mut params = json!({
+        "threadId": thread_id,
+        "limit": limit,
+        "itemsView": "full",
+        "sortDirection": "desc",
+    });
+    if let Some(cursor) = cursor {
+        params["cursor"] = json!(cursor);
+    }
+    temp.request("thread/turns/list", Some(params)).await
 }
 
 /// The newest turns, converted oldest first, from as many pages as `req`
@@ -75,17 +96,10 @@ pub(crate) async fn load_window(
     let mut cursor: Option<String> = None;
     let mut older = true;
     let mut converted = None;
+    let mut chased = 0;
+    let mut children = std::collections::HashMap::new();
     for page_index in 0..MAX_PAGES {
-        let mut params = json!({
-            "threadId": thread_id,
-            "limit": req.turns,
-            "itemsView": "full",
-            "sortDirection": "desc",
-        });
-        if let Some(cursor) = &cursor {
-            params["cursor"] = json!(cursor);
-        }
-        let value = match temp.request("thread/turns/list", Some(params)).await {
+        let value = match fetch(temp, thread_id, req.turns, cursor.as_deref()).await {
             Ok(value) => value,
             Err(error) if page_index == 0 => {
                 if is_unknown_method(&error.0) {
@@ -109,10 +123,14 @@ pub(crate) async fn load_window(
         // The CLI answers newest first; the transcript reads oldest first.
         turns.splice(0..0, page.data.into_iter().rev());
         if older && names_unopened_child(&turns) {
+            chased += 1;
+            if chased >= MAX_CHASE {
+                return Ok(None);
+            }
             converted = None;
             continue;
         }
-        let loaded = build_history(temp, thread_id, &turns).await?;
+        let loaded = build_history(temp, thread_id, &turns, Some(&mut children)).await?;
         let done = !older || (req.enough)(&loaded.messages);
         converted = Some(loaded.messages);
         if done {
@@ -130,13 +148,15 @@ fn names_unopened_child(turns: &[ThreadReadTurn]) -> bool {
     let mut opened: HashSet<&str> = HashSet::new();
     for item in turns.iter().flat_map(|turn| &turn.items) {
         match item {
-            ThreadItem::SubAgentActivity(a) => {
-                if classify_sub_agent_kind(&a.kind) == SubAgentKind::Started {
+            ThreadItem::SubAgentActivity(a) => match classify_sub_agent_kind(&a.kind) {
+                SubAgentKind::Started => {
                     opened.insert(&a.agent_thread_id);
-                } else if !opened.contains(a.agent_thread_id.as_str()) {
+                }
+                SubAgentKind::Interrupted if !opened.contains(a.agent_thread_id.as_str()) => {
                     return true;
                 }
-            }
+                _ => {}
+            },
             ThreadItem::CollabAgentToolCall(c)
                 if classify_collab_tool(&c.tool) == CollabTool::Wait =>
             {
@@ -150,4 +170,27 @@ fn names_unopened_child(turns: &[ThreadReadTurn]) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_server_rejection_marks_the_cli() {
+        for rejected in [
+            "Invalid request: unknown variant `thread/turns/list`, expected one of",
+            "Method not found",
+        ] {
+            assert!(is_unknown_method(rejected), "{rejected}");
+        }
+        for other in [
+            "Request thread/turns/list (id=3) timed out after 30000ms",
+            "Request thread/turns/list (id=3) not written: closed",
+            "Client closed",
+            "thread not loaded: abc",
+        ] {
+            assert!(!is_unknown_method(other), "{other}");
+        }
+    }
 }

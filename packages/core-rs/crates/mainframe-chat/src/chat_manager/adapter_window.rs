@@ -54,8 +54,18 @@ impl ChatManager {
         if page.messages.is_empty() {
             return None;
         }
+        // The idle-compaction records the normal load folds in; a held prompt
+        // is the one thing left out, because whether it was delivered cannot
+        // be told from a partial list. The full load's tail then differs and
+        // the client resyncs.
         let raw = remap_history_for(page.messages, chat_id);
+        let raw = self.shared.merge_idle_provenance(chat_id, raw).ok()?;
         let messages = self.display_of(chat_id, &raw, categories.as_ref());
+        // A load that filled the cache while the pages were read has already
+        // settled this chat; a marker left now would judge the wrong window.
+        if self.shared.messages.lock_recover().get(chat_id).is_some() {
+            return None;
+        }
         // The full load that follows decides whether this window held up.
         self.shared
             .history_cache

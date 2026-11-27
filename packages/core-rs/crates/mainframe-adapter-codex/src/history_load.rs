@@ -72,7 +72,7 @@ pub(crate) async fn load_history_inner(
         resume_thread_id,
     );
 
-    build_history(temp, resume_thread_id, &turns).await
+    build_history(temp, resume_thread_id, &turns, None).await
 }
 
 /// Nest the child threads the `turns` name and convert them to messages.
@@ -81,6 +81,9 @@ pub(crate) async fn build_history(
     temp: &Arc<JsonRpcClient>,
     thread_id: &str,
     turns: &[ThreadReadTurn],
+    // Children already read by an earlier call over the same thread; a window
+    // that converts again after each page passes one so no child is re-read.
+    known_children: Option<&mut HashMap<String, Vec<ThreadItem>>>,
 ) -> Result<LoadedHistory, AdapterError> {
     let all_items: Vec<ThreadItem> = turns.iter().flat_map(|t| t.items.iter().cloned()).collect();
 
@@ -92,8 +95,20 @@ pub(crate) async fn build_history(
         lookup_agent_metadata(&child_thread_ids)
     };
 
-    let (child_items_by_thread, dependencies) =
-        load_children(temp, &child_thread_ids, &agent_meta_by_thread).await?;
+    let (child_items_by_thread, dependencies) = match known_children {
+        None => load_children(temp, &child_thread_ids, &agent_meta_by_thread).await?,
+        Some(known) => {
+            let missing: Vec<String> = child_thread_ids
+                .iter()
+                .filter(|id| !known.contains_key(*id))
+                .cloned()
+                .collect();
+            let (loaded, dependencies) =
+                load_children(temp, &missing, &agent_meta_by_thread).await?;
+            known.extend(loaded);
+            (known.clone(), dependencies)
+        }
+    };
     Ok(LoadedHistory {
         dependencies,
         state: json!(agent_meta_by_thread),

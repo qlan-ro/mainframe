@@ -222,3 +222,27 @@ async fn a_sub_agent_whose_opening_turn_is_out_of_reach_reads_the_whole_thread()
 
     assert!(window(&session, |_| true).await.is_none());
 }
+
+#[tokio::test]
+async fn a_server_that_dies_on_the_first_page_does_not_mark_the_cli() {
+    let dir = tempdir().unwrap();
+    let capture = dir.path().join("capture.jsonl");
+    let fake = write_fake_app_server(
+        dir.path(),
+        &capture,
+        r#"    thread/turns/list)
+      exit 0
+      ;;"#,
+    );
+    let session = session(Some("thread-1"), None, &fake);
+
+    assert!(window(&session, |_| true).await.is_none());
+    assert!(window(&session, |_| true).await.is_none());
+
+    let requests = captured_requests(&capture);
+    assert_eq!(
+        requests_with_method(&requests, "thread/turns/list").len(),
+        2,
+        "a dead server says nothing about the CLI, so the next open asks again"
+    );
+}
