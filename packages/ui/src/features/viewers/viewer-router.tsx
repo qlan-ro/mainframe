@@ -26,8 +26,6 @@ import { PdfViewer } from './PdfViewer';
 import { UnsupportedViewer } from './UnsupportedViewer';
 import { type ViewerKind, pickViewerKind } from './viewer-kind';
 
-export { pickViewerKind, type ViewerKind } from './viewer-kind';
-
 // ── Mime type helper ─────────────────────────────────────────────────────────
 
 function imageDataUrl(ext: string, base64: string): string {
