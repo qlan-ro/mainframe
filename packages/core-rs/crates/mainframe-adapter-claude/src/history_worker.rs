@@ -1,5 +1,23 @@
 use super::*;
 
+/// Workers a background load (a turn-end refresh) may hold; a chat the user
+/// opens meanwhile gets the rest of the budget.
+const BACKGROUND_THREADS: usize = 2;
+
+impl parallel::ParseMode {
+    /// This mode limited to [`BACKGROUND_THREADS`] workers, so work nobody is
+    /// waiting on cannot starve a foreground load. Never raises a mode.
+    pub(super) fn background(self) -> Self {
+        Self {
+            threads: self.threads.min(BACKGROUND_THREADS),
+            batch_bytes: self
+                .batch_bytes
+                .min(BACKGROUND_THREADS * reader::CHUNK_SIZE / 2),
+            ..self
+        }
+    }
+}
+
 pub(crate) async fn load_discovered_history(
     session_id: &str,
     discovered: &DiscoveredFiles,
@@ -40,7 +58,7 @@ pub(crate) async fn load_discovered_history_background(
         discovered,
         base,
         messages,
-        parallel::ParseMode::detect_background(),
+        parallel::ParseMode::detect().background(),
     )
     .await
 }
