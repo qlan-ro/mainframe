@@ -8,7 +8,7 @@ import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { mfToast } from '@/lib/toast';
-import { confirmQueuedMessage, resumeQueuedMessages } from '@/lib/api/chats';
+import { confirmQueuedMessage } from '@/lib/api/chats';
 import { useChatExtras } from '../../runtime/chat-extras';
 import { sendErrorMessage, sendRefusal } from '../../controller/describe-send-error';
 import { visibleMessageText } from '../../markers/message-markers';
@@ -181,7 +181,7 @@ function useQueuedRows(): QueueRow[] {
           ? {
               label: 'Resume',
               testId: 'chat-queue-resume',
-              onClick: () => void resumeQueuedMessages(extras.port, chatId).catch(report('resume')),
+              onClick: () => void extras.resumeQueue().catch(report('resume')),
             }
           : delivery === 'rejected'
             ? {

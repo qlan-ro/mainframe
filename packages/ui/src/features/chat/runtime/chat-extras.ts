@@ -47,6 +47,8 @@ export interface ChatRuntimeExtras {
   readonly cancelQueued: (messageId: string) => Promise<void>;
   /** Send a message a Stop held back (C10). */
   readonly sendHeld: (messageId: string) => Promise<void>;
+  /** Resume a paused queue (C10). */
+  readonly resumeQueue: () => Promise<void>;
   readonly editQueued: (messageId: string, content: string) => Promise<void>;
   /** Re-send a failed optimistic user message (the "Failed to send" indicator),
    *  applying the failure's `remedy` (Unarchive) first when given. */
@@ -87,6 +89,7 @@ export function buildChatExtras(
     cancel: () => controller.cancel(),
     replyToPermission: (response, selectedOptionId) => controller.replyToPermission(response, selectedOptionId),
     sendHeld: (messageId) => controller.sendHeld(messageId),
+    resumeQueue: () => controller.resumeQueue(),
     cancelQueued: (messageId) => controller.cancelQueued(messageId),
     editQueued: (messageId, content) => controller.editQueued(messageId, content),
     retryMessage: (clientId, remedy) => controller.retryMessage(clientId, remedy),

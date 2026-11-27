@@ -19,6 +19,8 @@ The empty state claims only what it knows: no branch until it is read, nothing o
 Text a gate asks the user to approve shows whole, with nothing hidden, in stored order (`stored-order`, `visible-text.ts`). What overflows is not allowed unread: the allowing answers are locked until its end was in view (`use-shown-to-end.ts`). The bottom strip belongs to the thread footer, so a chat with no composer keeps it.
 The gate slot carries `data-chat-gate`: an Activity row that needs you moves focus into it (R13).
 
+Whatever the user sends from here moves the transcript to its bottom, even when they had scrolled up: a send, queue or steer, Send now on a held row, Resume on a paused queue and Compact conversation. A queued prompt the daemon releases at turn end does not move the view.
+
 The read dialog has a title, a labelled scroll region at least 64 px tall, and a reserved footer row. If the request text grows while the dialog is open, the reader must reach the new end. The manual confirmation appears only when the scroll region has no client rectangles. Closing returns focus to Show or the first available answer. If the request went away, focus moves to the next gate as a whole, or to the thread when none is left, never to an answer or the composer.
 
 A decorative middle dot separates the environment and branch buttons. The environment opens the worktree menu and the branch opens the branch manager. A matching live branch with a recorded creation base includes `from <base>` inside the branch button and a From row in the worktree menu.
