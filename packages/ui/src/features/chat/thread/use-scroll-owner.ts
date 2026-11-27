@@ -23,6 +23,9 @@
  * - treats a window around a jump target (`away`) as somewhere other than the tail: follow stays
  *   off in it (its bottom is not the live bottom), it opens at its top, and coming back to the tail
  *   pins to the bottom.
+ *
+ * `openAt: 'top'` is for a view read from its start (a sub-agent's tab): it opens where the
+ * browser puts it and does not follow until the reader scrolls down to the bottom.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
@@ -53,8 +56,13 @@ interface Near {
 export function useScrollOwner(
   threadId: string | null,
   chatId: string | undefined,
-  { findOwner = false, away = false }: { findOwner?: boolean; away?: boolean } = {},
+  {
+    findOwner = false,
+    away = false,
+    openAt = 'tail',
+  }: { findOwner?: boolean; away?: boolean; openAt?: 'tail' | 'top' } = {},
 ) {
+  const atTail = openAt === 'tail';
   const [viewport, setViewportState] = useState<HTMLDivElement | null>(null);
   const [content, setContentState] = useState<HTMLDivElement | null>(null);
   const viewportElement = useRef<HTMLDivElement | null>(null);
@@ -69,10 +77,10 @@ export function useScrollOwner(
     setContentState(element);
   }, []);
   const state = useRef({
-    following: true,
+    following: atTail,
     movedDown: false,
     lastTop: 0,
-    published: true,
+    published: atTail,
     listeners: new Set<() => void>(),
     restore: null as null | ReturnType<typeof readerAnchor>,
     near: null as Near | null,
@@ -137,8 +145,8 @@ export function useScrollOwner(
     state.current.near = null;
     state.current.restore = null;
     cancelAnimationFrame(state.current.staleFrame);
-    pinToBottom();
-  }, [threadId, pinToBottom]);
+    if (atTail) pinToBottom();
+  }, [threadId, pinToBottom, atTail]);
   const wasAway = useRef(away);
   useLayoutEffect(() => {
     state.current.away = away;

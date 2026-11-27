@@ -22,8 +22,16 @@ let scrollBy: ReturnType<typeof vi.fn>;
 let row: HTMLElement;
 let rowTop = 100;
 
-function Harness({ thread = 'thread', away = false }: { thread?: string; away?: boolean }) {
-  owner = useScrollOwner(thread, 'chat', { away });
+function Harness({
+  thread = 'thread',
+  away = false,
+  openAt,
+}: {
+  thread?: string;
+  away?: boolean;
+  openAt?: 'tail' | 'top';
+}) {
+  owner = useScrollOwner(thread, 'chat', { away, openAt });
   return (
     <div ref={owner.setViewport} data-testid="viewport" tabIndex={-1}>
       <div ref={owner.setContent} data-testid="content">
@@ -47,9 +55,9 @@ const DRIVEN = {
   },
 };
 
-function mount() {
+function mount(openAt?: 'tail' | 'top') {
   scrollBy = vi.fn();
-  const view = render(<Harness />);
+  const view = render(<Harness openAt={openAt} />);
   viewport = view.getByTestId('viewport');
   row = view.getByTestId('row');
   viewport.scrollBy = scrollBy as unknown as typeof viewport.scrollBy;
@@ -494,5 +502,29 @@ describe('a window around a jump target (away)', () => {
     expect(frames.some(Boolean)).toBe(true);
     goAway(view);
     expect(frames.some(Boolean)).toBe(false);
+  });
+});
+
+describe('a view read from its start (openAt: top, a sub-agent tab)', () => {
+  it('opens where it is and does not follow until the reader scrolls down to the bottom', () => {
+    mount('top');
+    expect(layout.top).toBe(0);
+    expect(following()).toBe(false);
+    grow(300);
+    expect(layout.top).toBe(0);
+    layout.top = 1800;
+    fireEvent.wheel(viewport, { deltaY: 40 });
+    grow(100);
+    expect(layout.top).toBe(1900);
+  });
+
+  it('holds the reader at offset 0 when a page lands above them', () => {
+    mount('top');
+    rowTop = 300;
+    act(() => owner.controller.beforePrepend?.());
+    layout.height += 600;
+    rowTop += 600;
+    act(() => resize());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 600, behavior: 'instant' });
   });
 });

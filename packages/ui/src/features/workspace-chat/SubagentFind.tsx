@@ -6,7 +6,7 @@ import { useShortcutAction } from '@/features/shortcuts/action-store';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import {
   historyKey,
-  loadSubagentPage,
+  loadSubagentTarget,
   useSubagentHistoryStore,
 } from '@/features/chat/messages/turn/subagent-history-store';
 
@@ -69,11 +69,17 @@ export function SubagentFind({
   const entry = useSubagentHistoryStore((state) => state.entries.get(key));
   useEffect(() => {
     if (!open || !match || !entry || entry.loading || entry.error) return;
-    if (entry.before && !entry.messages.some(({ id }) => id === match.containerId)) {
-      void loadSubagentPage(
+    const held = entry.messages.some(({ id }) => id === match.containerId);
+    // The held window is bounded: a match may be above it or, once its newest pages were dropped, below it.
+    if (!held && (entry.before || (entry.later && entry.target !== match.containerId))) {
+      void loadSubagentTarget(
         key,
-        (before) => controller.subagentHistory.page(agentId, before, before ? match.itemId : undefined),
-        true,
+        (before, until) =>
+          until
+            ? controller.subagentHistory.page(agentId, before, until)
+            : controller.subagentHistory.page(agentId, before),
+        match.containerId,
+        match.itemId,
       );
       return;
     }

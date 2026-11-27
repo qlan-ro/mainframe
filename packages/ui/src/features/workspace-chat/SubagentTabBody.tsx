@@ -40,6 +40,7 @@ import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
 import { useSubagentCall } from './use-subagent-call';
+import { SubagentScroller } from './SubagentScroller';
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 interface Place {
   pending: ReadonlySet<string>;
@@ -250,13 +251,7 @@ export function SubagentTabBody({
           />
         )}
       </ConversationHeader>
-      <div
-        data-conversation-scroller
-        role="region"
-        aria-label={shownTitle}
-        tabIndex={-1}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-[22px] pt-3 pb-4 outline-none focus-visible:focus-line-inset [&_.mf-tr-mono]:translate-y-0"
-      >
+      <SubagentScroller label={shownTitle}>
         {call == null || place == null ? (
           <p role="status" className="text-sm text-muted-foreground">
             {error ?? 'Loading the sub-agent…'}
@@ -286,7 +281,7 @@ export function SubagentTabBody({
             })}
           </ParentScope>
         )}
-      </div>
+      </SubagentScroller>
     </div>
   );
 }

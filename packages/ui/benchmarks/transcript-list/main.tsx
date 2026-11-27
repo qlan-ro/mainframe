@@ -18,19 +18,41 @@ import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
 import { sNoise, sTop } from './scenarios/short-window';
 import { bound } from './scenarios/bound';
+import { agentBound, agentPark, agentWheel } from './scenarios/agent';
 import { installOverlayScrollbars } from '@/lib/overlay-scrollbars/manager';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
 import { V1sShell } from './shells/V1sShell';
 import { V2Shell } from './shells/V2Shell';
 import { AppShell } from './shells/AppShell';
+import { AgentShell } from './shells/AgentShell';
 import { openSomeTurns } from './open-turns';
 
-const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell, app: AppShell };
-const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy, sTop, sNoise, bound } as Record<
-  string,
-  (o: object) => Promise<unknown>
->;
+const SHELLS = {
+  v0: V0Shell,
+  v1: V1Shell,
+  v1s: V1sShell,
+  'v1s-patched': V1sShell,
+  v2: V2Shell,
+  app: AppShell,
+  agent: AgentShell,
+};
+const SCENARIOS = {
+  p1,
+  p2,
+  p3,
+  p4follow,
+  p4release,
+  p6scroll,
+  p6tail,
+  p7proxy,
+  sTop,
+  sNoise,
+  bound,
+  agentPark,
+  agentWheel,
+  agentBound,
+} as Record<string, (o: object) => Promise<unknown>>;
 
 openSomeTurns();
 if (params.live && params.shape !== 'real')

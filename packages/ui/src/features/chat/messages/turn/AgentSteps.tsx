@@ -66,6 +66,8 @@ export interface AgentStepsProps extends Omit<NestedScope, 'live' | 'cancelled'>
   after?: ReactNode;
   /** The steps alone: what was asked and what came back are shown around them. */
   bare?: boolean;
+  /** The held steps stop before the agent's end (its newest pages were dropped): none of them is its answer. */
+  endsEarly?: boolean;
 }
 
 const normal = (text: string) => text.replace(/\s+/g, ' ').trim();
@@ -107,7 +109,7 @@ interface Nested {
   readonly answerTexts: readonly string[];
 }
 
-function nest(messages: readonly ThreadMessage[], scope: TurnScope): Nested {
+function nest(messages: readonly ThreadMessage[], scope: TurnScope, endsEarly = false): Nested {
   const units = new Map(messages.map((message) => [message.id, messageUnits(message, scope)]));
   const skills = new SkillMatcher();
   const seen: TurnUnit[] = [];
@@ -117,7 +119,7 @@ function nest(messages: readonly ThreadMessage[], scope: TurnScope): Nested {
     seen.push(...units.get(message.id)!);
   }
   let start = messages.length;
-  while (start > 0 && messages[start - 1]!.role !== 'user') start--;
+  while (!endsEarly && start > 0 && messages[start - 1]!.role !== 'user') start--;
   const tail = messages.slice(start).flatMap((message) => units.get(message.id)!);
   // A picture the agent answered with stays among its steps; only text moves to the Result block.
   const answer = new Set([...answerUnits(tail, false)].filter(({ part }) => part.type === 'text'));
@@ -208,13 +210,22 @@ function bareView(answer: readonly string[], result: string): ResultView {
   return { text: '', own: own !== '' && own === normal(result), delivered: true, label: '' };
 }
 
-function Steps({ messages, outcome, prompt, promptLabel = 'Prompt', result = '', bare, ...rest }: AgentStepsProps) {
+function Steps({
+  messages,
+  outcome,
+  prompt,
+  promptLabel = 'Prompt',
+  result = '',
+  bare,
+  endsEarly = false,
+  ...rest
+}: AgentStepsProps) {
   const scope = useTranscriptScope();
   const isRunning = outcome === 'going';
   const model = useMemo(() => buildTurns(messages, { ...scope, isRunning }), [messages, scope, isRunning]);
   const children = useNestedLiveChildren(model);
   const disclosure = useMemo(() => ({ model, children }), [model, children]);
-  const nested = useMemo(() => nest(messages, scope), [messages, scope]);
+  const nested = useMemo(() => nest(messages, scope, endsEarly), [messages, scope, endsEarly]);
   const first = useMemo(
     () => (bare && !prompt ? undefined : promptMessage(messages, prompt)),
     [messages, prompt, bare],

@@ -1,0 +1,683 @@
+{
+ "note": "#463: the sub-agent cases (A-park, A-wheel, A-bound) on the agent variant, WKWebView, one pass. agent@unbounded is A-bound on a build with the page window lifted (SUBAGENT_PAGES_KEPT = 100000), for the comparison only.",
+ "runs": [
+  {
+   "part": "agent, agent+plain=0, agent+inline, agent+inline+plain=0",
+   "load": [
+    3.9150390625,
+    6.64306640625,
+    10.21337890625
+   ]
+  },
+  {
+   "part": "agent@unbounded A-bound",
+   "load": [
+    6.65380859375,
+    6.08837890625,
+    9.09130859375
+   ]
+  }
+ ],
+ "engines": "wk",
+ "synthetic": false,
+ "results": [
+  {
+   "ok": true,
+   "variant": "agent",
+   "result": {
+    "at": "middle",
+    "landed": true,
+    "maxDrift": 0.25,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 536,
+    "rowsBefore": 40,
+    "rowsAfter": 80
+   },
+   "engine": "wk",
+   "case": "A-park-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent",
+   "result": {
+    "at": "top",
+    "landed": true,
+    "maxDrift": 0.75,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 0,
+    "rowsBefore": 40,
+    "rowsAfter": 80
+   },
+   "engine": "wk",
+   "case": "A-park-top",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent",
+   "result": {
+    "plain": true,
+    "inline": false,
+    "loads": 2,
+    "jump": 0.25,
+    "jumps": [
+     0.25,
+     0.25
+    ],
+    "lostFrames": 0,
+    "pageHeights": [
+     2798.75,
+     0
+    ],
+    "perLanding": [
+     {
+      "jump": 0.25,
+      "baseScrollTop": 594
+     },
+     {
+      "jump": 0.25,
+      "baseScrollTop": 633
+     }
+    ],
+    "peak": {
+     "nodes": 2574,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "frames": 272
+   },
+   "engine": "wk",
+   "case": "A-wheel",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent",
+   "result": {
+    "plain": true,
+    "inline": false,
+    "up": 20,
+    "down": 18,
+    "open": {
+     "nodes": 864,
+     "rows": 40,
+     "messages": 40,
+     "items": 80
+    },
+    "peak": {
+     "nodes": 2575,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "top": {
+     "nodes": 2575,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "after": {
+     "nodes": 2574,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "later": false
+   },
+   "engine": "wk",
+   "case": "A-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+plain=0",
+   "result": {
+    "at": "middle",
+    "landed": true,
+    "maxDrift": 0.25,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 536,
+    "rowsBefore": 40,
+    "rowsAfter": 80
+   },
+   "engine": "wk",
+   "case": "A-park-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+plain=0",
+   "result": {
+    "at": "top",
+    "landed": true,
+    "maxDrift": 2798.75,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 0,
+    "rowsBefore": 40,
+    "rowsAfter": 80
+   },
+   "engine": "wk",
+   "case": "A-park-top",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+plain=0",
+   "result": {
+    "plain": false,
+    "inline": false,
+    "loads": 2,
+    "jump": 0.25,
+    "jumps": [
+     0.25,
+     0.25
+    ],
+    "lostFrames": 0,
+    "pageHeights": [
+     2798.75,
+     0
+    ],
+    "perLanding": [
+     {
+      "jump": 0.25,
+      "baseScrollTop": 594
+     },
+     {
+      "jump": 0.25,
+      "baseScrollTop": 753
+     }
+    ],
+    "peak": {
+     "nodes": 2573,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "frames": 271
+   },
+   "engine": "wk",
+   "case": "A-wheel",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+plain=0",
+   "result": {
+    "plain": false,
+    "inline": false,
+    "up": 20,
+    "down": 18,
+    "open": {
+     "nodes": 863,
+     "rows": 40,
+     "messages": 40,
+     "items": 80
+    },
+    "peak": {
+     "nodes": 2574,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "top": {
+     "nodes": 2574,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "after": {
+     "nodes": 2573,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "later": false
+   },
+   "engine": "wk",
+   "case": "A-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline",
+   "result": {
+    "at": "middle",
+    "landed": true,
+    "maxDrift": 0.75,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 71541,
+    "rowsBefore": 80,
+    "rowsAfter": 120
+   },
+   "engine": "wk",
+   "case": "A-park-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 35,
+    "wrongFrames": 0,
+    "rowsInDomMs": 80,
+    "firstVisibleMs": 80,
+    "mountMs": 80,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.05
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline",
+   "result": {
+    "plain": true,
+    "inline": true,
+    "loads": 2,
+    "jump": 0.25,
+    "jumps": [
+     0.25,
+     0.25
+    ],
+    "lostFrames": 0,
+    "pageHeights": [
+     2798.75,
+     2798.75
+    ],
+    "perLanding": [
+     {
+      "jump": 0.25,
+      "baseScrollTop": 68623
+     },
+     {
+      "jump": 0.25,
+      "baseScrollTop": 68662
+     }
+    ],
+    "peak": {
+     "nodes": 25570,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "frames": 294
+   },
+   "engine": "wk",
+   "case": "A-wheel",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 36,
+    "wrongFrames": 0,
+    "rowsInDomMs": 69,
+    "firstVisibleMs": 69,
+    "mountMs": 69,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.03
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline",
+   "result": {
+    "plain": true,
+    "inline": true,
+    "up": 20,
+    "down": 19,
+    "open": {
+     "nodes": 23860,
+     "rows": 40,
+     "messages": 40,
+     "items": 80
+    },
+    "peak": {
+     "nodes": 25571,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "top": {
+     "nodes": 25571,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "after": {
+     "nodes": 25570,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "later": false
+   },
+   "engine": "wk",
+   "case": "A-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 36,
+    "wrongFrames": 0,
+    "rowsInDomMs": 67,
+    "firstVisibleMs": 67,
+    "mountMs": 67,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.03
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline+plain=0",
+   "result": {
+    "at": "middle",
+    "landed": true,
+    "maxDrift": 0.75,
+    "anchorLost": false,
+    "heightChange": 2799,
+    "parkedScrollTop": 71541,
+    "rowsBefore": 80,
+    "rowsAfter": 120
+   },
+   "engine": "wk",
+   "case": "A-park-middle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 36,
+    "wrongFrames": 0,
+    "rowsInDomMs": 62,
+    "firstVisibleMs": 62,
+    "mountMs": 62,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.05
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline+plain=0",
+   "result": {
+    "plain": false,
+    "inline": true,
+    "loads": 2,
+    "jump": 0.25,
+    "jumps": [
+     0.25,
+     0.25
+    ],
+    "lostFrames": 0,
+    "pageHeights": [
+     2798.75,
+     2798.75
+    ],
+    "perLanding": [
+     {
+      "jump": 0.25,
+      "baseScrollTop": 68623
+     },
+     {
+      "jump": 0.25,
+      "baseScrollTop": 68662
+     }
+    ],
+    "peak": {
+     "nodes": 25570,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "frames": 282
+   },
+   "engine": "wk",
+   "case": "A-wheel",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 36,
+    "wrongFrames": 0,
+    "rowsInDomMs": 80,
+    "firstVisibleMs": 80,
+    "mountMs": 80,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.03
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent+inline+plain=0",
+   "result": {
+    "plain": false,
+    "inline": true,
+    "up": 20,
+    "down": 18,
+    "open": {
+     "nodes": 23860,
+     "rows": 40,
+     "messages": 40,
+     "items": 80
+    },
+    "peak": {
+     "nodes": 25571,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "top": {
+     "nodes": 25571,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "after": {
+     "nodes": 25570,
+     "rows": 120,
+     "messages": 120,
+     "items": 240
+    },
+    "later": false
+   },
+   "engine": "wk",
+   "case": "A-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 36,
+    "wrongFrames": 0,
+    "rowsInDomMs": 68,
+    "firstVisibleMs": 68,
+    "mountMs": 68,
+    "firstFrameScrollTop": 2876,
+    "firstFrameGap": 0,
+    "newestMoved": 0.03
+   }
+  },
+  {
+   "ok": true,
+   "variant": "agent@unbounded",
+   "result": {
+    "plain": true,
+    "inline": false,
+    "up": 20,
+    "down": 0,
+    "open": {
+     "nodes": 864,
+     "rows": 40,
+     "messages": 40,
+     "items": 80
+    },
+    "peak": {
+     "nodes": 17934,
+     "rows": 840,
+     "messages": 840,
+     "items": 1680
+    },
+    "top": {
+     "nodes": 17934,
+     "rows": 840,
+     "messages": 840,
+     "items": 1680
+    },
+    "after": {
+     "nodes": 17934,
+     "rows": 840,
+     "messages": 840,
+     "items": 1680
+    },
+    "later": false
+   },
+   "engine": "wk",
+   "case": "A-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": -1,
+    "firstVisibleFrame": -1,
+    "lastRowOnFirstFrame": false,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": null,
+    "firstVisibleMs": null,
+    "mountMs": null,
+    "firstFrameScrollTop": null,
+    "firstFrameGap": null,
+    "newestMoved": 0
+   }
+  }
+ ]
+}
