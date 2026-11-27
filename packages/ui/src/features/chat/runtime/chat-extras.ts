@@ -40,6 +40,10 @@ export interface ChatRuntimeExtras {
   readonly port: number;
   readonly reconcileModelResponse: (chatId: string, request: () => Promise<Chat | undefined>) => Promise<void>;
   readonly loadEarlier?: (untilItemId?: string) => Promise<boolean>;
+  /** Scrolling down from a window around a jump target. */
+  readonly loadLater?: () => Promise<boolean>;
+  readonly returnToTail?: () => void;
+  readonly trimToNewestPage?: () => void;
   readonly searchHistory?: (query: string) => Promise<HistorySearchResult>;
   readonly canSearchHistory?: boolean;
   readonly cancel: () => Promise<void>;
@@ -84,6 +88,9 @@ export function buildChatExtras(
     port,
     reconcileModelResponse: (chatId, request) => controller.reconcileModelResponse(chatId, request),
     loadEarlier: (target) => controller.loadEarlier(target),
+    loadLater: () => controller.loadLater(),
+    returnToTail: () => controller.returnToTail(),
+    trimToNewestPage: () => controller.trimToNewestPage(),
     searchHistory: (query) => controller.searchHistory(query),
     canSearchHistory: controller.canSearchHistory,
     cancel: () => controller.cancel(),

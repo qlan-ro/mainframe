@@ -1,5 +1,6 @@
 import { AcpHistory } from './acp-history';
 import { isHeldHistoryItem } from './acp-history-items';
+import { planeWindowHost } from './acp-plane-window-host';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
@@ -56,6 +57,11 @@ export class AcpSessionPlane {
       changed: (history) => this.host.dispatch({ type: 'history.window', history }),
       prepend: (page) => this.prependPage(page),
       hasItem: (id, floor) => isHeldHistoryItem(this.store.accumulator.itemsInOrder, id, floor),
+      ...planeWindowHost(
+        this.store,
+        () => this.refreshMessages(),
+        () => this.host.getChatId(),
+      ),
     });
     this.attachment = new AcpSessionAttachment({
       getChatId: () => this.host.getChatId(),
@@ -226,7 +232,7 @@ export class AcpSessionPlane {
       this.applyUsageUpdate(update);
       return;
     }
-    this.refreshMessages();
+    if (!this.store.isAway) this.refreshMessages();
   }
 
   /** `AcpSessionAttachmentHost.beginReplay` — a replay window opened (D4); returns that window's own stage. */
@@ -242,7 +248,8 @@ export class AcpSessionPlane {
     this.cursorTracker.commitReplyCursor(stage.replyCursor);
     const items = this.store.publish(stage);
     if (!items) return;
-    this.refreshFrom(items);
+    // Away from the tail the transcript shows the window; coming back shows what the replay published.
+    if (!this.store.isAway) this.refreshFrom(items);
     const state = stage.pendingState;
     stage.pendingState = null;
     if (state) this.applyStateUpdate(state, items, true);
@@ -292,7 +299,7 @@ export class AcpSessionPlane {
   }
 
   private refreshMessages(): void {
-    this.refreshFrom(this.store.accumulator.itemsInOrder);
+    this.refreshFrom(this.store.shown.itemsInOrder);
   }
 
   private refreshFrom(items: AccumulatedItem[]): void {

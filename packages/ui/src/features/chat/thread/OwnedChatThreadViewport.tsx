@@ -1,4 +1,6 @@
 import { EarlierMessages } from './EarlierMessages';
+import { LaterMessages } from './LaterMessages';
+import { useTrimAtTail } from './use-trim-at-tail';
 import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { useUiPrefs } from '@/store/ui-prefs';
@@ -16,6 +18,9 @@ import { TRANSCRIPT_WIDTH_VAR, TranscriptWidthHandle } from './TranscriptWidthHa
 import { ChatThreadLoadingSpinner, LoadErrorBanner } from './ChatThreadIndicators';
 import type { ChatThreadVariant } from './ChatThread';
 import type { SessionCustom } from '@/features/sessions/view-model/chat-to-thread-custom';
+
+/** In a window around a jump target the bottom is not the live tail: the button always takes the reader there. */
+const NEVER_PINNED = () => false;
 
 /**
  * The transcript with plain rows and one scroll owner (`use-scroll-owner.ts`), behind
@@ -39,10 +44,13 @@ export function OwnedChatThreadViewport({
 }) {
   const readOnly = useAuiState((s) => (s.threadListItem?.custom as SessionCustom | undefined)?.delegation != null);
   const threadId = useSideAwareThreadId();
-  const chatId = useChatExtras()?.state.chatId;
+  const extras = useChatExtras();
+  const chatId = extras?.state.chatId;
+  const away = extras?.state.historyWindow?.detached != null;
   // Find searches the focused main chat only; the plain list reveals every row for it (use-tail-first-rows.ts).
   const focused = useAuiState((s) => s.threads?.mainThreadId === s.threadListItem?.id);
-  const owner = useScrollOwner(threadId, chatId, { findOwner: focused && variant === 'main' });
+  const owner = useScrollOwner(threadId, chatId, { findOwner: focused && variant === 'main', away });
+  useTrimAtTail(owner, extras?.trimToNewestPage, away);
   const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
   const footerHeight = useElementHeight(footerEl);
   const [overlayHost, setOverlayHost] = useState<HTMLDivElement | null>(null);
@@ -80,6 +88,7 @@ export function OwnedChatThreadViewport({
               {messageCount === 0 && emptyState != null ? emptyState : null}
               <EarlierMessages />
               <TurnTranscript key={threadId ?? ''} />
+              <LaterMessages />
             </div>
           </div>
           <TranscriptEdgeFades />
@@ -89,9 +98,9 @@ export function OwnedChatThreadViewport({
         <TranscriptScrollToBottom
           host={overlayHost}
           footerHeight={footerHeight}
-          isPinned={owner.isPinned}
+          isPinned={away ? NEVER_PINNED : owner.isPinned}
           subscribePinned={owner.subscribePinned}
-          onPin={owner.pinToBottom}
+          onPin={away && extras?.returnToTail ? extras.returnToTail : owner.pinToBottom}
         />
       </div>
     </TranscriptScrollProvider>

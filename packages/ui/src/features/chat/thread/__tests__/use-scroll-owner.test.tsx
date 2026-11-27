@@ -22,8 +22,8 @@ let scrollBy: ReturnType<typeof vi.fn>;
 let row: HTMLElement;
 let rowTop = 100;
 
-function Harness({ thread = 'thread' }: { thread?: string }) {
-  owner = useScrollOwner(thread, 'chat');
+function Harness({ thread = 'thread', away = false }: { thread?: string; away?: boolean }) {
+  owner = useScrollOwner(thread, 'chat', { away });
   return (
     <div ref={owner.setViewport} data-testid="viewport" tabIndex={-1}>
       <div ref={owner.setContent} data-testid="content">
@@ -433,5 +433,53 @@ describe('followNow', () => {
     layout.height = 2600;
     act(() => owner.controller.followNow?.());
     expect(layout.top).toBe(300);
+  });
+});
+
+describe('a window around a jump target (away)', () => {
+  const goAway = (view: ReturnType<typeof mount>) => view.rerender(<Harness away />);
+
+  it('opens at its top, leaves follow off, and does not follow what lands below', () => {
+    const view = mount();
+    expect(following()).toBe(true);
+    layout.top = 1500;
+    goAway(view);
+    expect(layout.top).toBe(0);
+    expect(following()).toBe(false);
+    grow(300);
+    expect(layout.top).toBe(0);
+  });
+
+  it('keeps follow off at the bottom of the window: its bottom is not the tail', () => {
+    const view = mount();
+    goAway(view);
+    fireEvent.wheel(viewport, { deltaY: 40 });
+    layout.top = layout.height - 500;
+    fireEvent.scroll(viewport);
+    grow(200);
+    expect(following()).toBe(false);
+    expect(layout.top).toBe(1500);
+  });
+
+  it('does not re-anchor a page that landed before the window changed', () => {
+    const view = mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 200;
+    act(() => owner.controller.beforePrepend?.());
+    goAway(view);
+    layout.height += 300;
+    rowTop += 300;
+    act(() => resize());
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('pins to the bottom and follows again when the tail comes back', () => {
+    const view = mount();
+    goAway(view);
+    view.rerender(<Harness />);
+    expect(following()).toBe(true);
+    expect(layout.top).toBe(1500);
+    grow(300);
+    expect(layout.top).toBe(1800);
   });
 });

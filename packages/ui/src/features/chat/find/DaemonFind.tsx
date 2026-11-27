@@ -4,6 +4,7 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { useFindInChatStore, type FindMatch } from './find-in-chat-store';
 import { showAbsorbedMatch } from './absorbed-match';
 import { paintDaemonMatch, messageElement, waitForMessage } from './daemon-highlights';
+import { useUiPrefs } from '@/store/ui-prefs';
 import { ACTIVITY_JUMP_EVENT } from '@/features/session-panel/activity-source';
 import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
 
@@ -24,7 +25,15 @@ export function DaemonFind() {
     if (!prepend && messages !== held) setRevision((value) => value + 1);
   }, [messages, enabled]);
   useEffect(() => {
-    useFindInChatStore.setState({ daemon: enabled, serverTotal: null, matches: [], activeIndex: 0 });
+    // The plain list has no in-page find to fall back on.
+    const unavailable = !enabled && useUiPrefs.getState().plainTranscript;
+    useFindInChatStore.setState({
+      daemon: enabled,
+      serverTotal: null,
+      matches: [],
+      activeIndex: 0,
+      error: unavailable ? 'Search needs a newer daemon' : null,
+    });
     return () => {
       useFindInChatStore.setState({ daemon: false, serverTotal: null });
     };
@@ -182,9 +191,11 @@ async function revealMatch(
     );
     const message = await waitForMessage(chatId, match.messageId);
     if (!message || isCancelled()) return;
-    window.dispatchEvent(
-      new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId, source: { messageId: match.messageId } } }),
-    );
+    // The virtualized list needs a second ask once the row has mounted; the plain list's rows are all real.
+    if (!useUiPrefs.getState().plainTranscript)
+      window.dispatchEvent(
+        new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId, source: { messageId: match.messageId } } }),
+      );
     const row = await showAbsorbedMatch(chatId, message, query, messages());
     if (isCancelled()) return;
     if (row) {

@@ -2,7 +2,8 @@
  * app: the list as the app ships it behind Settings > Chat > plain transcript list. The real scroll owner
  * (`features/chat/thread/use-scroll-owner.ts`), the real plain list with its tail-first mount
  * (`PlainMessages`), the real boundary row (`EarlierMessages`, with its loading state) and the real
- * `TurnTranscript`, in a viewport laid out as `OwnedChatThreadViewport` lays it out. Only the composer is a stub.
+ * `TurnTranscript`, in a viewport laid out as `OwnedChatThreadViewport` lays it out, with the app's trim at the tail
+ * (`use-trim-at-tail.ts`). Only the composer is a stub.
  */
 import { useEffect } from 'react';
 import { EarlierMessages } from '@/features/chat/thread/EarlierMessages';
@@ -10,13 +11,18 @@ import { TurnTranscript } from '@/features/chat/messages/turn/TurnTranscript';
 import { TranscriptScrollProvider } from '@/features/chat/thread/transcript-scroll-context';
 import { TranscriptEdgeFades } from '@/features/chat/thread/TranscriptEdgeFades';
 import { useScrollOwner } from '@/features/chat/thread/use-scroll-owner';
+import { useTrimAtTail } from '@/features/chat/thread/use-trim-at-tail';
 import { controls } from '../controls';
-import { CHAT_ID } from '../store';
+import { CHAT_ID, store } from '../store';
 import { ComposerStub } from './ComposerStub';
+
+const trimWindow = () => void store.trimToNewestPage();
 
 export function AppShell() {
   const owner = useScrollOwner(CHAT_ID, CHAT_ID);
   const { viewport } = owner.controller;
+  // The app's own hook; the rig's store cuts the window as `AcpHistory.trim` does.
+  useTrimAtTail(owner, trimWindow, false);
   useEffect(() => {
     controls.viewport = viewport ?? null;
     controls.jump = owner.pinToBottom;

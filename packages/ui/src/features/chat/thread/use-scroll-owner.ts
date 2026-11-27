@@ -19,7 +19,10 @@
  *   added with a relative `scrollBy`, which keeps the wheel input in flight (an absolute
  *   `scrollTop` write drops it). Measured in the proof rig (`docs/research/2026-11-26-transcript-list-rig.md`, 9.7),
  * - re-applies a measured anchor once after a page lands on an engine without `overflow-anchor`
- *   or at offset 0.
+ *   or at offset 0,
+ * - treats a window around a jump target (`away`) as somewhere other than the tail: follow stays
+ *   off in it (its bottom is not the live bottom), it opens at its top, and coming back to the tail
+ *   pins to the bottom.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
@@ -50,7 +53,7 @@ interface Near {
 export function useScrollOwner(
   threadId: string | null,
   chatId: string | undefined,
-  { findOwner = false }: { findOwner?: boolean } = {},
+  { findOwner = false, away = false }: { findOwner?: boolean; away?: boolean } = {},
 ) {
   const [viewport, setViewportState] = useState<HTMLDivElement | null>(null);
   const [content, setContentState] = useState<HTMLDivElement | null>(null);
@@ -75,6 +78,7 @@ export function useScrollOwner(
     near: null as Near | null,
     /** The frame that clears a record no resize used (a page that changed nothing's height). */
     staleFrame: 0,
+    away,
   });
   const publish = useCallback(() => {
     const current = state.current;
@@ -86,7 +90,7 @@ export function useScrollOwner(
   }, []);
   const pinToBottom = useCallback(() => {
     const current = state.current;
-    current.following = true;
+    current.following = !current.away;
     current.movedDown = false;
     const el = viewportElement.current;
     if (el) {
@@ -135,6 +139,27 @@ export function useScrollOwner(
     cancelAnimationFrame(state.current.staleFrame);
     pinToBottom();
   }, [threadId, pinToBottom]);
+  const wasAway = useRef(away);
+  useLayoutEffect(() => {
+    state.current.away = away;
+    if (wasAway.current === away) return;
+    wasAway.current = away;
+    const current = state.current;
+    current.near = null;
+    current.restore = null;
+    cancelAnimationFrame(current.staleFrame);
+    if (!away) {
+      pinToBottom();
+      return;
+    }
+    // The rows are another window: the old position means nothing in it. The jump that asked for it scrolls on.
+    release();
+    const el = viewportElement.current;
+    if (el) {
+      el.scrollTop = 0;
+      current.lastTop = 0;
+    }
+  }, [away, pinToBottom, release]);
   useEffect(() => (threadId == null ? undefined : onUserSent(threadId, pinToBottom)), [threadId, pinToBottom]);
   useEffect(() => () => cancelAnimationFrame(state.current.staleFrame), []);
   useEffect(() => {

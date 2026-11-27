@@ -7,6 +7,7 @@
 import {
   ITEM_CREATED_META_KEY,
   type ContentBlock,
+  type SessionUpdate,
   type ToolCallContent,
   type ToolCallLocation,
   type ToolCallStatus,
@@ -97,4 +98,57 @@ export function appendBlock(blocks: ContentBlock[], incoming: ContentBlock): Con
 export function patchField<T>(current: T | undefined, incoming: T | null | undefined): T | undefined {
   if (incoming === undefined) return current;
   return incoming === null ? undefined : incoming;
+}
+
+/** The item id a frame addresses; none for a turn or usage report. */
+export function updateTarget(update: SessionUpdate): string | undefined {
+  switch (update.sessionUpdate) {
+    case 'tool_call_update':
+    case 'tool_call_content_chunk':
+      return update.toolCallId;
+    case 'state_update':
+    case 'usage_update':
+      return undefined;
+    default:
+      return update.messageId;
+  }
+}
+
+/** A tool call after a `tool_call_update` patch: absent fields keep the prior value, `null` clears. */
+export function patchedToolCall(
+  id: string,
+  prior: AccumulatedToolCallItem | undefined,
+  update: Extract<SessionUpdate, { sessionUpdate: 'tool_call_update' }>,
+  origin: AccumulatorItemOrigin | undefined,
+): AccumulatedToolCallItem {
+  return {
+    kind: 'tool-call',
+    id,
+    title: patchField(prior?.title, update.title),
+    toolKind: patchField(prior?.toolKind, update.kind),
+    status: patchField(prior?.status, update.status),
+    content: patchField(prior?.content, update.content) ?? [],
+    locations: patchField(prior?.locations, update.locations),
+    rawInput: patchField(prior?.rawInput, update.rawInput),
+    rawOutput: patchField(prior?.rawOutput, update.rawOutput),
+    meta: patchField(prior?.meta, update._meta),
+    origin,
+  };
+}
+
+/** A tool call with every field of `prior` and the new content left for the caller. */
+export function emptyToolCall(id: string, prior: AccumulatedToolCallItem | undefined): AccumulatedToolCallItem {
+  return {
+    kind: 'tool-call',
+    id,
+    title: prior?.title,
+    toolKind: prior?.toolKind,
+    status: prior?.status,
+    content: [],
+    locations: prior?.locations,
+    rawInput: prior?.rawInput,
+    rawOutput: prior?.rawOutput,
+    meta: prior?.meta,
+    origin: prior?.origin,
+  };
 }

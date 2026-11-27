@@ -65,5 +65,7 @@ export const CASES = [
   { id: 'S-noise-60', query: '', run: 'sNoise', options: { dy: -60, steps: 40 } },
   { id: 'S-noise-300', query: '', run: 'sNoise', options: { dy: -300, steps: 10 } },
   { id: 'S-noise-flick', query: '', run: 'sNoise', options: { dy: -700, flicks: 2 }, engines: ['wk'] },
+  // #462: the window stays bounded. Scroll up 10 pages and back down, twice, on the app's list (`--variants app`).
+  { id: 'W-bound', query: '&total=400', run: 'bound', options: { pages: 10, cycles: 2 }, engines: ['wk'] },
   { id: 'P7-flicks', query: '', run: 'p7proxy', options: { loads: 3 }, engines: ['wk'] },
 ];

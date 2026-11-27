@@ -51,6 +51,9 @@ import {
   type AccumulatorItemOrigin,
   type AcpItemAccumulatorOptions,
   type ApplyOutcome,
+  emptyToolCall,
+  patchedToolCall,
+  updateTarget,
 } from './accumulated-item';
 
 export type {
@@ -67,6 +70,8 @@ export type {
 export class AcpItemAccumulator {
   private readonly items = new Map<string, AccumulatedItem>();
   private order: string[] = [];
+  /** Ids a trim removed. The daemon's connection still sends changes to them (its floor never rises), so they are dropped here instead of asking for a resync. */
+  private readonly dropped = new Set<string>();
   private turnState: AcpTurnState | null = null;
   private usage: UsageUpdate | null = null;
   private readonly strictCreation: boolean;
@@ -94,21 +99,58 @@ export class AcpItemAccumulator {
     this.replaying = value;
   }
 
-  prepend(updates: SessionUpdate[]): AccumulatedItem[] {
+  /** The items of a history page or window, built apart so a failed one leaves this accumulator untouched. */
+  private page(updates: SessionUpdate[]): AcpItemAccumulator {
     const page = new AcpItemAccumulator({ strictCreation: this.strictCreation });
     page.setReplaying(true);
     for (const update of updates) {
       if (page.apply(update).kind === 'needs-replay') throw new Error('Incomplete history page');
     }
+    return page;
+  }
+
+  private adopt(page: AcpItemAccumulator): AccumulatedItem[] {
     const incoming = page.itemsInOrder.filter((item) => !this.items.has(item.id));
-    for (const item of incoming) this.items.set(item.id, item);
+    for (const item of incoming) {
+      this.items.set(item.id, item);
+      this.dropped.delete(item.id);
+    }
+    return incoming;
+  }
+
+  prepend(updates: SessionUpdate[]): AccumulatedItem[] {
+    const page = this.page(updates);
+    const incoming = this.adopt(page);
     const pageIds = page.itemsInOrder.map((item) => item.id);
     const shared = new Set(pageIds);
     this.order = pageIds.concat(this.order.filter((id) => !shared.has(id)));
     return incoming;
   }
 
+  /** Adds a window that continues past the newest held item. A window repeats its anchor, so items already held are kept as they are. */
+  append(updates: SessionUpdate[]): AccumulatedItem[] {
+    const incoming = this.adopt(this.page(updates));
+    for (const item of incoming) this.order.push(item.id);
+    return incoming;
+  }
+
+  has(id: string): boolean {
+    return this.items.has(id);
+  }
+
+  /** Drops every item before `id`, newest side untouched. Returns how many went. */
+  trimBefore(id: string): number {
+    const at = this.order.indexOf(id);
+    if (at <= 0) return 0;
+    for (const gone of this.order.splice(0, at)) {
+      this.items.delete(gone);
+      this.dropped.add(gone);
+    }
+    return at;
+  }
+
   reset(): void {
+    this.dropped.clear();
     this.items.clear();
     this.order.length = 0;
     this.turnState = null;
@@ -116,6 +158,8 @@ export class AcpItemAccumulator {
   }
 
   apply(update: SessionUpdate): ApplyOutcome {
+    const target = updateTarget(update);
+    if (target !== undefined && this.dropped.has(target)) return IGNORED;
     switch (update.sessionUpdate) {
       case 'user_message_chunk':
         return this.applyChunk(update.messageId, 'user', false, update.content, update._meta);
@@ -230,19 +274,7 @@ export class AcpItemAccumulator {
     const prior = this.items.get(id);
     const priorToolCall = prior?.kind === 'tool-call' ? prior : undefined;
     const origin = existed ? priorToolCall?.origin : this.originForCreate();
-    const item: AccumulatedToolCallItem = {
-      kind: 'tool-call',
-      id,
-      title: patchField(priorToolCall?.title, update.title),
-      toolKind: patchField(priorToolCall?.toolKind, update.kind),
-      status: patchField(priorToolCall?.status, update.status),
-      content: patchField(priorToolCall?.content, update.content) ?? [],
-      locations: patchField(priorToolCall?.locations, update.locations),
-      rawInput: patchField(priorToolCall?.rawInput, update.rawInput),
-      rawOutput: patchField(priorToolCall?.rawOutput, update.rawOutput),
-      meta: patchField(priorToolCall?.meta, update._meta),
-      origin,
-    };
+    const item = patchedToolCall(id, priorToolCall, update, origin);
     this.items.set(id, item);
     return existed ? APPLIED : APPLIED_CREATED;
   }
@@ -257,16 +289,8 @@ export class AcpItemAccumulator {
     const priorToolCall = prior?.kind === 'tool-call' ? prior : undefined;
     const origin = existed ? priorToolCall?.origin : this.originForCreate();
     const item: AccumulatedToolCallItem = {
-      kind: 'tool-call',
-      id,
-      title: priorToolCall?.title,
-      toolKind: priorToolCall?.toolKind,
-      status: priorToolCall?.status,
+      ...emptyToolCall(id, priorToolCall),
       content: [...(priorToolCall?.content ?? []), content],
-      locations: priorToolCall?.locations,
-      rawInput: priorToolCall?.rawInput,
-      rawOutput: priorToolCall?.rawOutput,
-      meta: priorToolCall?.meta,
       origin,
     };
     this.items.set(id, item);
