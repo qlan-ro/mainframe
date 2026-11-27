@@ -133,10 +133,13 @@ async fn write_in_background_eventually_lands_a_hit() {
         .unwrap();
     cache.write_in_background(
         "c1".to_string(),
-        fp.clone(),
-        vec![msg("m1")],
-        Vec::new(),
-        serde_json::Value::Null,
+        Snapshot {
+            fingerprint: fp.clone(),
+            messages: vec![msg("m1")],
+            dependencies: Vec::new(),
+            adapter_state: serde_json::Value::Null,
+            history_files: None,
+        },
     );
 
     cache.flush().await;
@@ -161,6 +164,7 @@ async fn child_only_edits_and_deletions_invalidate_a_history_snapshot() {
                 messages: vec![msg("m1")],
                 dependencies: vec![dependency],
                 adapter_state: serde_json::Value::Null,
+                history_files: None,
             },
         )
         .await
@@ -242,10 +246,45 @@ async fn claude_history_files_survive_cache_hits_and_appends() {
         );
         cache.flush().await;
         let files = session.take_history_files();
-        assert_eq!(files.is_none(), pass == 1);
+        assert!(
+            files.is_some(),
+            "pass {pass}: a hit restores the collected files, so the scan does not reread"
+        );
         let files = session.scan_history_files(files).await.unwrap();
         assert_eq!(files.plans, vec!["/p.md"; if pass == 2 { 2 } else { 1 }]);
         assert_eq!(files.skills, session.extract_skill_files().await.unwrap());
         assert_eq!(files.skills.len(), if pass == 2 { 2 } else { 1 });
     }
+}
+
+#[tokio::test]
+async fn a_snapshot_hit_hands_the_session_the_files_its_miss_collected() {
+    use mainframe_adapter_api::AdapterSession as _;
+    use mainframe_adapter_api::test_support::FakeSession;
+    let dir = tempfile::tempdir().unwrap();
+    let source = source_file(&dir, "a.jsonl", "x").await;
+    let files = mainframe_adapter_api::CollectedHistoryFiles {
+        plans: vec!["/plan.md".into()],
+        skill_names: vec!["example".into()],
+        sources: Some(Vec::new()),
+    };
+    let cache = Arc::new(HistorySnapshotCache::new(dir.path().join("cache")));
+    let miss = FakeSession {
+        history: vec![msg("m1")],
+        history_sources: vec![source.clone()],
+        history_files: std::sync::Mutex::new(Some(files.clone())),
+        ..FakeSession::default()
+    };
+    cache.load("c1", &miss, Some("ctx")).await.unwrap();
+    cache.flush().await;
+
+    let hit = FakeSession {
+        history_sources: vec![source],
+        ..FakeSession::default()
+    };
+    assert_eq!(
+        cache.load("c1", &hit, Some("ctx")).await.unwrap(),
+        vec![msg("m1")]
+    );
+    assert_eq!(hit.peek_history_files(), Some(files));
 }

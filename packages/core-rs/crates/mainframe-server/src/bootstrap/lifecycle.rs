@@ -1,5 +1,10 @@
 use super::*;
 
+/// How long shutdown waits for history caches still stale from a recent turn.
+/// The desktop shell allows the daemon 10 s to stop; the flush runs beside the LSP
+/// stop (about 9 s at worst), so it adds to the total only if it outlasts it.
+const HISTORY_FLUSH_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
 pub struct ReadyDaemon {
     daemon: Daemon,
     liveness: mainframe_background_tasks::liveness::LivenessSchedulerHandle,
@@ -138,13 +143,21 @@ impl Daemon {
         }
         ctx.chat.orchestration.credentials().revoke_all();
         handles.orchestration_events.abort();
-        ctx.chat.chat_manager.dispose();
-        ctx.infra.plugin_manager.unload_all();
-        ctx.core.adapter_registry.kill_all();
-        tokio::join!(
-            shutdown_launches_and_tunnels(&ctx.infra.launch_registry, &ctx.infra.tunnel_manager),
-            ctx.infra.lsp_manager.shutdown_all()
-        );
+        // The LSP stop (its grace periods run concurrently, about 9 s at worst)
+        // is the long pole, so the history flush and everything else run
+        // beside it instead of ahead of it. The flush must finish before the
+        // chat manager is disposed and the adapters are killed.
+        tokio::join!(ctx.infra.lsp_manager.shutdown_all(), async {
+            ctx.chat
+                .facade_hub
+                .flush_history_refreshes(HISTORY_FLUSH_BUDGET)
+                .await;
+            ctx.chat.chat_manager.dispose();
+            ctx.infra.plugin_manager.unload_all();
+            ctx.core.adapter_registry.kill_all();
+            shutdown_launches_and_tunnels(&ctx.infra.launch_registry, &ctx.infra.tunnel_manager)
+                .await;
+        });
         drop(handles.keepalive);
     }
 }

@@ -61,6 +61,25 @@ pub async fn write_atomic(
     write_ordered(path, contents, owner_only, ordering, || {}).await
 }
 
+/// Like [`write_atomic`], for contents too large to hold twice: `fill`
+/// streams them straight into the sibling file, so nothing is buffered here.
+pub async fn write_atomic_streaming(
+    path: &Path,
+    owner_only: bool,
+    fill: impl FnOnce(&mut dyn Write) -> io::Result<()> + Send + 'static,
+) -> Result<(), AtomicWriteError> {
+    let ordering = ordering::for_path(path).await?;
+    let guard = ordering.lock_owned().await;
+    let path = path.to_path_buf();
+    let error_path = path.clone();
+    tokio::task::spawn_blocking(move || {
+        let _guard = guard;
+        write_atomic_with(&path, owner_only, || {}, fill)
+    })
+    .await
+    .map_err(|error| AtomicWriteError::write(&error_path, io::Error::other(error)))?
+}
+
 async fn write_ordered(
     path: &Path,
     contents: &[u8],
@@ -86,6 +105,17 @@ pub(crate) fn write_atomic_blocking(
     owner_only: bool,
     before_rename: impl FnOnce(),
 ) -> Result<(), AtomicWriteError> {
+    write_atomic_with(path, owner_only, before_rename, |file| {
+        file.write_all(contents)
+    })
+}
+
+fn write_atomic_with(
+    path: &Path,
+    owner_only: bool,
+    before_rename: impl FnOnce(),
+    fill: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+) -> Result<(), AtomicWriteError> {
     let (temporary, mut file) = create_sibling(path, owner_only)?;
     let permissions = if owner_only {
         Some(Permissions::from_mode(0o600))
@@ -98,8 +128,12 @@ pub(crate) fn write_atomic_blocking(
         file.set_permissions(permissions)
             .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
     }
-    file.write_all(contents)
-        .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
+    {
+        let mut buffered = io::BufWriter::new(&mut file);
+        fill(&mut buffered)
+            .and_then(|()| buffered.flush())
+            .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
+    }
     file.sync_all()
         .map_err(|error| AtomicWriteError::write(&temporary.0, error))?;
     drop(file);

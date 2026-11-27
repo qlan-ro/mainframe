@@ -2,6 +2,12 @@ use super::*;
 use mainframe_adapter_api::{AdapterError, AdapterSession};
 use mainframe_types::sync::LockExt as _;
 
+/// A fresh parse whose stamps held still across the read, ready to persist.
+pub(crate) struct ParsedHistory {
+    pub(crate) messages: Vec<ChatMessage>,
+    pub(crate) validation: crate::HistoryValidation,
+}
+
 impl HistorySnapshotCache {
     pub(crate) async fn fingerprint(
         session: &dyn AdapterSession,
@@ -28,6 +34,9 @@ impl HistorySnapshotCache {
                 .await
             && Self::fingerprint(session, context).await.as_ref() == Some(fingerprint)
         {
+            if let Some(files) = snapshot.history_files {
+                session.restore_history_files(files);
+            }
             self.remember(
                 chat_id,
                 crate::HistoryValidation::new(
@@ -40,33 +49,76 @@ impl HistorySnapshotCache {
             return Ok(snapshot.messages);
         }
         let messages = session.load_history().await?;
-        if !messages.is_empty()
-            && let Some(fingerprint) = before
-            && Self::fingerprint(session, context).await.as_ref() == Some(&fingerprint)
-            && let Some(dependencies) = session.history_dependencies()
-            && dependencies_current(&dependencies).await
-            && session
-                .validate_history_state(&session.history_state())
-                .await
+        if let Some(fingerprint) = before
+            && let Some((validation, snapshot)) =
+                Self::settled(session, context, fingerprint, messages.clone()).await
         {
-            let adapter_state = session.history_state();
-            self.remember(
-                chat_id,
-                crate::HistoryValidation::new(
-                    fingerprint.clone(),
-                    dependencies.clone(),
-                    adapter_state.clone(),
-                ),
-            );
-            self.write_in_background(
-                chat_id.to_owned(),
-                fingerprint,
-                messages.clone(),
-                dependencies,
-                adapter_state,
-            );
+            self.remember(chat_id, validation);
+            self.write_in_background(chat_id.to_owned(), snapshot);
         }
         Ok(messages)
+    }
+
+    /// Parses the transcript again, ignoring any stored snapshot, and writes
+    /// the result before returning. Used when a turn has made the stored
+    /// snapshot stale; leaves the in-memory validation of a hot chat alone.
+    /// `None` when nothing could be cached (no stable stamps, empty history,
+    /// a failed read or a failed write).
+    pub(crate) async fn refresh(
+        &self,
+        chat_id: &str,
+        session: &dyn AdapterSession,
+        context: Option<&str>,
+    ) -> Option<ParsedHistory> {
+        let before = Self::fingerprint(session, context).await?;
+        let messages = match session.load_history().await {
+            Ok(messages) => messages,
+            Err(err) => {
+                tracing::warn!(error = %err, chat_id, "history refresh read failed");
+                return None;
+            }
+        };
+        let (validation, snapshot) = Self::settled(session, context, before, messages).await?;
+        let messages = self.write_logged(chat_id, snapshot).await?;
+        Some(ParsedHistory {
+            messages,
+            validation,
+        })
+    }
+
+    /// The validation and snapshot for `messages` when every stamp the load
+    /// depends on held still across it; `None` means "do not cache".
+    async fn settled(
+        session: &dyn AdapterSession,
+        context: Option<&str>,
+        fingerprint: HistoryFingerprint,
+        messages: Vec<ChatMessage>,
+    ) -> Option<(crate::HistoryValidation, Snapshot)> {
+        if messages.is_empty()
+            || Self::fingerprint(session, context).await.as_ref() != Some(&fingerprint)
+        {
+            return None;
+        }
+        let dependencies = session.history_dependencies()?;
+        let adapter_state = session.history_state();
+        if !dependencies_current(&dependencies).await
+            || !session.validate_history_state(&adapter_state).await
+        {
+            return None;
+        }
+        let validation = crate::HistoryValidation::new(
+            fingerprint.clone(),
+            dependencies.clone(),
+            adapter_state.clone(),
+        );
+        let snapshot = Snapshot {
+            fingerprint,
+            messages,
+            dependencies,
+            adapter_state,
+            history_files: session.peek_history_files(),
+        };
+        Some((validation, snapshot))
     }
 }
 

@@ -9,6 +9,19 @@ impl ChatShared {
     pub(crate) fn merge_idle_history(
         &self,
         chat_id: &str,
+        history: Vec<ChatMessage>,
+    ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
+        let mut history = self.merge_idle_provenance(chat_id, history)?;
+        self.restore_queue_pause(chat_id)?;
+        self.reconcile_idle_queue(chat_id, &mut history)?;
+        Ok(history)
+    }
+
+    /// The idle-compaction records and markers folded into `history`, with no
+    /// effect on the queue: the part of the merge a read-only view can share.
+    pub(crate) fn merge_idle_provenance(
+        &self,
+        chat_id: &str,
         mut history: Vec<ChatMessage>,
     ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
         let commands = self.deps.idle_commands(chat_id).map_err(|_| {
@@ -33,8 +46,28 @@ impl ChatShared {
                 history.insert(index, marker);
             }
         }
-        self.restore_queue_pause(chat_id)?;
-        self.reconcile_idle_queue(chat_id, &mut history)?;
+        Ok(history)
+    }
+
+    /// What `merge_idle_history` would show after a restart, without touching
+    /// the live queue: held prompts the transcript does not yet contain are
+    /// appended, and nothing is acknowledged, paused or re-queued.
+    pub(crate) fn preview_idle_history(
+        &self,
+        chat_id: &str,
+        history: Vec<ChatMessage>,
+    ) -> Result<Vec<ChatMessage>, mainframe_adapter_api::AdapterError> {
+        let mut history = self.merge_idle_provenance(chat_id, history)?;
+        for input in self.deps.idle_queue_list(chat_id).map_err(|_| {
+            mainframe_adapter_api::AdapterError::Message("Queued history unavailable".into())
+        })? {
+            if !history
+                .iter()
+                .any(|m| m.id == input.message.id || input.matches_provider_message(m))
+            {
+                history.push(input.message);
+            }
+        }
         Ok(history)
     }
 
