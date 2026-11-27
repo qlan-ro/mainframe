@@ -14,6 +14,7 @@ fn params() -> HistoryPageParams {
         before: "message:0:top:m80".into(),
         containers: Some(40),
         items: None,
+        turns: None,
         until_item_id: None,
     }
 }

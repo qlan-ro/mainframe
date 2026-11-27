@@ -73,9 +73,9 @@ function readFixture(name: string): Record<string, unknown> {
 
 /** Filename prefix → Zod schema. Mirrors `acp_golden_fixtures.rs`'s dispatch table. */
 function schemaFor(name: string): z.ZodType {
-  if (name === 'history-window.json') return HistoryWindowSchema;
+  if (name === 'history-window.json' || name === 'history-window.turns.json') return HistoryWindowSchema;
   if (name === 'history-state.json') return HistoryStateSchema;
-  if (name === 'history-page.params.json') return HistoryPageParamsSchema;
+  if (name === 'history-page.params.json' || name === 'history-page-turns.params.json') return HistoryPageParamsSchema;
   if (name.startsWith('history-page.')) return HistoryPageResultSchema;
   if (name === 'history-around.params.json') return HistoryAroundParamsSchema;
   if (name.startsWith('history-around.')) return HistoryAroundResultSchema;

@@ -91,6 +91,7 @@ fn prepare(
         resume.replay_from.as_ref(),
         &window,
         log.as_ref().map(|(log, _)| *log),
+        options.result_previews,
     );
     let history = selection.history.clone();
     let fallback = selection.fallback;

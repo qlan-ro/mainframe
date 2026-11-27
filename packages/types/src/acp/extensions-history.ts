@@ -7,6 +7,8 @@ export const HistoryWindowSchema = z
   .object({
     containers: z.number().int().optional(),
     items: z.number().int().optional(),
+    /** Whole turns to send, newest first; replaces `containers` and `items` when set. */
+    turns: z.number().int().optional(),
     floorItemId: z.string().optional(),
     contextItemIds: z.array(z.string()).optional(),
   })
@@ -28,6 +30,8 @@ export const HistoryPageParamsSchema = z
     before: z.string(),
     containers: z.number().int().optional(),
     items: z.number().int().optional(),
+    /** Whole turns to page back; replaces `containers` and `items` when set. */
+    turns: z.number().int().optional(),
     untilItemId: z.string().optional(),
   })
   .loose();

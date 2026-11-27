@@ -12,6 +12,10 @@ pub struct HistoryWindow {
     pub containers: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items: Option<i64>,
+    /// Whole turns to send, newest first. When set it replaces `containers`
+    /// and `items`; a request without it keeps the container/item behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turns: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub floor_item_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -37,6 +41,9 @@ pub struct HistoryPageParams {
     pub containers: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items: Option<i64>,
+    /// Whole turns to page back, replacing `containers` and `items` when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turns: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub until_item_id: Option<String>,
 }

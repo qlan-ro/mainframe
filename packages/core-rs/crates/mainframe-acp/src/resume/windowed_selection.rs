@@ -1,6 +1,6 @@
 use super::super::ReplayCursor;
 use super::SnapshotView;
-use crate::{EncodedItem, ReplayPlan, RevisionLog, history_window};
+use crate::{EncodedItem, ReplayPlan, RevisionLog, history_window, turn_window};
 use mainframe_types::acp::extensions::{HistoryWindow, RevisionCursor};
 use mainframe_types::sync::LockExt as _;
 use serde_json::Value;
@@ -20,6 +20,7 @@ impl Selection {
         replay_from: Option<&Value>,
         window: &HistoryWindow,
         log: Option<&Mutex<RevisionLog>>,
+        previews: bool,
     ) -> Self {
         let cursor = replay_from
             .and_then(|value| serde_json::from_value::<ReplayCursor>(value.clone()).ok());
@@ -38,6 +39,7 @@ impl Selection {
             revision
                 .then_some(window.floor_item_id.as_deref())
                 .flatten(),
+            previews,
         );
         let mut plan = resolve(
             &selected,
@@ -47,7 +49,13 @@ impl Selection {
         );
         let fallback = revision && matches!(plan, ReplayPlan::Full);
         if fallback {
-            selected = select(snapshot, newest_start(snapshot, window), window, None);
+            selected = select(
+                snapshot,
+                newest_start(snapshot, window),
+                window,
+                None,
+                previews,
+            );
         }
         let context_changed = context_changed(&selected, window, &plan);
         if context_changed {
@@ -64,6 +72,10 @@ impl Selection {
 }
 
 fn newest_start(snapshot: &SnapshotView<'_>, window: &HistoryWindow) -> usize {
+    if let Some(turns) = window.turns {
+        return turn_window::TurnIndex::new(snapshot.messages)
+            .start_before(snapshot.messages.len(), turn_window::turn_count(turns));
+    }
     history_window::snap(
         snapshot.messages,
         snapshot
@@ -78,6 +90,7 @@ fn select(
     start: usize,
     window: &HistoryWindow,
     floor: Option<&str>,
+    previews: bool,
 ) -> crate::item_window::ItemWindow {
     let mut containers = history_window::encode_range(
         snapshot.messages,
@@ -85,7 +98,18 @@ fn select(
         start,
         snapshot.messages.len(),
     );
-    if window.items.is_some()
+    // A window by turns takes whole containers: no item trim, only the size guard.
+    let items = window.items.filter(|_| window.turns.is_none());
+    let mut start = start;
+    if window.turns.is_some() && floor.is_none() {
+        start = turn_window::TurnIndex::new(snapshot.messages).fit(
+            start,
+            &mut containers,
+            &turn_window::Wire::new(previews, true, snapshot.messages.len()),
+            turn_window::MAX_WINDOW_BYTES,
+        );
+    }
+    if items.is_some()
         && let Some(floor) = floor
     {
         match crate::item_window::ItemWindow::from_floor(containers, start, floor) {
@@ -96,9 +120,9 @@ fn select(
     let selected = crate::item_window::ItemWindow::newest(
         containers,
         start,
-        window.items.map(crate::item_window::budget),
+        items.map(crate::item_window::budget),
     );
-    if window.items.is_some() {
+    if items.is_some() {
         selected.track_context()
     } else {
         selected
@@ -138,6 +162,7 @@ fn context_changed(
 ) -> bool {
     matches!(plan, ReplayPlan::Incremental(_))
         && window.items.is_some()
+        && window.turns.is_none()
         && selected
             .history
             .context_item_ids

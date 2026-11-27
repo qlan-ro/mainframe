@@ -98,6 +98,16 @@ export function clampTranscriptWidth(width: number): number {
   return Math.round(Math.min(TRANSCRIPT_MAX_WIDTH, Math.max(TRANSCRIPT_MIN_WIDTH, width)));
 }
 
+/** Whole turns loaded when a chat opens and for each older page. */
+export const HISTORY_TURNS_DEFAULT = 10;
+export const HISTORY_TURNS_MIN = 2;
+export const HISTORY_TURNS_MAX = 50;
+
+export function clampHistoryTurns(turns: unknown): number {
+  if (typeof turns !== 'number' || !Number.isFinite(turns)) return HISTORY_TURNS_DEFAULT;
+  return Math.round(Math.min(HISTORY_TURNS_MAX, Math.max(HISTORY_TURNS_MIN, turns)));
+}
+
 interface UiPrefsState {
   finishedWork: FinishedWork;
   setFinishedWork: (finishedWork: FinishedWork) => void;
@@ -108,6 +118,10 @@ interface UiPrefsState {
   /** The composer shows `@` and `/` tokens as atomic chips (a Lexical field). Off by default while it is tested. */
   chipComposer: boolean;
   setChipComposer: (on: boolean) => void;
+  /** Turns the transcript loads at a time: the first window and every older page.
+   *  It only changes what is requested, so the next open or page picks it up. */
+  historyTurns: number;
+  setHistoryTurns: (turns: number) => void;
   /** The composer's activity strip shows only its first row (K5). */
   activityStripCollapsed: boolean;
   setActivityStripCollapsed: (collapsed: boolean) => void;
@@ -153,6 +167,7 @@ function partializeUiPrefs(s: UiPrefsState) {
     openLinksIn: s.openLinksIn,
     enterWhileRunning: s.enterWhileRunning,
     chipComposer: s.chipComposer,
+    historyTurns: s.historyTurns,
     activityStripCollapsed: s.activityStripCollapsed,
     transcriptWidth: s.transcriptWidth,
     sidebarVisible: s.sidebarVisible,
@@ -207,6 +222,7 @@ function sanitizeTranscriptPreference(persisted: unknown): Partial<PersistedUiPr
     openLinksIn: state.openLinksIn === 'browser' ? 'browser' : 'workspace',
     enterWhileRunning: state.enterWhileRunning === 'steer' ? 'steer' : 'queue',
     chipComposer: state.chipComposer === true,
+    historyTurns: clampHistoryTurns(state.historyTurns),
     activityStripCollapsed: state.activityStripCollapsed === true,
     transcriptWidth:
       typeof state.transcriptWidth === 'number'
@@ -263,6 +279,8 @@ export const useUiPrefs = create<UiPrefsState>()(
       setEnterWhileRunning: (enterWhileRunning) => set({ enterWhileRunning }),
       chipComposer: false,
       setChipComposer: (chipComposer) => set({ chipComposer }),
+      historyTurns: HISTORY_TURNS_DEFAULT,
+      setHistoryTurns: (turns) => set({ historyTurns: clampHistoryTurns(turns) }),
       activityStripCollapsed: false,
       setActivityStripCollapsed: (activityStripCollapsed) => set({ activityStripCollapsed }),
       transcriptWidth: TRANSCRIPT_DEFAULT_WIDTH,

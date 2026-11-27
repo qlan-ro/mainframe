@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { HISTORY_TURNS_DEFAULT, useUiPrefs } from '@/store/ui-prefs';
 import { AcpHistory, type HistoryLoadState } from '../acp-history';
 import { makeFakeAcpClient } from './acp-test-kit';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
@@ -34,11 +35,13 @@ function fixture() {
   };
 }
 
+beforeEach(() => useUiPrefs.setState({ historyTurns: HISTORY_TURNS_DEFAULT }));
+
 describe('windowed history loading', () => {
   it('applies the whole load-through synchronously and retains the lowered floor', async () => {
     const f = fixture();
     f.client.historyPage = vi.fn(async (params, apply) => {
-      expect(params).toEqual({ sessionId: 'chat', before: 'new', containers: 40, items: 80, untilItemId: 'old' });
+      expect(params).toEqual({ sessionId: 'chat', before: 'new', turns: 10, untilItemId: 'old' });
       apply({
         hasMore: true,
         floorItemId: 'old',
@@ -50,11 +53,23 @@ describe('windowed history loading', () => {
     expect(await f.history.load('old')).toBe(true);
     expect(f.history.window({ type: 'revision', epoch: 'e', revision: 2 })).toEqual({
       floorItemId: 'old',
-      contextItemIds: ['context-parent'],
-      items: 80,
+      turns: 10,
     });
     expect(f.state()?.loading).toBe(false);
     await f.history.load('old');
+    expect(f.client.historyPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for the first window and each page in the turns the setting says', async () => {
+    const f = fixture();
+    expect(f.history.window({ type: 'start' })).toEqual({ turns: 10 });
+    useUiPrefs.getState().setHistoryTurns(25);
+    expect(f.history.window({ type: 'start' })).toEqual({ turns: 25 });
+    f.client.historyPage = vi.fn(async (params, apply) => {
+      expect(params).toEqual({ sessionId: 'chat', before: 'new', turns: 25 });
+      apply({ hasMore: false, floorItemId: 'old' });
+    });
+    await f.history.load();
     expect(f.client.historyPage).toHaveBeenCalledTimes(1);
   });
 

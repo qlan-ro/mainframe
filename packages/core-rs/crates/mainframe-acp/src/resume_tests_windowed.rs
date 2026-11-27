@@ -126,6 +126,7 @@ fn pages_are_contiguous_load_through_is_unbounded_and_unknown_targets_are_stale(
         before: "message:0:top:m460".into(),
         containers: Some(1),
         items: None,
+        turns: None,
         until_item_id: Some("message:0:top:m128".into()),
     };
     let page = crate::history_page::prepare(
@@ -283,3 +284,6 @@ async fn reconnect_keeps_changed_older_results_previewed() {
 
 #[path = "resume_tests_item_window.rs"]
 mod item_window;
+
+#[path = "resume_tests_turns.rs"]
+mod turns;

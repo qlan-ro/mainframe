@@ -6,6 +6,7 @@ import type {
   HistoryWindow,
   ReplayCursor,
 } from '@qlan-ro/mainframe-types';
+import { useUiPrefs } from '@/store/ui-prefs';
 import type { AcpSessionClientPort } from './acp-session-attachment-types';
 
 export interface HistoryLoadState extends HistoryState {
@@ -42,9 +43,8 @@ export class AcpHistory {
   }
 
   window(cursor: ReplayCursor): HistoryWindow {
-    return cursor.type === 'revision'
-      ? { floorItemId: this.state.floorItemId, contextItemIds: this.state.contextItemIds, items: 80 }
-      : { containers: 40, items: 80 };
+    const turns = useUiPrefs.getState().historyTurns;
+    return cursor.type === 'revision' ? { floorItemId: this.state.floorItemId, turns } : { turns };
   }
 
   /** Changes when the history is reloaded or detached, which ends a load on its way. */
@@ -89,8 +89,7 @@ export class AcpHistory {
         const params: HistoryPageParams = {
           sessionId: this.host.chatId(),
           before: this.state.floorItemId!,
-          containers: 40,
-          items: 80,
+          turns: useUiPrefs.getState().historyTurns,
           ...(untilItemId ? { untilItemId } : {}),
         };
         let stale = false;

@@ -10,6 +10,7 @@ const savedPreferences = {
   dontWarnOnTuningChange: true,
   enterWhileRunning: 'queue' as const,
   chipComposer: false,
+  historyTurns: 10,
   activityStripCollapsed: false,
   sessionPanelOpen: true,
   sessionPanelSections: { plan: true, context: false },
@@ -20,7 +21,13 @@ const savedPreferences = {
 
 /** What a v7/v8 install had on disk: no v9 fields, no chip setting, and the removed confirm flag. */
 const legacyPreferences = (() => {
-  const { enterWhileRunning: _a, activityStripCollapsed: _b, chipComposer: _c, ...rest } = savedPreferences;
+  const {
+    enterWhileRunning: _a,
+    activityStripCollapsed: _b,
+    chipComposer: _c,
+    historyTurns: _d,
+    ...rest
+  } = savedPreferences;
   return { ...rest, dontConfirmProviderSwitch: true };
 })();
 

@@ -184,6 +184,7 @@ describe('useUiPrefs persistence', () => {
         'dialogSizes',
         'dontWarnOnTuningChange',
         'enterWhileRunning',
+        'historyTurns',
         'sessionPanelHiddenSections',
         'sessionPanelOpen',
         'sessionPanelSections',
