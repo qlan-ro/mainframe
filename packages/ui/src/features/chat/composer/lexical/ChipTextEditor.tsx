@@ -167,7 +167,7 @@ export function ChipTextEditor({
           <EditablePlugin readOnly={readOnly} />
           <ChipCaretPlugin />
           <ChipPastePlugin formatter={formatter} />
-          <TypedChipsPlugin />
+          <TypedChipsPlugin formatter={formatter} />
         </div>
       </LexicalExtensionComposer>
     </DirectiveChipProvider>

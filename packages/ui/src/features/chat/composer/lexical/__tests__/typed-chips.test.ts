@@ -4,8 +4,9 @@
  * keystroke per update the way typing arrives.
  */
 import { describe, expect, it } from 'vitest';
-import { $createParagraphNode, $createTextNode, $getRoot, $isTextNode } from 'lexical';
+import { $createParagraphNode, $createTextNode, $getRoot, $isTextNode, $isElementNode } from 'lexical';
 import { $createDirectiveNode } from '@assistant-ui/react-lexical';
+import { createComposerChipFormatter } from '../composer-chip-formatter';
 import { insert, lineBreak, read, setup, type } from './headless-editor';
 
 describe('typed tokens become chips', () => {
@@ -70,6 +71,26 @@ describe('typed tokens become chips', () => {
     expect(read(editor).shape).toBe('mail me@host.com and @ alone ');
   });
 
+  it('chips 150 finished tokens inserted into one node in a single update', () => {
+    const editor = setup();
+    insert(editor, (selection) => selection.insertText('@f.ts '.repeat(150)));
+    const { shape, text } = read(editor);
+    expect(shape).toBe('[@f.ts] '.repeat(150));
+    expect(text).toBe('@f.ts '.repeat(150));
+  });
+
+  it('uses the draft session labels, as restore and paste do', () => {
+    const editor = setup(createComposerChipFormatter(['Fix login bug']));
+    insert(editor, (selection) => selection.insertText('see @Fix login bug now'));
+    expect(read(editor).shape).toBe('see [@Fix login bug] now');
+  });
+
+  it('chips both parts of /review@x.ts, as a restore does', () => {
+    const editor = setup();
+    type(editor, '/review@x.ts ');
+    expect(read(editor).shape).toBe('[/review][@x.ts] ');
+  });
+
   it('chips two finished tokens in one node', () => {
     const editor = setup();
     insert(editor, (selection) => selection.insertText('@a.ts and @b.ts done'));
@@ -128,5 +149,64 @@ describe('chips restored line by line', () => {
     restore(editor, [['see ', { chip: '@a.ts' }]]);
     type(editor, '@b.ts now');
     expect(read(editor).shape).toBe('see [@a.ts]@b.ts now');
+  });
+});
+
+describe('chips follow text typed on an earlier line', () => {
+  it('turns a restored /command back into text once text is typed on line 1', () => {
+    const editor = setup();
+    restore(editor, [[], [{ chip: '/review' }, ' now']]);
+    editor.update(() => $getRoot().getFirstChild()?.selectStart(), { discrete: true });
+    expect(read(editor).shape).toBe('\n[/review] now');
+    type(editor, 'hi');
+    expect(read(editor)).toEqual({ shape: 'hi\n/review now', text: 'hi\n/review now' });
+  });
+
+  it('chips a /command again when the text before it is removed', () => {
+    const editor = setup();
+    restore(editor, [['x'], [{ chip: '/review' }, ' now']]);
+    expect(read(editor).shape).toBe('x\n/review now');
+    editor.update(
+      () => {
+        const first = $getRoot().getFirstChild();
+        if ($isElementNode(first)) first.clear();
+      },
+      { discrete: true },
+    );
+    expect(read(editor).shape).toBe('\n[/review] now');
+  });
+});
+
+describe('restoring and pasting long text stays linear', () => {
+  const LINES = 3000;
+  const BOUND_MS = 500;
+
+  function timed(run: () => void): number {
+    const started = performance.now();
+    run();
+    return performance.now() - started;
+  }
+
+  it('restores 3,000 lines of text tokens quickly', () => {
+    const editor = setup();
+    const lines = Array.from({ length: LINES }, (_, i) => [`line ${i} see @src/f${i}.ts now`]);
+    const ms = timed(() => restore(editor, lines));
+    expect(read(editor).shape.split('\n')).toHaveLength(LINES);
+    expect(ms).toBeLessThan(BOUND_MS);
+  });
+
+  it('restores 3,000 lines that each open with a /command chip quickly', () => {
+    const editor = setup();
+    const lines = Array.from({ length: LINES }, (_, i) => [{ chip: '/review' }, ` now ${i}`]);
+    const ms = timed(() => restore(editor, lines));
+    expect(ms).toBeLessThan(BOUND_MS);
+  });
+
+  it('pastes 3,000 plain lines quickly', () => {
+    const editor = setup();
+    const text = Array.from({ length: LINES }, (_, i) => `plain line ${i}`).join('\n');
+    const ms = timed(() => insert(editor, (selection) => selection.insertRawText(text)));
+    expect(read(editor).shape.split('\n')).toHaveLength(LINES);
+    expect(ms).toBeLessThan(BOUND_MS);
   });
 });

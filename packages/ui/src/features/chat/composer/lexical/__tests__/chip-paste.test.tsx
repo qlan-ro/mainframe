@@ -46,7 +46,7 @@ function Field({ onRuntime }: { onRuntime(runtime: AssistantRuntime): void }) {
       <LexicalComposerInput submitMode="none" formatter={formatter} directiveChip={ComposerChip} aria-label="Message">
         <AttachmentPastePlugin />
         <ChipPastePlugin formatter={formatter} />
-        <TypedChipsPlugin />
+        <TypedChipsPlugin formatter={formatter} />
       </LexicalComposerInput>
     </AssistantRuntimeProvider>
   );

@@ -75,8 +75,8 @@ export function ChipPastePlugin({ formatter }: { formatter: ComposerChipFormatte
 }
 
 /** Typed tokens become chips once finished (see `typed-chips.ts`). */
-export function TypedChipsPlugin() {
+export function TypedChipsPlugin({ formatter }: { formatter: ComposerChipFormatter }) {
   const [editor] = useLexicalComposerContext();
-  useEffect(() => registerTypedChips(editor), [editor]);
+  useEffect(() => registerTypedChips(editor, formatter), [editor, formatter]);
   return null;
 }

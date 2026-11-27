@@ -13,14 +13,14 @@ import { read, setup, type } from './headless-editor';
 const formatter = createComposerChipFormatter(['Fix login bug']);
 
 function restored(text: string) {
-  const editor = setup();
+  const editor = setup(formatter);
   editor.update(() => $setEditorText(text, formatter), { discrete: true });
   return read(editor);
 }
 
 /** Types `before`, puts the caret `back` characters from the end, pastes `text`. Returns the shape, or null for a plain paste. */
 function paste(before: string, text: string, back = 0) {
-  const editor = setup();
+  const editor = setup(formatter);
   type(editor, before);
   let pasted = false;
   editor.update(

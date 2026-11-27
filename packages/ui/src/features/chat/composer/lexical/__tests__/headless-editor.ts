@@ -15,10 +15,11 @@ import {
   type RangeSelection,
 } from 'lexical';
 import { $isDirectiveNode, DirectiveNode } from '@assistant-ui/react-lexical';
+import type { ComposerChipFormatter } from '../composer-chip-formatter';
 import { registerTypedChips } from '../typed-chips';
 import { $readEditorText } from '../lexical-edits';
 
-export function setup(): LexicalEditor {
+export function setup(formatter?: ComposerChipFormatter): LexicalEditor {
   const editor = createEditor({
     nodes: [DirectiveNode],
     onError: (error) => {
@@ -26,7 +27,7 @@ export function setup(): LexicalEditor {
     },
   });
   editor.update(() => $getRoot().append($createParagraphNode()).selectEnd(), { discrete: true });
-  registerTypedChips(editor);
+  registerTypedChips(editor, formatter);
   return editor;
 }
 

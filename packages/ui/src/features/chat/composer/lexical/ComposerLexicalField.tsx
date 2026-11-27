@@ -52,7 +52,7 @@ export function ComposerLexicalField({
       <ChipCaretPlugin />
       <AttachmentPastePlugin />
       <ChipPastePlugin formatter={formatter} />
-      <TypedChipsPlugin />
+      <TypedChipsPlugin formatter={formatter} />
     </LexicalComposerInput>
   );
 }
