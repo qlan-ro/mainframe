@@ -16,6 +16,7 @@ import { p1, p2, p3 } from './scenarios/anchor';
 import { p4follow, p4release } from './scenarios/follow';
 import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
+import { sNoise, sTop } from './scenarios/short-window';
 import { installOverlayScrollbars } from '@/lib/overlay-scrollbars/manager';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
@@ -24,13 +25,14 @@ import { V2Shell } from './shells/V2Shell';
 import { openSomeTurns } from './open-turns';
 
 const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell };
-const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy } as Record<
+const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy, sTop, sNoise } as Record<
   string,
   (o: object) => Promise<unknown>
 >;
 
 openSomeTurns();
-if (params.live) store.set({ messages: [...store.get().messages, ...buildLongTurn(9000)], running: true });
+if (params.live && params.shape !== 'real')
+  store.set({ messages: [...store.get().messages, ...buildLongTurn(9000)], running: true });
 
 function Rig() {
   const Shell = SHELLS[params.variant];

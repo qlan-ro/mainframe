@@ -1,0 +1,2832 @@
+{
+ "note": "S-top and S-noise on WKWebView, one repetition per case, rebuilt 2026-11-27 on the branch with the short-window cases; load average recorded.",
+ "runs": [
+  {
+   "engine": "wk",
+   "load": [
+    6.24267578125,
+    6.150390625,
+    6.140625
+   ]
+  }
+ ],
+ "results": [
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15990,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 199
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 105
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16760,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 112,
+    "wheelSum": -1630,
+    "frames": 235
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 22,
+    "firstVisibleMs": 22,
+    "mountMs": 22,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15278,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 195
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 23,
+    "firstVisibleMs": 23,
+    "mountMs": 23,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15398,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 107
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16334,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 113,
+    "wheelSum": -1630,
+    "frames": 240
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 28,
+    "firstVisibleMs": 28,
+    "mountMs": 28,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 798,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 203
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 36,
+    "firstVisibleMs": 36,
+    "mountMs": 36,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 122,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 108
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 31,
+    "firstVisibleMs": 31,
+    "mountMs": 31,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     0,
+     608,
+     602
+    ],
+    "jump": 537,
+    "endResidual": 309,
+    "gapJump": 537,
+    "gapEnd": 309,
+    "lostFrames": 0,
+    "pinned": 1,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 1190,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 118,
+    "wheelSum": -1630,
+    "frames": 247
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 43,
+    "firstVisibleMs": 43,
+    "mountMs": 43,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "noise": 0,
+    "windows": 15,
+    "wheelEvents": 40,
+    "frames": 164
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 451,
+    "firstVisibleMs": 451,
+    "mountMs": 451,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "noise": 0,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 70
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 403,
+    "firstVisibleMs": 403,
+    "mountMs": 403,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1",
+   "result": {
+    "noise": 0,
+    "windows": 20,
+    "wheelEvents": 120,
+    "frames": 218
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 428,
+    "firstVisibleMs": 428,
+    "mountMs": 428,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15989,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 200
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15689,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 168.19,
+    "endResidual": 134.19,
+    "gapJump": 168,
+    "gapEnd": 134,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16953,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 108,
+    "wheelSum": -1630,
+    "frames": 236
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15278,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 201
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15098,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 104
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0.81,
+    "endResidual": 0.81,
+    "gapJump": 1,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16371,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 110,
+    "wheelSum": -1630,
+    "frames": 233
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 24,
+    "firstVisibleMs": 24,
+    "mountMs": 24,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 60,
+    "endResidual": 60,
+    "gapJump": 60,
+    "gapEnd": 60,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 1038,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 199
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 38,
+    "firstVisibleMs": 38,
+    "mountMs": 38,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 122,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 110
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 46,
+    "firstVisibleMs": 46,
+    "mountMs": 46,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     578,
+     597
+    ],
+    "jump": 22,
+    "endResidual": 22,
+    "gapJump": 22,
+    "gapEnd": 22,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 999,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 121,
+    "wheelSum": -1630,
+    "frames": 251
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 33,
+    "firstVisibleMs": 33,
+    "mountMs": 33,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "noise": 0,
+    "windows": 15,
+    "wheelEvents": 40,
+    "frames": 161
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 415,
+    "firstVisibleMs": 415,
+    "mountMs": 415,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "noise": 0,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 70
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 393,
+    "firstVisibleMs": 393,
+    "mountMs": 393,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1+fix",
+   "result": {
+    "noise": 0,
+    "windows": 19,
+    "wheelEvents": 111,
+    "frames": 202
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 429,
+    "firstVisibleMs": 429,
+    "mountMs": 429,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     711
+    ],
+    "jump": null,
+    "endResidual": 18.05,
+    "gapJump": 18,
+    "gapEnd": 18,
+    "lostFrames": 7,
+    "pinned": 0,
+    "pageHeights": [
+     11220
+    ],
+    "endScrollTop": 11896,
+    "endHeight": 13876,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 201
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 51,
+    "firstVisibleMs": 51,
+    "mountMs": 51,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": null,
+    "endResidual": null,
+    "gapJump": 127,
+    "gapEnd": 1,
+    "lostFrames": 18,
+    "pinned": 0,
+    "pageHeights": [
+     11070
+    ],
+    "endScrollTop": 9276,
+    "endHeight": 14125,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 45,
+    "firstVisibleMs": 45,
+    "mountMs": 45,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     688
+    ],
+    "jump": null,
+    "endResidual": 111.03,
+    "gapJump": 111,
+    "gapEnd": 111,
+    "lostFrames": 7,
+    "pinned": 0,
+    "pageHeights": [
+     11220
+    ],
+    "endScrollTop": 12787,
+    "endHeight": 13876,
+    "hasMore": true,
+    "wheelEvents": 123,
+    "wheelSum": -1630,
+    "frames": 252
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 49,
+    "firstVisibleMs": 49,
+    "mountMs": 49,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": null,
+    "endResidual": 651,
+    "gapJump": 891,
+    "gapEnd": 651,
+    "lostFrames": 1,
+    "pinned": 0,
+    "pageHeights": [
+     11220
+    ],
+    "endScrollTop": 10996,
+    "endHeight": 13876,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 202
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 57,
+    "firstVisibleMs": 57,
+    "mountMs": 57,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": null,
+    "endResidual": 8.95,
+    "gapJump": 891,
+    "gapEnd": 9,
+    "lostFrames": 1,
+    "pinned": 0,
+    "pageHeights": [
+     11220
+    ],
+    "endScrollTop": 11356,
+    "endHeight": 13876,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 107
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.24,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": null,
+    "endResidual": 836,
+    "gapJump": 891,
+    "gapEnd": 836,
+    "lostFrames": 1,
+    "pinned": 0,
+    "pageHeights": [
+     11220
+    ],
+    "endScrollTop": 11878,
+    "endHeight": 13876,
+    "hasMore": true,
+    "wheelEvents": 122,
+    "wheelSum": -1630,
+    "frames": 249
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 52,
+    "firstVisibleMs": 52,
+    "mountMs": 52,
+    "firstFrameScrollTop": 0,
+    "firstFrameGap": 763
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.26,
+     "scrollTop": 190
+    },
+    "loads": 5,
+    "landed": 5,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     520,
+     545,
+     612,
+     663
+    ],
+    "jump": null,
+    "endResidual": 196,
+    "gapJump": 359,
+    "gapEnd": 196,
+    "lostFrames": 40,
+    "pinned": 0,
+    "pageHeights": [
+     3520,
+     3390,
+     3520,
+     3301,
+     3520
+    ],
+    "endScrollTop": 3230,
+    "endHeight": 6847,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 203
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 5,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 1,
+    "wrongFrames": 0,
+    "rowsInDomMs": 50,
+    "firstVisibleMs": 67,
+    "mountMs": 67,
+    "firstFrameScrollTop": 1789,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.26,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 1,
+    "pageMessages": [
+     16
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": null,
+    "endResidual": null,
+    "gapJump": 115,
+    "gapEnd": 60,
+    "lostFrames": 13,
+    "pinned": 1,
+    "pageHeights": [
+     3520
+    ],
+    "endScrollTop": 0,
+    "endHeight": 1750,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 107
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 5,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 1,
+    "wrongFrames": 0,
+    "rowsInDomMs": 47,
+    "firstVisibleMs": 61,
+    "mountMs": 61,
+    "firstFrameScrollTop": 1789,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.26,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 1,
+    "pageMessages": [
+     16
+    ],
+    "requestScrollTops": [
+     148
+    ],
+    "jump": null,
+    "endResidual": null,
+    "gapJump": 46,
+    "gapEnd": 21,
+    "lostFrames": 11,
+    "pinned": 0,
+    "pageHeights": [
+     3520
+    ],
+    "endScrollTop": 0,
+    "endHeight": 1750,
+    "hasMore": true,
+    "wheelEvents": 122,
+    "wheelSum": -1630,
+    "frames": 254
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 5,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 1,
+    "wrongFrames": 0,
+    "rowsInDomMs": 97,
+    "firstVisibleMs": 111,
+    "mountMs": 111,
+    "firstFrameScrollTop": 1789,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "noise": null,
+    "windows": 15,
+    "wheelEvents": 40,
+    "frames": 162
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 87,
+    "firstVisibleMs": 87,
+    "mountMs": 87,
+    "firstFrameScrollTop": 45012,
+    "firstFrameGap": 721
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "noise": null,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 69
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 85,
+    "firstVisibleMs": 85,
+    "mountMs": 85,
+    "firstFrameScrollTop": 45012,
+    "firstFrameGap": 721
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v0",
+   "result": {
+    "noise": 1136,
+    "windows": 20,
+    "wheelEvents": 123,
+    "frames": 216
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 4,
+    "firstVisibleFrame": 4,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 102,
+    "firstVisibleMs": 102,
+    "mountMs": 102,
+    "firstFrameScrollTop": 45012,
+    "firstFrameGap": 721
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 59.19,
+    "endResidual": 0.81,
+    "gapJump": 59,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16109,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 202
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 33,
+    "firstVisibleMs": 33,
+    "mountMs": 33,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 105
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 39,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 240.19,
+    "endResidual": 218.19,
+    "gapJump": 240,
+    "gapEnd": 218,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 17024,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 109,
+    "wheelSum": -1630,
+    "frames": 232
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 17.19,
+    "endResidual": 17.19,
+    "gapJump": 17,
+    "gapEnd": 17,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15176,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 200
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 42.81,
+    "endResidual": 42.81,
+    "gapJump": 43,
+    "gapEnd": 43,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15356,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 27,
+    "firstVisibleMs": 27,
+    "mountMs": 27,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 21.19,
+    "endResidual": 9.19,
+    "gapJump": 21,
+    "gapEnd": 9,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16363,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 107,
+    "wheelSum": -1630,
+    "frames": 232
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 29,
+    "firstVisibleMs": 29,
+    "mountMs": 29,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 918,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 203
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 41,
+    "firstVisibleMs": 41,
+    "mountMs": 41,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 28,
+    "endResidual": 28,
+    "gapJump": 28,
+    "gapEnd": 28,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 450,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 45,
+    "firstVisibleMs": 45,
+    "mountMs": 45,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     576,
+     590
+    ],
+    "jump": 5,
+    "endResidual": 5,
+    "gapJump": 5,
+    "gapEnd": 5,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 944,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 120,
+    "wheelSum": -1630,
+    "frames": 252
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 40,
+    "firstVisibleMs": 40,
+    "mountMs": 40,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "noise": 0,
+    "windows": 15,
+    "wheelEvents": 40,
+    "frames": 161
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 347,
+    "firstVisibleMs": 347,
+    "mountMs": 347,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "noise": 0,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 68
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 320,
+    "firstVisibleMs": 320,
+    "mountMs": 320,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s",
+   "result": {
+    "noise": 0,
+    "windows": 18,
+    "wheelEvents": 113,
+    "frames": 200
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 308,
+    "firstVisibleMs": 308,
+    "mountMs": 308,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 59.19,
+    "endResidual": 0.81,
+    "gapJump": 59,
+    "gapEnd": 1,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16049,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 202
+   },
+   "engine": "wk",
+   "case": "S-top-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 30,
+    "firstVisibleMs": 30,
+    "mountMs": 30,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     591
+    ],
+    "jump": 0.19,
+    "endResidual": 0.19,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15399,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 28,
+    "firstVisibleMs": 28,
+    "mountMs": 28,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 891
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     594
+    ],
+    "jump": 242.19,
+    "endResidual": 219.19,
+    "gapJump": 242,
+    "gapEnd": 219,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 17002,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 110,
+    "wheelSum": -1630,
+    "frames": 237
+   },
+   "engine": "wk",
+   "case": "S-top-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 25,
+    "firstVisibleMs": 25,
+    "mountMs": 25,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -60,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 17.19,
+    "endResidual": 17.19,
+    "gapJump": 17,
+    "gapEnd": 17,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15176,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 201
+   },
+   "engine": "wk",
+   "case": "S-top-park-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 26,
+    "firstVisibleMs": 26,
+    "mountMs": 26,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": true,
+    "dy": -300,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 42.81,
+    "endResidual": 42.81,
+    "gapJump": 43,
+    "gapEnd": 43,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 15356,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 104
+   },
+   "engine": "wk",
+   "case": "S-top-park-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 28,
+    "firstVisibleMs": 28,
+    "mountMs": 28,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -700,
+    "opening": {
+     "viewports": 2.47,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     51
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 30.81,
+    "endResidual": 30.81,
+    "gapJump": 31,
+    "gapEnd": 31,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     17499
+    ],
+    "endScrollTop": 16421,
+    "endHeight": 18998,
+    "hasMore": true,
+    "wheelEvents": 105,
+    "wheelSum": -1630,
+    "frames": 231
+   },
+   "engine": "wk",
+   "case": "S-top-park-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 27,
+    "firstVisibleMs": 27,
+    "mountMs": 27,
+    "firstFrameScrollTop": 891,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -60,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 4,
+    "landed": 4,
+    "pageMessages": [
+     16,
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     130,
+     550,
+     552,
+     555
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723,
+     723
+    ],
+    "endScrollTop": 918,
+    "endHeight": 3806,
+    "hasMore": true,
+    "wheelEvents": 40,
+    "wheelSum": -2400,
+    "frames": 201
+   },
+   "engine": "wk",
+   "case": "S-top-real-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "wheel",
+    "park": false,
+    "dy": -300,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 2,
+    "landed": 2,
+    "pageMessages": [
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     0,
+     0
+    ],
+    "jump": 28,
+    "endResidual": 28,
+    "gapJump": 28,
+    "gapEnd": 28,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722
+    ],
+    "endScrollTop": 450,
+    "endHeight": 2360,
+    "hasMore": true,
+    "wheelEvents": 10,
+    "wheelSum": -3000,
+    "frames": 106
+   },
+   "engine": "wk",
+   "case": "S-top-real-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 44,
+    "firstVisibleMs": 44,
+    "mountMs": 44,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "mode": "flick",
+    "park": false,
+    "dy": -700,
+    "opening": {
+     "viewports": 1.31,
+     "scrollTop": 190
+    },
+    "loads": 3,
+    "landed": 3,
+    "pageMessages": [
+     16,
+     16,
+     16
+    ],
+    "requestScrollTops": [
+     148,
+     578,
+     594
+    ],
+    "jump": 5,
+    "endResidual": 5,
+    "gapJump": 5,
+    "gapEnd": 5,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     840,
+     722,
+     723
+    ],
+    "endScrollTop": 968,
+    "endHeight": 3083,
+    "hasMore": true,
+    "wheelEvents": 122,
+    "wheelSum": -1630,
+    "frames": 248
+   },
+   "engine": "wk",
+   "case": "S-top-real-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 35,
+    "firstVisibleMs": 35,
+    "mountMs": 35,
+    "firstFrameScrollTop": 190,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "noise": 0,
+    "windows": 15,
+    "wheelEvents": 40,
+    "frames": 162
+   },
+   "engine": "wk",
+   "case": "S-noise-60",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 354,
+    "firstVisibleMs": 354,
+    "mountMs": 354,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "noise": 0,
+    "windows": 5,
+    "wheelEvents": 10,
+    "frames": 69
+   },
+   "engine": "wk",
+   "case": "S-noise-300",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 347,
+    "firstVisibleMs": 347,
+    "mountMs": 347,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "v1s-patched",
+   "result": {
+    "noise": 0,
+    "windows": 20,
+    "wheelEvents": 123,
+    "frames": 215
+   },
+   "engine": "wk",
+   "case": "S-noise-flick",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 349,
+    "firstVisibleMs": 349,
+    "mountMs": 349,
+    "firstFrameScrollTop": 67684,
+    "firstFrameGap": 0
+   }
+  }
+ ]
+}

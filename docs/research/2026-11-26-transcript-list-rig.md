@@ -11,6 +11,8 @@ Todo #455. It decides which path #461 takes. The proof spec is section 4.5 of th
 
 ## 1. Short answer
 
+**Update, section 9:** a short first window with the reader at the top (S-top) found a case `v1` as merged fails in WKWebView, a page landing near offset 0 during a momentum flick. The recommendation stays `v1`, with that hole to close first.
+
 **#461 takes the primary path: `v1`, no virtualizer, with the hand-written owner. It also needs two changes the spec did not have: mount the tail first, and bound the window. Tail-first needs one more thing it does not have yet (see the second bullet below).**
 
 - **`v1` passes P1 to P5 in Chromium and Playwright WebKit, and in WKWebView (the system WebKit that Safari 27 and the app use) with one exception:** under load, one of four WKWebView P4 runs took 3 frames to land the jump (the line is 2). That covers a page landing above a parked reader, a page landing mid-wheel, a code block and the automatic fold above the reader in both scroll directions, following at a 0 px gap through 10 s of streaming and a 4,000 px fold, release and jump, and opening at the tail on the first visible frame. Browser anchoring did the work in every case. No row anchor and no settle loop were involved.
@@ -522,3 +524,78 @@ node $R/summarize.mjs ab-pre.json ab-post.json
 The release repeat in 4.4 (`results/chromium-p4-release-repeat.json`) is `node $R/run.mjs --no-build --engines chromium --variants v1s-patched,v1s,v1 --cases P4-wheel-up --repeat 6 --out chromium-p4-release-repeat.json`, run in the profiling build after the matrix.
 
 A full matrix takes 30–60 minutes per engine, depending on load. `--variants v1,v1+progressive --cases P5,P6` narrows a run. `--serve` serves the page for the manual P7 run (`?v=v1&manual=1`). The `wk` engine opens a borderless 1280×720 window at the bottom-left of the screen for the duration of the run.
+
+## 9. S-top: a short first window, the reader at the top (27 November 2026)
+
+The owner hit a scroll problem the proof never tested. A tool-heavy chat opens with a first window shorter than the screen, so the reader reaches the top at once, and an older page lands while they are still scrolling at or near offset 0. P1-top passes `v1` only with the reader parked, no input during the landing. Everything in this section is **WKWebView only** (the engine the app ships), **one repetition per cell**, on a loaded machine (load average 6.2, recorded and not waited out), so read a single cell as a sign, not a rate. Chromium and Playwright WebKit were run on a smaller set while building the case (`v1` and `v1s-patched` held on `window=2` in Chromium); they are not in the table. The full cross-engine run, `v2` and `v1+progressive` are left for the end of the plan.
+
+### 9.1 The scenario
+
+- **Opening.** Two shapes. `window=2` opens with the newest two messages (2.2 to 2.5 viewports here, the reader at the tail). `shape=real` is the measured shape of a real first window: the newest 80 items, two folded tool-heavy turns (33 tool calls, 5 texts, 2 thoughts; 24 tool calls, 5 texts, 5 thoughts) between five short user messages, about 1.3 viewports, with older pages of 80 items that add about one viewport each (`fixture-real.ts`, no real content). `window=2` runs both walking up from the tail and parked at offset 0 first.
+- **Input.** The reader wheels up continuously: fixed −60 px steps, fixed −300 px steps, and two momentum flicks with the harness's real `NSEvent` phases.
+- **Landing.** The app's own rule requests the page (`EarlierMessages` `useOlderPageGesture`: an upward gesture fires the load once the reader is within a viewport of the top, and a window shorter than the viewport has no scroll events, so the gesture itself fires it). The page arrives 60 ms ±30% later, while the wheel continues. The reader keeps going afterwards, so in the real shape a page can land at the top again; each landing is scored on its own.
+- **Score.** The anchor is the block under the viewport centre when the page is requested; the baseline is the last frame before the landing shows. After removing the wheel's own deltas (a ledger of the page's `wheel` events, with the browser clamping the wheel at the top of the old content before the landing and at the top of the new page after it), the content under the reader must move ≤ 2 px, must never be lost (an unmounted anchor counts as lost, not as a missing sample; an anchor that leaves the viewport stays a number), and the reader must not end at the top of the new page (`pinned`). `loads` is recorded. Lag between a wheel event and the frame that shows its scroll differs per event, so the ledger takes the best fit over how many events the browser had applied (a prefix); that forgives a jump no larger than the wheel step in flight. Its own error is measured by `S-noise` (the same input with no landing): 0 px for every variant but `v0` in every input, so flicks use the same 2 px line. `v0`'s flick control (1,136 px) is its virtualizer unmounting the anchor, not ledger error.
+- **The readout.** The manual readout (`?manual=1`) dropped non-finite samples (`Number.isFinite` filter), so a lost anchor never showed. It now counts a missing anchor as a jump and prints `lost`.
+
+### 9.2 Results
+
+| Case                                     | v0                                                                                  | v1                                            | v1s                                               | v1s-patched                                       | v1+fix                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| window=2, from the tail, -60 px steps    | **fail** jump lost, end 18.1, anchor lost 7 fr (bottom gap 18), pinned 0, loads 1   | pass jump 0.2, end 0.2, pinned 0, loads 1     | **fail** jump 59.2, end 0.8, pinned 0, loads 1    | **fail** jump 59.2, end 0.8, pinned 0, loads 1    | pass jump 0.8, end 0.8, pinned 0, loads 1         |
+| window=2, from the tail, -300 px steps   | **fail** jump lost, end lost, anchor lost 18 fr (bottom gap 127), pinned 0, loads 1 | pass jump 0.2, end 0.2, pinned 0, loads 1     | pass jump 0.2, end 0.2, pinned 0, loads 1         | pass jump 0.2, end 0.2, pinned 0, loads 1         | pass jump 0.8, end 0.8, pinned 0, loads 1         |
+| window=2, from the tail, momentum flicks | **fail** jump lost, end 111, anchor lost 7 fr (bottom gap 111), pinned 0, loads 1   | pass jump 0.2, end 0.2, pinned 0, loads 1     | **fail** jump 240.2, end 218.2, pinned 0, loads 1 | **fail** jump 242.2, end 219.2, pinned 0, loads 1 | **fail** jump 168.2, end 134.2, pinned 0, loads 1 |
+| window=2, parked at 0, -60 px steps      | **fail** jump lost, end 651, anchor lost 1 fr (bottom gap 891), pinned 0, loads 1   | pass jump 0.8, end 0.8, pinned 0, loads 1     | **fail** jump 17.2, end 17.2, pinned 0, loads 1   | **fail** jump 17.2, end 17.2, pinned 0, loads 1   | pass jump 0.8, end 0.8, pinned 0, loads 1         |
+| window=2, parked at 0, -300 px steps     | **fail** jump lost, end 9, anchor lost 1 fr (bottom gap 891), pinned 0, loads 1     | pass jump 0.8, end 0.8, pinned 0, loads 1     | **fail** jump 42.8, end 42.8, pinned 0, loads 1   | **fail** jump 42.8, end 42.8, pinned 0, loads 1   | pass jump 0.8, end 0.8, pinned 0, loads 1         |
+| window=2, parked at 0, momentum flicks   | **fail** jump lost, end 836, anchor lost 1 fr (bottom gap 891), pinned 0, loads 1   | pass jump 0.8, end 0.8, pinned 0, loads 1     | **fail** jump 21.2, end 9.2, pinned 0, loads 1    | **fail** jump 30.8, end 30.8, pinned 0, loads 1   | pass jump 0.8, end 0.8, pinned 0, loads 1         |
+| real shape, -60 px steps                 | **fail** jump lost, end 196, anchor lost 40 fr (bottom gap 359), pinned 0, loads 5  | pass jump 0, end 0, pinned 0, loads 4         | pass jump 0, end 0, pinned 0, loads 4             | pass jump 0, end 0, pinned 0, loads 4             | **fail** jump 60, end 60, pinned 0, loads 4       |
+| real shape, -300 px steps                | **fail** jump lost, end lost, anchor lost 13 fr (bottom gap 115), pinned 1, loads 2 | pass jump 0, end 0, pinned 0, loads 2         | **fail** jump 28, end 28, pinned 0, loads 2       | **fail** jump 28, end 28, pinned 0, loads 2       | pass jump 0, end 0, pinned 0, loads 2             |
+| real shape, momentum flicks              | **fail** jump lost, end lost, anchor lost 11 fr (bottom gap 46), pinned 0, loads 2  | **fail** jump 537, end 309, pinned 1, loads 4 | **fail** jump 5, end 5, pinned 0, loads 3         | **fail** jump 5, end 5, pinned 0, loads 3         | **fail** jump 22, end 22, pinned 0, loads 3       |
+
+Ledger noise floor (-60/-300/flick) (the same input, no page landing, per variant): v0 0/0/1136 px; v1 0/0/0 px; v1s 0/0/0 px; v1s-patched 0/0/0 px; v1+fix 0/0/0 px.
+
+Cell format: jump is the largest residual over the 20 frames after a landing (the worst landing of the run), end the residual at the end of that window, `anchor lost` the frames with the anchor unmounted (then the distance to the bottom of the content stands in for it: it needs no mounted row), `pinned` the landings after which the reader sat at offset 0 with a residual, `loads` the pages requested (one landing each).
+
+What the table shows:
+
+- **`v1` as merged holds in eight of nine cells, to 0.2 to 0.8 px, and fails one: the real shape with momentum flicks** (537 px, pinned at the top of the new page, 4 loads against 3 for the Message Scroller variants). That is the case the owner described. The −60 and −300 wheel cases do not reproduce it in this engine, including the parked-at-0 ones; with wheel steps the landing is held. The earlier quick check's 17,500 px jump and endless loading with −60 steps did not reproduce here.
+- **`v1s` and `v1s-patched` fail seven of nine** in this run, with the same numbers: 17 to 59 px with wheel steps, 28 px on the real shape at −300, and 200 to 240 px under momentum on `window=2` from the tail (wheel input dropped in flight, the loss seen in 4.2). They do not get pinned at the top. They do not fail the real flick case by much (5 px).
+- **`v0`** loses its anchor in every case (the virtualizer unmounts it), and the distance to the bottom moves by 18 to 891 px, so it keeps the reader's place in neither metric. One landing in the real shape at −300 left the reader pinned at the top.
+
+### 9.3 Why `v1` fails the real-shape flick
+
+The failing landing (`shells/scroll-owner.ts`), from the per-frame trace of a momentum flick on the real shape:
+
+| Frame                         | Anchor offset | scrollTop | Content height |
+| ----------------------------- | ------------: | --------: | -------------: |
+| last frame before the landing |           423 |        22 |            798 |
+| landing frame                 |         1,263 |        22 |          1,638 |
+| next frame                    |         1,285 |         0 |          1,638 |
+
+Content grew by 840 px above the reader and `scrollTop` did not move: neither the browser nor the owner adjusted anything, so the reader is shown the top of the new page and the momentum then runs them to 0. Two gates explain it:
+
+1. The owner's one measured restore is taken only when `scrollTop < 1` at the moment the page is about to land. During a momentum flick near the top the main thread reads 22 (a frame or two behind the scrolling thread, which is already at or near 0), so the restore is skipped. It is not skipped because input is active; the code has no such check. It is skipped because the offset it reads is stale.
+2. The browser's own anchoring did not hold in that frame either. The likely reason is that WebKit's scrolling thread is at offset 0 while the main thread reads 22 (anchoring is suppressed at offset 0). The data cannot separate that from "anchoring is suspended while a momentum gesture runs"; it only shows that a landing 22 to 106 px from the top under momentum is not held. At the same input but a larger offset (the `window=2` flick from the tail, base offset about 514), the browser does hold it.
+
+An experiment that widened the owner's gate to "within a viewport of the top" (`?fix=2`) hung the harness's web process in two runs, so it has no result.
+
+### 9.4 The prototype fix, and whether it holds
+
+`v1+fix` (`?fix=1`) takes over a landing when the reader is not following: it switches the browser's anchoring off for that landing, remembers where the reader's block sits in the content (not in the viewport), and after layout moves `scrollTop` by how far the block moved. The shift is in content coordinates, so scroll the reader did meanwhile is kept, unlike a restore of a viewport offset. It is about 25 lines, behind the flag, so "v1 as merged" and "v1 fixed" are both in the table.
+
+**It does not hold as prototyped.** It removes the failure it was made for (no pinning, and the real-shape flick lands within 22 px against 537 px), and the parked and −300 cells pass. It passes six of nine, but it fails two cells `v1` passes, `window=2` from the tail with flicks (168 px) and the real shape at −60 (60 px, one wheel step), and the real-shape flick, though 22 px instead of 537, still fails the 2 px line. The trace shows why: a write to `scrollTop` is absolute from the main thread's view, which is behind the scrolling thread's, so the wheel input in flight is dropped (the same loss `v1s` shows). The browser's own anchoring adjusts relative to the scrolling thread and keeps it. So a fix has to leave browser anchoring on wherever it holds and add a correction only for the near-top case, and that correction needs a way to add to the scrolling thread's offset rather than set an absolute one. Not prototyped; the next step for #461 if the owner's case is in scope.
+
+### 9.5 Does the #461 recommendation change?
+
+**No, the path stays `v1`, but the owner is not finished.** Against the patched Message Scroller the picture in this scenario is the same as in 5.1, and a little stronger: `v1` holds eight of nine cells, `v1s-patched` two, and neither is pinned except `v1` in the one real-shape flick case. What changes is the to-do list for #461:
+
+- `v1`'s owner has a real hole at the owner's case: a page landing within about a viewport of the top while a momentum gesture runs. #461 must close it and gate on `S-top-real-flick` (and the other cells) before it ships. The prototype in 9.4 closes the pinning and not the in-flight loss.
+- 5.2 gains a rule: the owner cannot rely on browser anchoring near offset 0 under momentum, and cannot correct with an absolute `scrollTop` write either.
+- The rig now has the case and the pass line, so it gates that.
+
+### 9.6 What was not tested
+
+- Chromium and Playwright WebKit at full set, three repetitions, and `v2` and `v1+progressive` (scoped out for this pass); one repetition per cell here, so cells near a boundary (the `v1s` 17 px, the 5 px real flick) could flip.
+- P1-P4 after the fix: not rerun, so "nothing else breaks" is not shown.
+- Safari itself, and a real trackpad: momentum is the harness's synthetic phases.
+- Whether anchoring is suppressed at offset 0 or during momentum (9.3), and the near-top gate experiment (`?fix=2`, hung).
+- The real compaction marker (the `shape=real` fixture has none), and the daemon's real page latency distribution (60 ms ±30% only).

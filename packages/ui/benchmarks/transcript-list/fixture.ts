@@ -18,9 +18,9 @@ export interface Turn {
 }
 
 const words = 'The module keeps its state in one place and the caller reads it through a narrow interface.';
-const prose = (n: number) => Array.from({ length: n }, () => words).join(' ');
+export const prose = (n: number) => Array.from({ length: n }, () => words).join(' ');
 
-function tool(id: string, toolName: string, args: Args, result: string): ToolCallMessagePart {
+export function tool(id: string, toolName: string, args: Args, result: string): ToolCallMessagePart {
   return { type: 'tool-call', toolCallId: id, toolName, args, argsText: JSON.stringify(args), result, ...done };
 }
 
@@ -55,7 +55,12 @@ export function answerText(index: number, options: AnswerOptions = {}) {
   return `## Result for module ${index}\n\n${prose(4)}\n\n${codeBlock(index, options.codeExtra)}\n\n${table()}${image}\n\n${prose(2)}`;
 }
 
-function assistant(id: string, index: number, content: ThreadMessage['content'], running = false): ThreadMessage {
+export function assistant(
+  id: string,
+  index: number,
+  content: ThreadMessage['content'],
+  running = false,
+): ThreadMessage {
   return {
     id,
     role: 'assistant',
