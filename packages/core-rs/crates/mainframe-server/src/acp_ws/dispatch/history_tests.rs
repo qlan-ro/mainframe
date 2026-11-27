@@ -137,6 +137,28 @@ async fn history_around_and_search_are_routed_and_answered() {
     assert!(bad["error"].is_object());
 }
 
+#[tokio::test]
+async fn history_trim_needs_the_windowed_history_opt_in_and_answers_stale_for_a_session_that_is_not_live()
+ {
+    let (_keep, ctx, chat) = chat_with_history().await;
+    let params = json!({"sessionId":chat,"floorItemId":"m50"});
+    let refused = call(&ctx, "_mainframe.dev/history_trim", params.clone()).await;
+    assert_eq!(refused["error"]["code"], -32601, "{refused}");
+    let (answered, _) = call_with(&ctx, "_mainframe.dev/history_trim", params, |conn| {
+        conn.mark_windowed_history_opted_in();
+    })
+    .await;
+    assert_eq!(answered["result"]["stale"], true, "{answered}");
+    let (bad, _) = call_with(
+        &ctx,
+        "_mainframe.dev/history_trim",
+        json!({"sessionId":chat}),
+        |conn| conn.mark_windowed_history_opted_in(),
+    )
+    .await;
+    assert!(bad["error"].is_object());
+}
+
 mod routing {
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 

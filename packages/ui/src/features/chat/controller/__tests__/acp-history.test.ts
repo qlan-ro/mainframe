@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HISTORY_TURNS_DEFAULT, useUiPrefs } from '@/store/ui-prefs';
 import { AcpHistory, type HistoryLoadState } from '../acp-history';
 import { makeFakeAcpClient } from './acp-test-kit';
+import { noWindowHost } from './history-host-kit';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 
 function fixture() {
@@ -13,6 +14,7 @@ function fixture() {
     if (page.updates?.length) held.add('old');
   });
   const history = new AcpHistory({
+    ...noWindowHost,
     chatId: () => 'chat',
     client: () => client,
     active: () => active,

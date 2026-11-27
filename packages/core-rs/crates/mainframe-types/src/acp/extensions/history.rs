@@ -69,6 +69,17 @@ pub struct HistoryPageResult {
     pub stale: Option<bool>,
 }
 
+/// `_mainframe.dev/history_trim`: the client cut its loaded window back to the newest page and
+/// asks the connection to raise its history floor to `floorItemId`, so `history_page` accepts a
+/// `before` at the new floor. The reply is a [`HistoryPageResult`] with no updates: the state
+/// (`hasMore`, `floorItemId`), or `stale: true` when the floor could not be raised.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryTrimParams {
+    pub session_id: String,
+    pub floor_item_id: String,
+}
+
 /// `_mainframe.dev/history_around`: a page of items centred on one item,
 /// independent of the connection's history floor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,16 +1,17 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFindInChatStore } from '../find-in-chat-store';
+import { useUiPrefs } from '@/store/ui-prefs';
 import type { HistorySearchResult } from '@qlan-ro/mainframe-types';
 
-const f = vi.hoisted(() => ({ messages: [] as object[], load: vi.fn(), search: vi.fn() }));
+const f = vi.hoisted(() => ({ messages: [] as object[], load: vi.fn(), search: vi.fn(), canSearch: true }));
 vi.mock('@assistant-ui/react', () => ({
   useAuiState: (select: (state: unknown) => unknown) => select({ thread: { messages: f.messages } }),
 }));
 vi.mock('../../runtime/chat-extras', () => ({
   useChatExtras: () => ({
     state: { chatId: 'chat' },
-    canSearchHistory: true,
+    canSearchHistory: f.canSearch,
     searchHistory: f.search,
     loadEarlier: f.load,
   }),
@@ -40,6 +41,8 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  useUiPrefs.setState({ plainTranscript: false });
+  f.canSearch = true;
   document.querySelector('[data-mf-chat-thread]')?.remove();
 });
 
@@ -121,4 +124,46 @@ it('loads a missing item even when its partial container is already visible', as
   await waitFor(() => expect(useFindInChatStore.getState().serverTotal).toBe(1));
   fireEvent.click(view.getByTestId('thread-find-next'));
   await waitFor(() => expect(f.load).toHaveBeenCalledWith('earlier-prose'));
+});
+
+describe('on the plain list', () => {
+  it('loads a window around an unloaded match and asks for the jump once', async () => {
+    useUiPrefs.setState({ plainTranscript: true });
+    const jumps = vi.fn();
+    window.addEventListener('jump', jumps);
+    const view = render(
+      <>
+        <FindBar />
+        <DaemonFind />
+      </>,
+    );
+    await waitFor(() => expect(useFindInChatStore.getState().serverTotal).toBe(57));
+    f.load.mockImplementation(async () => {
+      const thread = document.createElement('div');
+      thread.dataset.mfChatThread = '';
+      thread.dataset.mfChatId = 'chat';
+      thread.innerHTML = '<div data-message-id="old" data-search-item-id="old"><div data-text-part>needle</div></div>';
+      thread.querySelector('div')!.scrollIntoView = vi.fn();
+      document.body.append(thread);
+      return true;
+    });
+    fireEvent.click(view.getByTestId('thread-find-next'));
+    await waitFor(() => expect(f.load).toHaveBeenCalledWith('old'));
+    await waitFor(() => expect(useFindInChatStore.getState().loading).toBe(false));
+    window.removeEventListener('jump', jumps);
+    expect(jumps).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no in-page find to fall back on: a daemon without search says so', async () => {
+    useUiPrefs.setState({ plainTranscript: true });
+    f.canSearch = false;
+    const view = render(
+      <>
+        <FindBar />
+        <DaemonFind />
+      </>,
+    );
+    await waitFor(() => expect(view.getByRole('alert')).toHaveTextContent('Search needs a newer daemon'));
+    expect(f.search).not.toHaveBeenCalled();
+  });
 });

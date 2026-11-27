@@ -5,11 +5,12 @@
  * its sub-agents' (they arrive in the same queue) and its delegated tasks'.
  */
 import { useMemo } from 'react';
-import { useAuiState, type ThreadMessage } from '@assistant-ui/react';
+import type { ThreadMessage } from '@assistant-ui/react';
 import type { ExecutionMode } from '@qlan-ro/mainframe-types';
 import type { ActivityEntry } from '@/features/session-panel/activity-model';
 import { useAdapters } from '@/store/adapters';
 import { useChatExtras } from '../runtime/chat-extras';
+import { useLiveMessages } from '../runtime/use-live-messages';
 import type { ChatPermissionEntry } from '../controller/chat-thread-state';
 import { useDelegatedGates } from './delegated-gates-store';
 import type { ReplyFn } from './gate-types';
@@ -51,7 +52,7 @@ export function useGateQueue(): GateQueue {
   const permissions = extras?.permissions;
   const pending = permissions != null && Object.keys(permissions).length > 0;
   // Read the transcript only while something waits: naming the sub-agent needs it.
-  const messages = useAuiState((s) => (pending ? s.thread.messages : NO_MESSAGES));
+  const messages = useLiveMessages((all) => (pending ? all : NO_MESSAGES));
   const chatId = extras?.state.chatId;
   const adapterId = extras?.state.chatConfig?.adapterId;
   const mode = extras?.state.chatConfig?.permissionMode;

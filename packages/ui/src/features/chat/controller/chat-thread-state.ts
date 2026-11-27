@@ -96,8 +96,14 @@ export interface ChatThreadState extends ChatEnvironmentSlice {
   readonly runState: RunState;
   /** Forgotten when the session goes idle: nothing is kept of how a run ended. */
   readonly run: RunInProgress | null;
-  /** The converted transcript, projected as-is into the message repository. */
+  /** The converted live transcript: what export, the session panel, gates and sub-agent tabs read. */
   readonly messages: readonly ThreadMessageLike[];
+  /**
+   * While the reader is in a window around a jump target (`history_around`), that window. Only the
+   * main transcript list shows it (the runtime it feeds projects it); everything else reads
+   * `messages`, which keeps taking every live update.
+   */
+  readonly windowMessages: readonly ThreadMessageLike[] | null;
   readonly interactions: {
     readonly permissions: Readonly<Record<string, ChatPermissionEntry>>;
     readonly queued: Readonly<Record<string, QueuedMessageRef>>;
@@ -134,6 +140,7 @@ export type ChatStateEvent =
   | { type: 'history.ready' }
   | { type: 'history.failed'; error: unknown }
   | { type: 'transcript.updated'; messages: readonly ThreadMessageLike[] }
+  | { type: 'window.updated'; messages: readonly ThreadMessageLike[] | null }
   | { type: 'transcript.cleared' }
   | ({ type: 'run.started' } & RunStart)
   | { type: 'run.cancelling' }
@@ -170,6 +177,7 @@ export function createChatThreadState(chatId: string): ChatThreadState {
     runState: { type: 'idle' },
     run: null,
     messages: [],
+    windowMessages: null,
     interactions: {
       permissions: {} as Readonly<Record<string, ChatPermissionEntry>>,
       queued: {} as Readonly<Record<string, QueuedMessageRef>>,

@@ -34,6 +34,27 @@ impl FacadeHub {
         }
     }
 
+    /// Raises the connection's history floor after the client cut its window back to the newest
+    /// page. None when the session is not live on this connection or the floor cannot rise.
+    pub(crate) fn raise_history_floor(
+        &self,
+        connection: &FacadeConnection,
+        chat_id: &str,
+        floor_item_id: &str,
+    ) -> Option<HistoryState> {
+        let mut sessions = connection.locked_sessions();
+        let Some(SessionSlot::Live(stream)) = sessions.get_mut(chat_id) else {
+            return None;
+        };
+        stream
+            .raise_history_floor(floor_item_id)
+            .then(|| HistoryState {
+                has_more: true,
+                floor_item_id: Some(floor_item_id.to_string()),
+                context_item_ids: None,
+            })
+    }
+
     /// Whether serving a page would first seed the chat's revision log, which
     /// encodes the whole transcript. A caller holding the list borrowed under
     /// the cache lock should take a copy instead.

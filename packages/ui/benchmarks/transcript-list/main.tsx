@@ -17,6 +17,7 @@ import { p4follow, p4release } from './scenarios/follow';
 import { p6scroll, p6tail, p7proxy } from './scenarios/cost';
 import { startManual } from './scenarios/manual';
 import { sNoise, sTop } from './scenarios/short-window';
+import { bound } from './scenarios/bound';
 import { installOverlayScrollbars } from '@/lib/overlay-scrollbars/manager';
 import { V0Shell } from './shells/V0Shell';
 import { V1Shell } from './shells/V1Shell';
@@ -26,7 +27,7 @@ import { AppShell } from './shells/AppShell';
 import { openSomeTurns } from './open-turns';
 
 const SHELLS = { v0: V0Shell, v1: V1Shell, v1s: V1sShell, 'v1s-patched': V1sShell, v2: V2Shell, app: AppShell };
-const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy, sTop, sNoise } as Record<
+const SCENARIOS = { p1, p2, p3, p4follow, p4release, p6scroll, p6tail, p7proxy, sTop, sNoise, bound } as Record<
   string,
   (o: object) => Promise<unknown>
 >;

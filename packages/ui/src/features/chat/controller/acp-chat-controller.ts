@@ -134,6 +134,36 @@ export class AcpChatController {
     return this.plane.history.load(untilItemId);
   }
 
+  /** Scrolling down from a window around a jump target: the next items, and at its end the live tail. */
+  loadLater(): Promise<boolean> {
+    return this.plane.history.loadLater();
+  }
+
+  /** Leaves a window around a jump target for the live tail. */
+  returnToTail(): void {
+    this.plane.history.returnToTail();
+  }
+
+  /** The reader is back at the tail: cut the window back to its newest page (when the daemon can follow). */
+  trimToNewestPage(): void {
+    void this.plane.history.trim();
+  }
+
+  /** Pages the live window, whatever window the reader is in: export and the sub-agent fallback need it, not a jump window. */
+  loadEarlierLive(untilItemId?: string): Promise<boolean> {
+    return this.plane.history.loadLive(untilItemId);
+  }
+
+  /** The live window's paging state, which a window around a jump target leaves alone. */
+  get liveHistory() {
+    return this.plane.history.liveHistory;
+  }
+
+  /** What the transcript list shows: the window around a jump target while there is one, else the live window. */
+  get shownMessages() {
+    return this.state.windowMessages ?? this.state.messages;
+  }
+
   private async reactivatePlane(client: AcpClientHandle): Promise<void> {
     // Wait for a validated initial transcript before opening the replay.
     await this.liveSub.whenTranscriptReady();
@@ -260,6 +290,7 @@ export class AcpChatController {
 
   /** Tells this chat's transcript the user sent something (`user-sent.ts`). */
   private announceUserSend(): void {
+    this.plane.history.returnToTail();
     emitUserSent([this.threadId, this.daemonId]);
   }
 
@@ -380,6 +411,10 @@ export class AcpChatController {
   /** Single dispatch choke point. `run.started` (any source) and `run.failed` both cancel the plane's deferred `run.stopped` (D7 finding 10) — a failure inside the settle delay must not be clobbered by the stale deferred idle. */
   private dispatch(event: ChatStateEvent): void {
     if (event.type === 'run.started' || event.type === 'run.failed') this.plane.cancelPendingStop();
+    // A window around a jump target is a snapshot: these events may have outdated it.
+    if (event.type === 'run.stopped' || event.type === 'compact.done' || event.type === 'transcript.cleared') {
+      this.plane.history.resnapshot();
+    }
     const nextState = reduceChatThreadState(this.state, event);
     if (nextState === this.state) return;
     this.state = nextState;

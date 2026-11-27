@@ -1,0 +1,78 @@
+{
+ "engines": "wk",
+ "synthetic": false,
+ "load": [
+  3.8662109375,
+  5.2939453125,
+  6.7705078125
+ ],
+ "results": [
+  {
+   "ok": true,
+   "variant": "app",
+   "result": {
+    "open": {
+     "nodes": 22998,
+     "rows": 207,
+     "messages": 207
+    },
+    "cycles": [
+     {
+      "pages": 10,
+      "peak": {
+       "nodes": 79115,
+       "rows": 718,
+       "messages": 718
+      },
+      "top": {
+       "nodes": 79115,
+       "rows": 718,
+       "messages": 718
+      },
+      "after": {
+       "nodes": 22998,
+       "rows": 207,
+       "messages": 207
+      },
+      "back": true
+     },
+     {
+      "pages": 10,
+      "peak": {
+       "nodes": 79115,
+       "rows": 718,
+       "messages": 718
+      },
+      "top": {
+       "nodes": 79115,
+       "rows": 718,
+       "messages": 718
+      },
+      "after": {
+       "nodes": 22998,
+       "rows": 207,
+       "messages": 207
+      },
+      "back": true
+     }
+    ]
+   },
+   "engine": "wk",
+   "case": "W-bound",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 107,
+    "firstVisibleMs": 107,
+    "mountMs": 107,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0
+   }
+  }
+ ]
+}

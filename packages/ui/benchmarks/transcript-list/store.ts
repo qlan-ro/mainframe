@@ -30,6 +30,8 @@ function createStore() {
     params.shape === 'real' ? buildRealTranscript() : buildTranscript(params.totalTurns, params.groups, { image });
   let start = params.windowItems > 0 ? Math.max(0, transcript.all.length - params.windowItems) : transcript.windowStart;
   let state: RigState = { messages: transcript.all.slice(start), running: false, loading: false };
+  /** Where the newest page starts: what the app cuts the window back to when the reader returns to the tail. */
+  const newestStart = start;
   const listeners = new Set<() => void>();
   const set = (next: Partial<RigState>) => {
     state = { ...state, ...next };
@@ -47,6 +49,14 @@ function createStore() {
     set,
     replace,
     hasMore: () => start > 0,
+    /** What `AcpHistory.trim` does to the window: everything above the newest page goes, and the page above it is `hasMore` again. */
+    trimToNewestPage(): number {
+      const at = state.messages.findIndex((message) => message.id === transcript.all[newestStart]?.id);
+      if (at <= 0) return 0;
+      start = newestStart;
+      set({ messages: state.messages.slice(at) });
+      return at;
+    },
     /** Lands the page before the window, the way `AcpSessionPlane.prependPage` does. */
     prependPage(): number {
       const from = previousPage(transcript.all, start);

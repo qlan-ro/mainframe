@@ -1,5 +1,6 @@
 import { AcpHistory } from './acp-history';
 import { isHeldHistoryItem } from './acp-history-items';
+import { planeWindowHost } from './acp-plane-window-host';
 import type { HistoryPageResult } from '@qlan-ro/mainframe-types';
 import type { ControlResponse, PromptSendMeta, SessionUpdate } from '@qlan-ro/mainframe-types';
 import { MAINFRAME_META_NAMESPACE, UsageMetaSchema } from '@qlan-ro/mainframe-types';
@@ -36,6 +37,7 @@ export class AcpSessionPlane {
   private readonly cursorTracker = new ResumeCursorTracker();
   /** Per-chat conversion cache: a frame re-converts only the container it touched, every other message keeps its identity. */
   private readonly converter = new TranscriptConverter();
+  private readonly windowConverter = new TranscriptConverter();
   /** Item ids already fed to the reconcile matcher — see `takeUnreconciledUserMessages()`. */
   private readonly reconciledUserItemIds = new Set<string>();
   readonly history: AcpHistory;
@@ -56,6 +58,9 @@ export class AcpSessionPlane {
       changed: (history) => this.host.dispatch({ type: 'history.window', history }),
       prepend: (page) => this.prependPage(page),
       hasItem: (id, floor) => isHeldHistoryItem(this.store.accumulator.itemsInOrder, id, floor),
+      ...planeWindowHost(this.store, { live: () => this.refreshMessages(), window: () => this.refreshWindow() }, () =>
+        this.host.getChatId(),
+      ),
     });
     this.attachment = new AcpSessionAttachment({
       getChatId: () => this.host.getChatId(),
@@ -110,6 +115,8 @@ export class AcpSessionPlane {
 
   /** Drop the live stream (D2 dormancy): tells the daemon, stops listening, keeps the client bound. */
   detach(): void {
+    // A jump window is not kept for a chat nobody is looking at: it opens at the tail again.
+    this.history.returnToTail();
     this.attachment.detach();
   }
 
@@ -168,7 +175,9 @@ export class AcpSessionPlane {
       if (item.kind === 'message' && item.role === 'user') this.reconciledUserItemIds.add(item.id);
     }
     if (items.length) {
-      window.dispatchEvent(new CustomEvent('mainframe:history-prepend', { detail: this.host.getChatId() }));
+      // A window around a target is not above these rows: nothing there needs holding.
+      if (!this.store.isAway)
+        window.dispatchEvent(new CustomEvent('mainframe:history-prepend', { detail: this.host.getChatId() }));
       this.refreshMessages();
     }
   }
@@ -242,6 +251,7 @@ export class AcpSessionPlane {
     this.cursorTracker.commitReplyCursor(stage.replyCursor);
     const items = this.store.publish(stage);
     if (!items) return;
+    // Away from the tail the transcript shows the window; coming back shows what the replay published.
     this.refreshFrom(items);
     const state = stage.pendingState;
     stage.pendingState = null;
@@ -293,6 +303,15 @@ export class AcpSessionPlane {
 
   private refreshMessages(): void {
     this.refreshFrom(this.store.accumulator.itemsInOrder);
+  }
+
+  /** The window around a jump target, converted apart from the live window so neither loses its identities; null once it is gone. */
+  private refreshWindow(): void {
+    const now = () => new Date();
+    const messages = this.store.isAway
+      ? this.windowConverter.convert(this.store.shown.itemsInOrder, (id) => this.store.firstSeenAtOf(id, now))
+      : null;
+    this.host.dispatch({ type: 'window.updated', messages });
   }
 
   private refreshFrom(items: AccumulatedItem[]): void {

@@ -72,8 +72,8 @@ export class TranscriptProjector {
   private previous = new Map<string, Projected>();
 
   /** The native message list — the `ExternalThread({ messages })` shape the workspace tabs feed. */
-  projectMessages(state: ChatThreadState): ThreadMessage[] {
-    const likes = stampServerStatuses(state.messages, state, this.stamps);
+  projectMessages(state: ChatThreadState, messages: readonly ThreadMessageLike[] = state.messages): ThreadMessage[] {
+    const likes = stampServerStatuses(messages, state, this.stamps);
     const next = new Map<string, Projected>();
     const server = likes.map((like) => {
       const message = this.normalize(like);
@@ -88,7 +88,8 @@ export class TranscriptProjector {
 
   /** The pre-built repository `useExternalStoreRuntime` imports — a linear parent chain in list order. */
   projectRepository(state: ChatThreadState): ExportedMessageRepository {
-    const messages = this.projectMessages(state);
+    // The main transcript shows the window around a jump target while there is one.
+    const messages = this.projectMessages(state, state.windowMessages ?? state.messages);
     return {
       messages: messages.map((message, index) => ({
         parentId: index > 0 ? messages[index - 1]!.id : null,

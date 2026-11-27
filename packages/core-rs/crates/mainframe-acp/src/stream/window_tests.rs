@@ -220,3 +220,78 @@ fn adding_an_unknown_context_ancestor_resyncs_instead_of_appending_it_after_chil
     let frames = stream.on_revision_delta(&changed, Vec::new, 0, None);
     assert!(matches!(&frames[0],ThrottledFrame::Raw(raw) if raw.contains("_mainframe.dev/resync")));
 }
+
+fn four_containers() -> SessionStream {
+    let mut stream = SessionStream::new(0);
+    let containers = vec![
+        vec![item("a", "a")],
+        vec![item("b1", "b"), item("b2", "b")],
+        vec![item("c", "c")],
+        vec![item("d", "d")],
+    ];
+    stream.seed_containers(&containers);
+    stream.seed_window("chat", &containers);
+    stream
+}
+
+#[test]
+fn a_raised_floor_drops_deltas_below_it_without_a_resync_and_keeps_those_above() {
+    let mut stream = four_containers();
+    assert_eq!(stream.history_floor(), Some("a"));
+    assert!(stream.raise_history_floor("c"));
+    assert_eq!(stream.history_floor(), Some("c"));
+    let below = EncodedDelta {
+        full: false,
+        len: 4,
+        changes: vec![(1, vec![item("b1", "late"), item("b2", "late")])],
+    };
+    assert!(
+        stream
+            .on_revision_delta(&below, Vec::new, 0, None)
+            .is_empty()
+    );
+    assert_eq!(stream.history_floor(), Some("c"), "no resync, not blocked");
+    let above = EncodedDelta {
+        full: false,
+        len: 4,
+        changes: vec![(3, vec![item("d", "changed")])],
+    };
+    assert_eq!(stream.on_revision_delta(&above, Vec::new, 0, None).len(), 1);
+}
+
+#[test]
+fn the_floor_only_moves_forward_and_only_to_a_held_item() {
+    let mut stream = four_containers();
+    assert!(!stream.raise_history_floor("missing"));
+    assert!(stream.raise_history_floor("b2"));
+    // An earlier item of the same container, or of an earlier one, is not a raise.
+    assert!(!stream.raise_history_floor("b1"));
+    assert!(!stream.raise_history_floor("a"));
+    assert_eq!(stream.history_floor(), Some("b2"));
+    assert!(stream.raise_history_floor("b2"));
+}
+
+#[test]
+fn a_page_after_a_raise_replaces_the_forgotten_items_instead_of_finding_them_held() {
+    let mut stream = four_containers();
+    assert!(stream.raise_history_floor("d"));
+    stream.prepend_history(
+        1,
+        &[
+            vec![item("b1", "fresh"), item("b2", "fresh")],
+            vec![item("c", "fresh")],
+        ],
+        4,
+        Default::default(),
+    );
+    // A chunk for a prepended item extends the fresh copy, not the stale one held before the raise.
+    let delta = EncodedDelta {
+        full: false,
+        len: 4,
+        changes: vec![(2, vec![item("c", "fresh more")])],
+    };
+    let frames = stream.on_revision_delta(&delta, Vec::new, 0, None);
+    assert!(
+        matches!(&frames[0], ThrottledFrame::Update(mainframe_types::acp::update::SessionUpdate::AgentMessageChunk(chunk)) if chunk.message_id == "c")
+    );
+}

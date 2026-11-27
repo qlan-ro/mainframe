@@ -50,6 +50,7 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         history_search: Some(true),
         history_around: Some(true),
         history_around_descendants: Some(true),
+        history_trim: Some(true),
         lazy_tool_images: Some(true),
         // A connection that opts in via `BINARY_HISTORY_FRAMES_OPT_IN_KEY` gets
         // history responses with their batches as binary frames.

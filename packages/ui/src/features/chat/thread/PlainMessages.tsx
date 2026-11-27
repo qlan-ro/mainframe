@@ -2,6 +2,7 @@ import { memo, useEffect, type ComponentProps } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
 import { markFirstTranscriptShown } from '@/lib/after-first-paint';
+import { useAwayFromTail } from '../runtime/use-away-from-tail';
 import { TimeMarker } from './TimeMarker';
 import { TurnStatusRow } from './TurnStatusRow';
 import { statusAnchorId } from './turn-phase';
@@ -53,7 +54,9 @@ function useRows(): { rows: Row[]; anchorId: string | null } {
  * The newest rows mount first and the rest follows in slices (`use-tail-first-rows.ts`).
  */
 export function PlainMessages({ components }: { components: MessageComponents }) {
-  const { rows: all, anchorId } = useRows();
+  const { rows: all, anchorId: newest } = useRows();
+  // The run's status sits under the newest message: a window around a jump target does not hold it.
+  const anchorId = useAwayFromTail() ? null : newest;
   const scroll = useTranscriptScroll();
   const rows = useTailFirstRows(all, scroll);
   const userCount = all.filter((row) => row.user).length;

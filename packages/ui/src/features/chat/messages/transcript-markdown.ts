@@ -36,11 +36,12 @@ export async function transcriptMarkdown(
 export async function exportConversation(controller: AcpChatController): Promise<string> {
   await controller.load();
   if (controller.getState().loadState.type !== 'ready') throw new Error('Chat history is unavailable');
-  let history = controller.getState().historyWindow;
-  while (history?.hasMore) {
-    if (!(await controller.loadEarlier())) throw new Error('Could not load earlier messages');
-    const next = controller.getState().historyWindow;
-    if (next?.hasMore && next.floorItemId === history.floorItemId) throw new Error('History did not advance');
+  // The live window, even while the reader is in a window around a jump target.
+  let history = controller.liveHistory;
+  while (history.hasMore) {
+    if (!(await controller.loadEarlierLive())) throw new Error('Could not load earlier messages');
+    const next = controller.liveHistory;
+    if (next.hasMore && next.floorItemId === history.floorItemId) throw new Error('History did not advance');
     history = next;
   }
   return transcriptMarkdown(controller.getState().messages.map(normalizeNativeMessage), (id) =>

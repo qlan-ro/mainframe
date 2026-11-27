@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAuiState } from '@assistant-ui/react';
+import type { ThreadMessage } from '@assistant-ui/react';
 import type { BackgroundActivityTask, BackgroundTask } from '@qlan-ro/mainframe-types';
 import { useChatExtras } from '@/features/chat/runtime/chat-extras';
+import { useLiveMessages } from '@/features/chat/runtime/use-live-messages';
 import { useSessionItems } from '@/features/chat/orchestration/use-session-items';
 import { delegatedTasksOf } from '@/features/sessions/view-model/agent-provenance';
 import { listBackgroundTasks } from '@/lib/api/background-tasks';
@@ -45,8 +46,10 @@ function mergedTasks(
   return [...byId.values()];
 }
 
+const identity = (messages: readonly ThreadMessage[]) => messages;
+
 export function useActivityEntries() {
-  const messages = useAuiState((state) => state.thread.messages);
+  const messages = useLiveMessages(identity);
   const extras = useChatExtras();
   const sessionItems = useSessionItems();
   const chatId = extras?.state.chatId;

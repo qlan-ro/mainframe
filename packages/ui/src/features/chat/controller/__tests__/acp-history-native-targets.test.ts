@@ -3,6 +3,7 @@ import { AcpItemAccumulator } from '../../view-model/acp-item-accumulator';
 import { AcpHistory } from '../acp-history';
 import { isHeldHistoryItem } from '../acp-history-items';
 import { makeFakeAcpClient } from './acp-test-kit';
+import { noWindowHost } from './history-host-kit';
 
 it.each([true, false])('loads a native task target when held only as context: %s', async (context) => {
   const acc = new AcpItemAccumulator();
@@ -21,6 +22,7 @@ it.each([true, false])('loads a native task target when held only as context: %s
   });
   const client = makeFakeAcpClient();
   const history = new AcpHistory({
+    ...noWindowHost,
     chatId: () => 'chat',
     client: () => client,
     active: () => true,

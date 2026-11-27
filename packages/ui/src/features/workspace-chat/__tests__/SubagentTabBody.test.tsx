@@ -31,7 +31,7 @@ interface Call {
 const { controller, world } = vi.hoisted(() => ({
   controller: {
     load: vi.fn(async () => undefined),
-    loadEarlier: vi.fn(async () => true),
+    loadEarlierLive: vi.fn(async () => true),
     historyGeneration: 0,
     subagentHistory: {
       page: vi.fn(async (): Promise<HistoryPageResult> => ({ hasMore: false, updates: [] })),
@@ -233,7 +233,7 @@ beforeEach(() => {
   world.stop.mockClear();
   world.list.mockClear();
   __resetSideChatRegistryForTests();
-  controller.loadEarlier.mockClear().mockResolvedValue(true);
+  controller.loadEarlierLive.mockClear().mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -600,7 +600,7 @@ describe('a call outside the loaded history', () => {
   it('loads the history that holds it', async () => {
     world.hasMore = true;
     await show(null);
-    expect(controller.loadEarlier).toHaveBeenCalledWith('call-1');
+    expect(controller.loadEarlierLive).toHaveBeenCalledWith('call-1');
     expect(screen.getByRole('status')).toHaveTextContent('Loading the sub-agent…');
   });
 
@@ -611,7 +611,7 @@ describe('a call outside the loaded history', () => {
 
   it('says why it could not be loaded', async () => {
     world.hasMore = true;
-    controller.loadEarlier.mockRejectedValue(new Error('daemon is away'));
+    controller.loadEarlierLive.mockRejectedValue(new Error('daemon is away'));
     await show(null);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('daemon is away'));
   });
@@ -699,7 +699,7 @@ it('offers Retry after eviction and chat-tab close while saved steps remain moun
   expect(screen.getByTestId('workspace-agent-status-nested')).toHaveTextContent(/failed/i);
   expect(screen.getByTestId('workspace-agent-brief-nested')).toHaveTextContent('Investigate the inner failure.');
   expect(screen.getByTestId('workspace-agent-result-nested')).toHaveTextContent('The inner task failed.');
-  expect(controller.loadEarlier).not.toHaveBeenCalled();
+  expect(controller.loadEarlierLive).not.toHaveBeenCalled();
   expect(screen.getAllByTestId('steps').map((steps) => steps.textContent)).toEqual(['nested-step', 'nested-step']);
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
 
@@ -764,5 +764,5 @@ it('does not request any history when loading a layout with a legacy nested agen
   await act(async () => undefined);
   expect(screen.queryByTestId('workspace-agent-nested')).toBeNull();
   expect(controller.subagentHistory.page).not.toHaveBeenCalled();
-  expect(controller.loadEarlier).not.toHaveBeenCalled();
+  expect(controller.loadEarlierLive).not.toHaveBeenCalled();
 });

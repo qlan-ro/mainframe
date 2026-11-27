@@ -26,10 +26,10 @@ use serde_json::{Value, json};
 use mainframe_types::acp::extensions::{
     CompactionParams, CursorParams, GateResolvedParams, HeartbeatParams, HistoryAroundParams,
     HistoryAroundResult, HistoryPageParams, HistoryPageResult, HistorySearchParams,
-    HistorySearchResult, HistoryState, HistoryWindow, ItemMeta, MainframeCapabilities,
-    PromptSendMeta, QueueStateParams, QueuedPromptState, ReplayBatchParams, ReplayCompleteParams,
-    ResyncParams, RetryMarker, RetryStatusParams, RichPermissionAnswer, SessionDetachParams,
-    StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
+    HistorySearchResult, HistoryState, HistoryTrimParams, HistoryWindow, ItemMeta,
+    MainframeCapabilities, PromptSendMeta, QueueStateParams, QueuedPromptState, ReplayBatchParams,
+    ReplayCompleteParams, ResyncParams, RetryMarker, RetryStatusParams, RichPermissionAnswer,
+    SessionDetachParams, StructuredDiff, TranscriptClearedParams, TruncationMarker, UsageMeta,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use mainframe_types::acp::permission::{RequestPermissionRequest, RequestPermissionResponse};
@@ -182,6 +182,9 @@ fn roundtrip_by_name(name: &str, body: &Value) -> Result<(), String> {
     }
     if name.starts_with("history-around.") {
         return roundtrip_as::<HistoryAroundResult>(body);
+    }
+    if name == "history-trim.params.json" {
+        return roundtrip_as::<HistoryTrimParams>(body);
     }
     if name == "history-search.params.json" {
         return roundtrip_as::<HistorySearchParams>(body);

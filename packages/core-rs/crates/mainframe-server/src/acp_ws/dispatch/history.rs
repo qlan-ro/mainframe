@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use mainframe_acp::{ResumePort, rpc};
 use mainframe_types::acp::extensions::{
-    HistoryAroundParams, HistoryPageParams, HistorySearchParams,
+    HistoryAroundParams, HistoryPageParams, HistorySearchParams, HistoryTrimParams,
 };
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, JsonRpcResponse};
 use serde::de::DeserializeOwned;
@@ -27,7 +27,10 @@ pub(super) fn start(
         ));
         return;
     }
-    if request.method == "_mainframe.dev/history_page" && !connection.is_windowed_history_opted_in()
+    if matches!(
+        request.method.as_str(),
+        "_mainframe.dev/history_page" | "_mainframe.dev/history_trim"
+    ) && !connection.is_windowed_history_opted_in()
     {
         connection.send_json(&rpc::error_response(
             request.id,
@@ -51,6 +54,8 @@ pub(super) fn start(
             subagent_history::handle(request, &ctx, &connection).await;
         } else if request.method == "_mainframe.dev/history_search" {
             search(request, &connection, port.as_ref()).await;
+        } else if request.method == "_mainframe.dev/history_trim" {
+            trim(request, &ctx, &connection);
         } else if request.method == "_mainframe.dev/history_around" {
             around(request, &connection, port.as_ref()).await;
         } else {
@@ -193,6 +198,29 @@ async fn compute_page(
     })
     .await
     .ok()
+}
+
+/// The client cut its window back to the newest page: raise the floor so its next page request,
+/// `before` the new floor, is accepted.
+fn trim(request: JsonRpcRequest, ctx: &AppCtx, connection: &FacadeConnection) {
+    let params: HistoryTrimParams = match parse(&request) {
+        Ok(params) => params,
+        Err(error) => {
+            connection.send_json(&error);
+            return;
+        }
+    };
+    let hub = &ctx.chat.facade_hub;
+    match hub.raise_history_floor(connection, &params.session_id, &params.floor_item_id) {
+        Some(history) => connection.send_json(&rpc::success_response(
+            request.id,
+            serde_json::json!(mainframe_types::acp::extensions::HistoryPageResult {
+                history,
+                ..Default::default()
+            }),
+        )),
+        None => hub.stale_history_page(connection, &params.session_id, request.id),
+    }
 }
 
 async fn page(

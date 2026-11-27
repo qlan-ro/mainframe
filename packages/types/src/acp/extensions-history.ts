@@ -74,6 +74,14 @@ export const HistoryAroundParamsSchema = z
   .loose();
 export type HistoryAroundParams = z.infer<typeof HistoryAroundParamsSchema>;
 
+/**
+ * `_mainframe.dev/history_trim`: the client cut its loaded window back to the newest page; the
+ * connection raises its history floor to `floorItemId`, so a `history_page` with `before` at the new
+ * floor is accepted. The reply is a `HistoryPageResult` with no updates (the state, or `stale`).
+ */
+export const HistoryTrimParamsSchema = z.object({ sessionId: z.string(), floorItemId: z.string() }).loose();
+export type HistoryTrimParams = z.infer<typeof HistoryTrimParamsSchema>;
+
 export const HistoryAroundResultSchema = z
   .object({
     updates: z.array(SessionUpdateSchema).optional(),

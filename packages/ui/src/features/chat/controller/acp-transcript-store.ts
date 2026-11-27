@@ -17,12 +17,19 @@ import {
 } from '../view-model/acp-item-accumulator';
 import type { SessionUpdate } from '@qlan-ro/mainframe-types';
 import { ReplayStage } from './acp-replay-stage';
+import { newestPageStart } from './acp-window-trim';
 
 export class AcpTranscriptStore {
   private visible: AcpItemAccumulator;
   /** Every still-open FULL stage — the only kind `resetAll()` must protect against a late, post-wipe publish. A cursor stage never touches `visible` through `publish()`, so it needs no bookkeeping here. */
   private readonly openFullStages = new Set<ReplayStage>();
   private readonly firstSeenAt = new Map<string, Date>();
+  /**
+   * A window around one item, shown instead of the live one while the reader is away from the tail.
+   * `visible` keeps receiving every live frame meanwhile, so nothing is lost; leaving the window
+   * shows it again.
+   */
+  private around: AcpItemAccumulator | null = null;
 
   /**
    * `resolveOptions` is called fresh every time a new accumulator is built
@@ -38,6 +45,48 @@ export class AcpTranscriptStore {
   /** The published accumulator — what `refreshMessages()`/gates/reconcile read. */
   get accumulator(): AcpItemAccumulator {
     return this.visible;
+  }
+
+  /** What the transcript shows: the window around a jump target while one is open, else the live window. */
+  get shown(): AcpItemAccumulator {
+    return this.around ?? this.visible;
+  }
+
+  get isAway(): boolean {
+    return this.around !== null;
+  }
+
+  /** Shows a snapshot window. `updates` are the frames of a `history_around` reply. */
+  openAround(updates: SessionUpdate[]): void {
+    const window = new AcpItemAccumulator(this.resolveOptions());
+    this.stampHistorical(window.prepend(updates));
+    this.around = window;
+  }
+
+  /** Adds a window above or below what the open snapshot holds. */
+  extendAround(updates: SessionUpdate[], side: 'before' | 'after'): AccumulatedItem[] {
+    if (!this.around) return [];
+    const items = side === 'before' ? this.around.prepend(updates) : this.around.append(updates);
+    this.stampHistorical(items);
+    return items;
+  }
+
+  closeAround(): void {
+    // The window's rows are no longer shown: forget the stamps of those the live window does not hold.
+    for (const item of this.around?.itemsInOrder ?? []) {
+      if (!this.visible.has(item.id)) this.firstSeenAt.delete(item.id);
+    }
+    this.around = null;
+  }
+
+  /** The item the newest page of `turns` turns starts at in the live window, or null when it holds no more. */
+  newestPageStart(turns: number): string | null {
+    return newestPageStart(this.visible.itemsInOrder, turns);
+  }
+
+  /** Drops everything above `start` from the live window, and the stamps of what went. */
+  trimTo(start: string): void {
+    for (const id of this.visible.trimBefore(start)) this.firstSeenAt.delete(id);
   }
 
   /** A new replay window opened — the window (via its coordinator) owns the returned stage from here on. */
@@ -102,10 +151,15 @@ export class AcpTranscriptStore {
 
   prepend(updates: SessionUpdate[]): AccumulatedItem[] {
     const items = this.visible.prepend(updates);
+    this.stampHistorical(items);
+    return items;
+  }
+
+  /** History is not new: its items carry the oldest stamp, so none of it plays a mount animation. */
+  private stampHistorical(items: AccumulatedItem[]): void {
     let oldest = 0;
     for (const date of this.firstSeenAt.values()) oldest = Math.min(oldest, date.getTime());
     for (const item of items) this.firstSeenAt.set(item.id, new Date(oldest));
-    return items;
   }
 
   /** Stamps (and remembers) the first time this id was seen, for `convertAcpItems`'s per-item mount timestamp. */
