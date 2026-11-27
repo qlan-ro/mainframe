@@ -55,6 +55,7 @@ export function publishPinned(state: PinState) {
 export function resetPin(state: PinState) {
   state.pinned = true;
   state.opening = true;
+  state.quietFrames = 0;
   state.repinOnRelease = false;
   state.anchor = null;
   state.bottom = Infinity;
@@ -214,6 +215,7 @@ export function trackUserScroll(element: HTMLDivElement, state: PinState) {
   };
   const startDrag = () => {
     state.dragging = true;
+    state.opening = false;
   };
   const endDrag = () => {
     state.dragging = false;

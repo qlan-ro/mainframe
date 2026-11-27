@@ -107,8 +107,9 @@ it('opens the next session at the tail before paint after a switch', () => {
   act(() => resizeBeforePaint(viewport, 40_000));
   act(settle);
 
+  // Commit the switch first, so the resizes run against the new session's phase.
+  act(() => rerender({ id: 'chat-2' }));
   act(() => {
-    rerender({ id: 'chat-2' });
     resizeBeforePaint(viewport, 8_000);
     resizeBeforePaint(viewport, 9_000);
   });
