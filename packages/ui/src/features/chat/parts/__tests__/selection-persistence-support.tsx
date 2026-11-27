@@ -144,4 +144,4 @@ export function clearSelectionWithoutEvent(): void {
   window.getSelection()?.removeAllRanges();
 }
 
-export const shownText = (): string => document.querySelector('[data-status]')!.textContent ?? '';
+export const shownText = (): string => document.querySelector('[data-text-part]')!.textContent ?? '';
