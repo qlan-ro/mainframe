@@ -4,9 +4,8 @@ import { useAuiState } from '@assistant-ui/react';
 import { DisclosureScope } from '@/components/ui/disclosure-state';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { useChatExtrasSelector } from '../../runtime/chat-extras';
+import { chatControllerRegistry } from '@/features/sessions/runtime/chat-controller-registry';
 import { TranscriptList } from '../../thread/TranscriptList';
-import { TurnCache } from '../../view-model/turn/turn-cache';
-import { buildTurns } from '../../view-model/turn/build-turns';
 import type { TurnModel } from '../../view-model/turn/types';
 import { isPlaceholder } from '../../view-model/placeholder';
 import { boundedMessageComponents } from '../bounded-messages';
@@ -18,6 +17,7 @@ import { useTranscriptScope } from './transcript-scope';
 import { TurnProvider, useTurnSelector, type TurnContextValue } from './turn-context';
 import { turnDisclosureStore } from './turn-disclosure-store';
 import { useLiveChildren } from './use-live-children';
+import { useTranscriptTurns } from './use-transcript-turns';
 import { useTurnState } from './use-turn-state';
 
 /** The calls whose rows stand for this message, or undefined when it is drawn itself (T1f, T1a). */
@@ -104,10 +104,10 @@ export function TurnTranscript() {
   const scope = useTranscriptScope();
   const chatId = useChatExtrasSelector((extras) => extras?.state.chatId);
   const root = useRef<HTMLDivElement>(null);
-  const cache = useMemo(() => new TurnCache(), []);
-  const model = useMemo(
-    () => buildTurns(messages, { ...scope, isRunning, runAfter }, cache),
-    [messages, scope, isRunning, runAfter, cache],
+  const turnScope = useMemo(() => ({ ...scope, isRunning, runAfter }), [scope, isRunning, runAfter]);
+  // Kept per chat across switches (`use-transcript-turns.ts`): coming back reuses the turns.
+  const model = useTranscriptTurns(messages, turnScope, () =>
+    chatId ? chatControllerRegistry.get(chatId) : undefined,
   );
   const { children, world } = useLiveChildren(model, chatId, isRunning);
   useJumps(model, chatId);

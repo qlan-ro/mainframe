@@ -10,6 +10,10 @@ vi.mock('../../../chat/controller/acp-chat-controller', () => ({
   }),
 }));
 
+// The kept turns of a controller (`use-transcript-turns.ts`): released before it is disposed.
+const { releaseTranscriptViewModels } = vi.hoisted(() => ({ releaseTranscriptViewModels: vi.fn() }));
+vi.mock('@/features/chat/messages/turn/use-transcript-turns', () => ({ releaseTranscriptViewModels }));
+
 // Import AFTER the mock is registered so the registry module picks up the mock.
 import { chatControllerRegistry } from '../chat-controller-registry';
 import { AcpChatController } from '../../../chat/controller/acp-chat-controller';
@@ -127,6 +131,18 @@ describe('chatControllerRegistry.adopt — the first-send handoff', () => {
 
     expect(disposeSpyOf(stale)).toHaveBeenCalledTimes(1);
     expect(chatControllerRegistry.getOrCreate('chat-9', 31415)).toBe(draft);
+  });
+
+  it('releases the kept turns of the stale controller it disposes, and of a disposed one', () => {
+    const stale = chatControllerRegistry.getOrCreate('chat-9', 31415);
+    const draft = chatControllerRegistry.getOrCreate('__LOCALID_a', 31415);
+    adopt(draft, 'chat-9');
+    expect(releaseTranscriptViewModels).toHaveBeenCalledWith(stale);
+    expect(releaseTranscriptViewModels.mock.invocationCallOrder[0]).toBeLessThan(
+      disposeSpyOf(stale).mock.invocationCallOrder[0]!,
+    );
+    chatControllerRegistry.dispose('chat-9');
+    expect(releaseTranscriptViewModels).toHaveBeenLastCalledWith(draft);
   });
 
   it('re-adopting the same id does not dispose the adopted controller', () => {

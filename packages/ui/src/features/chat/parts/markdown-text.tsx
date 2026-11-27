@@ -35,6 +35,8 @@ import { MarkdownInlineCode, MarkdownPre } from './markdown-code';
 import { MarkdownUl, MarkdownOl, MarkdownLi, MarkdownTaskCheckbox } from './markdown-lists';
 import { MarkdownTable, MarkdownThead, MarkdownTh, MarkdownTd, MarkdownTr } from './markdown-table';
 import { useSelectionHold, recheckHeld } from './selection-hold';
+import { withParseCache } from './markdown-parse-cache';
+import { GrowingTextContext, ParseCacheBlock } from './parse-cache-block';
 import { hasFootnoteSyntax, splitFootnoteBlocks } from './split-blocks';
 import { useSmoothText } from './use-smooth-text';
 
@@ -116,14 +118,28 @@ interface MarkdownBodyProps {
   /** The text is still streaming: close unfinished syntax at its end. */
   running?: boolean;
   remarkPlugins?: PluggableList;
+  /**
+   * Keep parsed blocks for the next mount (`markdown-parse-cache.ts`). Pass it for the part's whole
+   * life: the block still growing is left out by itself (`parse-cache-block.tsx`).
+   */
+  cacheParse?: boolean;
+  /** The text is still changing (streaming, or its typing reveal is catching up). Defaults to `running`. */
+  growing?: boolean;
 }
 
-export function MarkdownBody({ text, running = false, remarkPlugins = REPLY_PLUGINS }: MarkdownBodyProps) {
-  return (
+export function MarkdownBody({
+  text,
+  running = false,
+  remarkPlugins = REPLY_PLUGINS,
+  cacheParse = false,
+  growing = running,
+}: MarkdownBodyProps) {
+  const body = (
     <Streamdown
       className={MARKDOWN_ROOT_CLASS}
       components={markdownComponents}
-      remarkPlugins={remarkPlugins}
+      remarkPlugins={cacheParse ? withParseCache(remarkPlugins) : remarkPlugins}
+      BlockComponent={cacheParse ? ParseCacheBlock : undefined}
       rehypePlugins={NO_REHYPE_PLUGINS}
       urlTransform={urlTransform}
       parseIncompleteMarkdown={running}
@@ -138,6 +154,7 @@ export function MarkdownBody({ text, running = false, remarkPlugins = REPLY_PLUG
       {text}
     </Streamdown>
   );
+  return cacheParse ? <GrowingTextContext value={growing ? text : null}>{body}</GrowingTextContext> : body;
 }
 
 // ── MarkdownText: TextMessagePartComponent ────────────────────────────────────
@@ -161,7 +178,7 @@ export const MarkdownText: TextMessagePartComponent = (props) => {
   return (
     <div data-text-part data-search-item-id={searchItemId(props)} ref={containerRef}>
       <SmartActionsProvider>
-        <MarkdownBody text={shown} running={running} />
+        <MarkdownBody text={shown} running={running} growing={running || shown !== text} cacheParse />
       </SmartActionsProvider>
     </div>
   );
