@@ -7,7 +7,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Rebuilds a chat's messages from its rollout for the cold-load PR scan.
 /// The file is streamed, never held whole: only the response items of the
@@ -25,7 +25,7 @@ pub(crate) async fn read_rollout_history(
     (!messages.is_empty()).then_some(messages)
 }
 
-fn open(path: &PathBuf) -> std::io::Result<BufReader<std::fs::File>> {
+fn open(path: &Path) -> std::io::Result<BufReader<std::fs::File>> {
     Ok(BufReader::with_capacity(
         CHUNK_SIZE,
         std::fs::File::open(path)?,
@@ -33,7 +33,7 @@ fn open(path: &PathBuf) -> std::io::Result<BufReader<std::fs::File>> {
 }
 
 /// `None` when the file cannot be read, including invalid UTF-8 anywhere in it.
-fn convert_rollout_file(path: &PathBuf, thread: &str) -> Option<Vec<ChatMessage>> {
+fn convert_rollout_file(path: &Path, thread: &str) -> Option<Vec<ChatMessage>> {
     let start = forked_start(open(path).ok()?)?;
     convert_rollout_stream(open(path).ok()?, thread, start).ok()
 }

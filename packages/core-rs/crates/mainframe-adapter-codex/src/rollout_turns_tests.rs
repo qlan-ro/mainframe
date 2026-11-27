@@ -20,8 +20,8 @@ fn render(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
         .iter()
         .map(|m| {
             let mut v = serde_json::to_value(m).unwrap();
-            // Ids and timestamps are generated per call; content must match.
-            v.as_object_mut().unwrap().remove("id");
+            // Ids come from the conversion counter and must match; only the
+            // timestamp is taken from the clock.
             v.as_object_mut().unwrap().remove("timestamp");
             v
         })
@@ -67,7 +67,9 @@ fn pr_links_match_across_chunk_boundaries_order_and_dedupe() {
 
 #[test]
 fn trailing_newline_crlf_blank_lines_and_missing_final_newline() {
-    let body = pr_turn("t1", "c1", 5, 3).join("\r\n");
+    let mut lines = pr_turn("t1", "c1", 5, 3);
+    lines.insert(2, assistant("caf\u{e9} \u{20ac}5 \u{1f600}"));
+    let body = lines.join("\r\n");
     for raw in [
         format!("{body}\r\n"),
         format!("{body}\n\n\n"),
@@ -77,6 +79,35 @@ fn trailing_newline_crlf_blank_lines_and_missing_final_newline() {
     ] {
         assert_parity(&raw);
     }
+}
+
+#[test]
+fn turn_started_complete_and_aborted_events_match() {
+    let lines = vec![
+        event("turn_started", "a"),
+        user("one"),
+        exec("c1", "gh pr create"),
+        exec_output("c1", "https://github.com/acme/repo/pull/1"),
+        event("turn_complete", "a"),
+        event("turn_started", "b"),
+        user("two"),
+        assistant("stopping"),
+        exec("c2", "gh pr create"),
+        exec_output("c2", "https://github.com/acme/repo/pull/2"),
+        event("turn_aborted", "b"),
+        event("turn_started", "c"),
+        user("three"),
+    ];
+    let raw = lines.join("\n");
+    assert_parity(&raw);
+    let new = stream(raw.as_bytes(), "t", 7).unwrap();
+    // The status only decides the turn grouping (it is not rendered), so a
+    // link in an aborted turn must still be found.
+    let numbers: Vec<_> = scan_history_for_prs(&new)
+        .iter()
+        .map(|p| p.number)
+        .collect();
+    assert_eq!(numbers, [1, 2]);
 }
 
 #[test]
