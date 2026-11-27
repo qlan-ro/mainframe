@@ -1,66 +1,8 @@
 use super::fixture::*;
 use super::*;
 use crate::history::history_worker;
-use crate::history::parallel_fixture::{SESSION, assistant, tool_result, tool_use, user_text};
+use crate::history::parallel_fixture::SESSION;
 use mainframe_adapter_api::WindowRequest;
-use serde_json::json;
-
-/// A transcript of about `megabytes`, mostly large tool results as in real sessions.
-fn generate(path: &std::path::Path, megabytes: usize) -> usize {
-    use std::io::Write;
-    let target = megabytes << 20;
-    let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
-    let (mut written, mut turns) = (0, 0);
-    let mut parent: Option<String> = None;
-    while written < target {
-        turns += 1;
-        let id = format!("toolu_{turns}");
-        let blob = "lorem ipsum dolor sit amet \\n ".repeat(1 + (turns * 37) % 600);
-        let lines = [
-            (
-                user_text(
-                    turns * 4,
-                    &format!("prompt {turns} {}", "word ".repeat(20)),
-                    json!({}),
-                ),
-                true,
-            ),
-            (tool_use(turns * 4 + 1, &id, "Bash"), false),
-            (
-                tool_result(
-                    turns * 4 + 2,
-                    &id,
-                    json!({"toolUseResult": {"stdout": blob}}),
-                ),
-                false,
-            ),
-            (
-                assistant(
-                    turns * 4 + 3,
-                    &format!("text-{turns}"),
-                    json!([{"type": "text", "text": "answer ".repeat(1 + turns % 50)}]),
-                    json!({}),
-                ),
-                false,
-            ),
-        ];
-        for (line, prompt) in lines {
-            let mut entry: Value = serde_json::from_str(&line).unwrap();
-            entry["sessionId"] = json!(SESSION);
-            entry["parentUuid"] = json!(parent);
-            if prompt {
-                entry["promptId"] = json!(format!("prompt-{turns}"));
-            }
-            parent = entry["uuid"].as_str().map(str::to_owned);
-            let line = entry.to_string();
-            out.write_all(line.as_bytes()).unwrap();
-            out.write_all(b"\n").unwrap();
-            written += line.len() + 1;
-        }
-    }
-    out.flush().unwrap();
-    turns
-}
 
 /// Time to a window of `turns` turns, read from the end or in full, on a
 /// generated transcript; both must give the same window.
@@ -74,13 +16,7 @@ async fn time_to_window(
     let path = path.to_str().unwrap();
     let size = std::fs::metadata(path).unwrap().len();
     let files = discovered(path, &[]);
-    let enough = move |messages: &[ChatMessage]| {
-        messages
-            .iter()
-            .filter(|message| is_turn_start(message))
-            .count()
-            >= turns
-    };
+    let enough = move |messages: &[ChatMessage]| prompts(messages) >= turns;
     let request = || WindowRequest {
         turns: turns.max(16),
         enough: &enough,
@@ -98,7 +34,7 @@ async fn time_to_window(
         .await
         .unwrap();
     let full = started.elapsed();
-    let start = window_start(&rows, turns);
+    let start = window_start(&std::fs::read_to_string(path).unwrap(), &rows, turns);
     let from = page.messages.len() - (rows.len() - start);
     assert_eq!(json_of(&page.messages[from..]), json_of(&rows[start..]));
     println!(

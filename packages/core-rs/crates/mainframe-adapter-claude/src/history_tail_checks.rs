@@ -1,7 +1,8 @@
 //! What a tail read checks a message or entry for.
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use mainframe_types::chat::{ChatMessage, ChatMessageType, MessageContent, MessageContentNode};
+use mainframe_types::task_progress::extract_task_id;
 use serde_json::Value;
 
 use crate::history::{
@@ -64,4 +65,94 @@ pub(super) fn has_orphan_result(messages: &[ChatMessage]) -> bool {
         matches!(node, MessageContentNode::ToolResult { tool_use_id, .. }
             if !calls.contains(tool_use_id.as_str()))
     })
+}
+
+/// A user or assistant record the loader would have to give an id or a time
+/// of its own: it would differ from one read to the next.
+pub(super) fn lacks_identity(entry: &Value) -> bool {
+    let text = |key| {
+        entry
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|value| !value.is_empty())
+    };
+    matches!(
+        entry.get("type").and_then(Value::as_str),
+        Some("user" | "assistant")
+    ) && !(text("uuid") && text("timestamp"))
+}
+
+/// A task update with no subject of its own whose task is not created, or
+/// renamed, within `messages`. The display names it from the creating call,
+/// so a window that cut that call off would show it differently. A creation
+/// whose result carries no id is numbered by its place in the whole list.
+pub(super) fn has_unresolved_task_update(messages: &[ChatMessage]) -> bool {
+    let nodes = || {
+        messages
+            .iter()
+            .flat_map(|message| &message.content)
+            .filter_map(|content| match content {
+                MessageContent::Node(node) => Some(node),
+                _ => None,
+            })
+    };
+    let results: HashMap<&str, &str> = nodes()
+        .filter_map(|node| match node {
+            MessageContentNode::ToolResult {
+                tool_use_id,
+                content,
+                ..
+            } => Some((tool_use_id.as_str(), content.as_str())),
+            _ => None,
+        })
+        .collect();
+    let mut known: HashSet<String> = HashSet::new();
+    nodes().any(|node| match node {
+        MessageContentNode::ToolUse {
+            id, name, input, ..
+        } => task_call_unresolved(id, name, input, &results, &mut known),
+        _ => false,
+    })
+}
+
+/// Records what a task call creates or renames in `known`; whether it needs
+/// a task `known` does not hold.
+fn task_call_unresolved(
+    id: &str,
+    name: &str,
+    input: &HashMap<String, Value>,
+    results: &HashMap<&str, &str>,
+    known: &mut HashSet<String>,
+) -> bool {
+    match name {
+        "TaskCreate" => {
+            let created = results
+                .get(id)
+                .and_then(|content| extract_task_id(&Value::String((*content).to_owned())));
+            created.is_none_or(|task| {
+                known.insert(task);
+                false
+            })
+        }
+        "TaskUpdate" => {
+            let task = match input.get("taskId") {
+                Some(Value::String(task)) => task.clone(),
+                Some(Value::Null) | None => String::new(),
+                Some(other) => other.to_string(),
+            };
+            let renamed = input
+                .get("subject")
+                .and_then(Value::as_str)
+                .is_some_and(|subject| !subject.is_empty());
+            if task.is_empty() {
+                false
+            } else if renamed {
+                known.insert(task);
+                false
+            } else {
+                !known.contains(&task)
+            }
+        }
+        _ => false,
+    }
 }

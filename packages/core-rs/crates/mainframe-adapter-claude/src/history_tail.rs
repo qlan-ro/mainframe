@@ -15,11 +15,17 @@
 //!
 //! - other transcripts belong to the session (resumed or branched files);
 //! - the file starts with another session's records (copied history);
-//! - a line in the read is not UTF-8 (the full read stops there);
-//! - a tool result in the window answers a call before it;
+//! - a line in the read is not UTF-8 (the full read stops there; one before
+//!   where the read began is not seen, and the window marker catches it);
+//! - a user or assistant record has no uuid or timestamp (the loader invents
+//!   a different one on each read);
+//! - a tool result in the window answers a call before it, or a task update
+//!   without a subject names a task its window never created (the display
+//!   fills the subject from the creating call);
 //! - an assistant message's prompt group could not be resolved from the tail;
-//! - no cut with enough turns exists within a third of the file (at most
-//!   [`MAX_READ`]), where the full read is as cheap.
+//! - the file is shorter than [`MIN_FILE`], holds too few prompts, or needs
+//!   more than a third of itself (at most [`MAX_READ`]) for the window, where
+//!   the full read is as cheap.
 //!
 //! Duplicated uuids or API message ids that straddle the cut cannot be seen
 //! from the tail. The caller's window marker catches that: the full load
@@ -36,7 +42,10 @@ use super::*;
 
 #[path = "history_tail_checks.rs"]
 mod checks;
-use checks::{has_orphan_result, is_anchor, is_compaction_marker, is_turn_start};
+use checks::{
+    has_orphan_result, has_unresolved_task_update, is_anchor, is_compaction_marker, is_turn_start,
+    lacks_identity,
+};
 
 /// Bytes of the file's end read first.
 const FIRST_READ: u64 = 2 << 20;
@@ -45,49 +54,57 @@ const MAX_READ: u64 = 32 << 20;
 /// Reads up to this long are always allowed. Above it a read stops at a third
 /// of the file: a window that needs more is no cheaper than the full read.
 const MIN_READ: u64 = 4 << 20;
+/// Files shorter than this are read in full: the parallel full read is as
+/// fast as any read from the end.
+const MIN_FILE: u64 = 8 << 20;
 /// Most turns a window may grow to before giving up.
-const MAX_TURNS: usize = 256;
-
-/// Messages of the newest turns, oldest first, and whether older ones exist.
-#[derive(Debug)]
-pub(super) struct Tail {
-    pub(super) messages: Vec<ChatMessage>,
-    pub(super) older: bool,
-}
+const MAX_TURNS: usize = 64;
+/// Most reads a window may take, each asking for twice the turns of the last.
+const MAX_ATTEMPTS: usize = 3;
 
 pub(crate) async fn load_window(
     session_id: &str,
     discovered: &DiscoveredFiles,
     req: WindowRequest<'_>,
 ) -> Result<Option<HistoryPage>, AdapterError> {
+    load_window_within(session_id, discovered, req, Limits::PRODUCTION).await
+}
+
+async fn load_window_within(
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+    req: WindowRequest<'_>,
+    limits: Limits,
+) -> Result<Option<HistoryPage>, AdapterError> {
     if !discovered.complete || discovered.parent_files().count() != 1 {
         return Ok(None);
     }
     let mut turns = req.turns.clamp(1, MAX_TURNS);
-    loop {
+    for _ in 0..MAX_ATTEMPTS {
         let (id, path) = (session_id.to_owned(), discovered.primary_path.clone());
         let children = discovered.subagent_files.clone();
         let read =
-            run_history_worker(move || read_tail(&path, &id, &children, turns, FIRST_READ)).await?;
-        let tail = match read {
-            Ok(Some(tail)) => tail,
+            run_history_worker(move || read_tail(&path, &id, &children, turns, limits)).await?;
+        let messages = match read {
+            Ok(Some(messages)) => messages,
             Ok(None) => return Ok(None),
             Err(error) => {
                 tracing::debug!(error = %error, session_id, "tail read failed, reading the whole file");
                 return Ok(None);
             }
         };
-        if !tail.older || (req.enough)(&tail.messages) {
+        if (req.enough)(&messages) {
             return Ok(Some(HistoryPage {
-                messages: tail.messages,
-                older: tail.older,
+                messages,
+                older: true,
             }));
         }
         if turns >= MAX_TURNS {
-            return Ok(None);
+            break;
         }
         turns = (turns * 2).min(MAX_TURNS);
     }
+    Ok(None)
 }
 
 /// The first session id the file names, within its first lines.
@@ -113,60 +130,81 @@ fn utf8_line(raw: &[u8]) -> Option<&str> {
     Some(line.strip_suffix('\r').unwrap_or(line))
 }
 
-/// Reads backwards from the end of `path`, starting with `first_read` bytes,
-/// until it holds `turns` whole turns after a settled cut. `Ok(None)` when the
-/// cut is ambiguous; the caller reads the whole file.
+/// How much of the file a tail read may take.
+#[derive(Clone, Copy)]
+pub(super) struct Limits {
+    /// Bytes of the file's end read first.
+    pub(super) first_read: u64,
+    /// Files shorter than this are not read from the end.
+    pub(super) min_file: u64,
+}
+
+impl Limits {
+    const PRODUCTION: Self = Self {
+        first_read: FIRST_READ,
+        min_file: MIN_FILE,
+    };
+}
+
+/// Reads backwards from the end of `path` until it holds `turns` whole turns
+/// after a settled cut. `Ok(None)` when the cut is ambiguous or the file is
+/// too short or too thin in prompts to gain anything; the caller reads the
+/// whole file.
 pub(super) fn read_tail(
     path: &str,
     session_id: &str,
     children: &HashSet<String>,
     turns: usize,
-    first_read: u64,
-) -> std::io::Result<Option<Tail>> {
+    limits: Limits,
+) -> std::io::Result<Option<Vec<ChatMessage>>> {
+    let mut file = std::fs::File::open(path)?;
+    let length = file.metadata()?.len();
+    if length < limits.min_file {
+        return Ok(None);
+    }
     let Some(own_session) = first_session_id(path)? else {
         return Ok(None);
     };
-    let mut file = std::fs::File::open(path)?;
-    let length = file.metadata()?.len();
-    let mut span = first_read.max(1);
     // One more prompt than the window: it anchors the read and leaves room for
     // the markers that lead the first turn kept.
     let wanted = turns + 1;
+    let cap = (length / 3).clamp(MIN_READ, MAX_READ);
+    // The bytes from `start` to the end, kept across growth steps.
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut start = length;
+    let mut span = limits.first_read.max(1);
     loop {
-        let start = length.saturating_sub(span);
-        let mut bytes = vec![0; (length - start) as usize];
-        file.seek(SeekFrom::Start(start))?;
-        file.read_exact(&mut bytes)?;
+        let from = length.saturating_sub(span);
+        let mut earlier = vec![0; (start - from) as usize];
+        file.seek(SeekFrom::Start(from))?;
+        file.read_exact(&mut earlier)?;
+        earlier.extend_from_slice(&bytes);
+        (bytes, start) = (earlier, from);
         // A read that begins mid-line drops its partial first line.
         let body = match (start, bytes.iter().position(|&byte| byte == b'\n')) {
             (0, _) => Some(0),
             (_, Some(newline)) => Some(newline + 1),
             _ => None,
         };
-        let lines: Vec<&[u8]> = body.map_or_else(Vec::new, |from| {
-            bytes[from..].split(|&byte| byte == b'\n').collect()
+        let lines: Vec<&[u8]> = body.map_or_else(Vec::new, |first| {
+            bytes[first..].split(|&byte| byte == b'\n').collect()
         });
         let anchors = anchors(&lines, session_id, wanted);
-        if start > 0 && anchors.len() < wanted {
-            let cap = (length / 3).clamp(MIN_READ, MAX_READ);
-            if span >= cap {
-                return Ok(None);
-            }
-            span = (span * 4).min(cap);
-            continue;
+        if anchors.len() >= wanted {
+            return Ok(settle(
+                &lines[anchors[wanted - 1]..],
+                session_id,
+                children,
+                turns,
+                &own_session,
+            ));
         }
-        let whole = start == 0 && anchors.len() < wanted;
-        let from = if whole { 0 } else { anchors[wanted - 1] };
-        return Ok(settle(
-            &lines[from..],
-            session_id,
-            children,
-            if whole {
-                None
-            } else {
-                Some((turns, own_session.as_str()))
-            },
-        ));
+        // Too few prompts in the whole file, or the window outgrew what a
+        // read from the end can save over the full read.
+        if start == 0 || span >= cap {
+            return Ok(None);
+        }
+        span = (span * 4).min(cap);
     }
 }
 
@@ -189,65 +227,51 @@ fn anchors(lines: &[&[u8]], session_id: &str, wanted: usize) -> Vec<usize> {
     found
 }
 
-/// Runs `lines` through the loader. With `cut` (the turns to keep and the
-/// file's own session id) the list is cut to the newest turns and checked;
-/// without it the lines are the whole file.
+/// Runs `lines` through the loader, cuts the list to its newest `turns` turns
+/// and checks that the cut can be trusted.
 fn settle(
     lines: &[&[u8]],
     session_id: &str,
     children: &HashSet<String>,
-    cut: Option<(usize, &str)>,
-) -> Option<Tail> {
+    turns: usize,
+    own_session: &str,
+) -> Option<Vec<ChatMessage>> {
     let mut load = HistoryLoad::default();
     let mut facts = history_agent_facts::AgentFacts::default();
     for raw in lines {
-        let line = match utf8_line(raw) {
-            Some(line) => line,
-            // The full read ends at this line; where that leaves the window cannot be told.
-            None if cut.is_some() => return None,
-            None => break,
-        };
-        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+        // The full read ends at a line that is not UTF-8; where that leaves
+        // the window cannot be told.
+        let Ok(entry) = serde_json::from_str::<Value>(utf8_line(raw)?) else {
             continue;
         };
-        if let Some((_, own)) = cut
-            && entry
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .is_some_and(|id| id != own)
-        {
+        let foreign = entry
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .is_some_and(|id| id != own_session);
+        if foreign || lacks_identity(&entry) {
             return None;
         }
         facts.observe(&entry);
         load.entry(&entry, session_id, false);
     }
-    let kept = match cut {
-        None => 0,
-        Some((turns, _)) => {
-            let starts: Vec<usize> = (0..load.messages.len())
-                .filter(|&index| is_turn_start(&load.messages[index]))
-                .collect();
-            let mut kept = *starts.get(starts.len().checked_sub(turns)?)?;
-            while kept > 0 && is_compaction_marker(&load.messages[kept - 1]) {
-                kept -= 1;
-            }
-            if load.prompt_groups.chains_leave_records(kept) {
-                return None;
-            }
-            kept
-        }
-    };
+    let starts: Vec<usize> = (0..load.messages.len())
+        .filter(|&index| is_turn_start(&load.messages[index]))
+        .collect();
+    let mut kept = *starts.get(starts.len().checked_sub(turns)?)?;
+    while kept > 0 && is_compaction_marker(&load.messages[kept - 1]) {
+        kept -= 1;
+    }
+    if load.prompt_groups.chains_leave_records(kept) {
+        return None;
+    }
     let agent_ids = std::mem::take(&mut load.agent_id_to_parent_tool_use_id);
     let mut rows = load.finish();
     facts.apply(&mut rows, &agent_ids, children);
     let rows = rows.split_off(kept);
-    if cut.is_some() && has_orphan_result(&rows) {
+    if has_orphan_result(&rows) || has_unresolved_task_update(&rows) {
         return None;
     }
-    Some(Tail {
-        messages: rows,
-        older: cut.is_some(),
-    })
+    Some(rows)
 }
 
 #[cfg(test)]

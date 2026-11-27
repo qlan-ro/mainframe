@@ -30,6 +30,7 @@ pub(crate) enum PinFailure {
 
 #[derive(Default)]
 pub(crate) struct FakeAdapterPort {
+    pub(crate) real_display: std::sync::atomic::AtomicBool,
     pub(crate) scan_gate: Mutex<Option<Arc<tokio::sync::Notify>>>,
     pub(crate) scan_started: tokio::sync::Notify,
     /// `locate_transcript`'s answer (`None` = cannot determine).
@@ -100,7 +101,7 @@ impl AdapterPort for FakeDeps {
         raw: &[ChatMessage],
         categories: Option<&ToolCategories>,
     ) -> Vec<DisplayMessage> {
-        FakeAdapterPort::convert(raw, categories)
+        self.adapters.project(raw, categories)
     }
     fn display_projector(&self, _chat_id: &str) -> Box<dyn mainframe_display::DisplayProjector> {
         if let Some(factory) = self.adapters.projector_factory {

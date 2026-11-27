@@ -130,35 +130,77 @@ pub(super) fn json_of(messages: &[ChatMessage]) -> Vec<Value> {
         .collect()
 }
 
-/// The first message of the last `turns` turns of `full`, with the markers
-/// that lead it: the window the display rules ask for.
-pub(super) fn window_start(full: &[ChatMessage], turns: usize) -> usize {
-    let starts: Vec<usize> = (0..full.len())
-        .filter(|&index| is_turn_start(&full[index]))
+/// Prompts in `messages`: the user messages (the fixtures hold no steered ones).
+pub(super) fn prompts(messages: &[ChatMessage]) -> usize {
+    messages
+        .iter()
+        .filter(|message| message.r#type == mainframe_types::chat::ChatMessageType::User)
+        .count()
+}
+
+/// Where the window of the last `turns` turns starts in `full`, worked out
+/// from the transcript text alone: the message of the `turns`-th last plain
+/// prompt line, with the compaction boundaries just before it.
+pub(super) fn window_start(text: &str, full: &[ChatMessage], turns: usize) -> usize {
+    let entries: Vec<Value> = text
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
         .collect();
-    let Some(&first) = starts.get(starts.len().saturating_sub(turns)) else {
+    let uuid = |entry: &Value| entry["uuid"].as_str().map(str::to_owned);
+    let prompt_ids: Vec<String> = entries
+        .iter()
+        .filter(|entry| {
+            entry["type"] == "user"
+                && entry["message"]["content"].is_string()
+                && !["isMeta", "isCompactSummary", "isSidechain"]
+                    .iter()
+                    .any(|flag| entry[*flag] == true)
+        })
+        .filter_map(uuid)
+        .collect();
+    let boundaries: HashSet<String> = entries
+        .iter()
+        .filter(|entry| entry["subtype"] == "compact_boundary")
+        .filter_map(uuid)
+        .collect();
+    let Some(first) = prompt_ids.get(prompt_ids.len().saturating_sub(turns)) else {
         return 0;
     };
-    let mut start = first;
-    while start > 0 && is_compaction_marker(&full[start - 1]) {
+    let mut start = full.iter().position(|m| &m.id == first).unwrap();
+    while start > 0 && boundaries.contains(&full[start - 1].id) {
         start -= 1;
     }
     start
 }
 
 /// The tail read for `turns`, which must equal the full read's window.
-pub(super) async fn parity(text: &str, turns: usize, first_read: u64) -> Option<Tail> {
+pub(super) async fn parity(text: &str, turns: usize, first_read: u64) -> Option<Vec<ChatMessage>> {
     let file = write(text);
-    let tail = read_tail(&file.path, SESSION, &HashSet::new(), turns, first_read).unwrap()?;
+    let tail = read_tail(
+        &file.path,
+        SESSION,
+        &HashSet::new(),
+        turns,
+        small(first_read),
+    )
+    .unwrap()?;
     let full = full_read(&file.path).await;
-    let start = window_start(&full, turns);
+    let start = window_start(text, &full, turns);
     assert_eq!(
-        json_of(&tail.messages),
+        json_of(&tail),
         json_of(&full[start..]),
         "turns {turns}, first read {first_read}"
     );
-    assert_eq!(tail.older, start > 0);
+    assert!(start > 0, "a cut leaves older messages");
     Some(tail)
+}
+
+/// Limits for a small test file: any size is read from the end.
+pub(super) fn small(first_read: u64) -> Limits {
+    Limits {
+        first_read,
+        min_file: 0,
+    }
 }
 
 pub(super) const READS: [u64; 5] = [1, 64, 700, 4096, 1 << 20];
@@ -179,21 +221,73 @@ pub(super) async fn window(
     turns: usize,
     need: usize,
 ) -> Option<HistoryPage> {
-    let enough = move |messages: &[ChatMessage]| {
-        messages
-            .iter()
-            .filter(|message| is_turn_start(message))
-            .count()
-            >= need
-    };
-    load_window(
+    let enough = move |messages: &[ChatMessage]| prompts(messages) >= need;
+    load_window_within(
         SESSION,
         files,
         WindowRequest {
             turns,
             enough: &enough,
         },
+        small(700),
     )
     .await
     .unwrap()
+}
+
+/// A transcript of about `megabytes`, mostly large tool results as in real sessions.
+pub(super) fn generate(path: &std::path::Path, megabytes: usize) -> usize {
+    use std::io::Write;
+    let target = megabytes << 20;
+    let mut out = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+    let (mut written, mut turns) = (0, 0);
+    let mut parent: Option<String> = None;
+    while written < target {
+        turns += 1;
+        let id = format!("toolu_{turns}");
+        let blob = "lorem ipsum dolor sit amet \\n ".repeat(1 + (turns * 37) % 600);
+        let lines = [
+            (
+                user_text(
+                    turns * 4,
+                    &format!("prompt {turns} {}", "word ".repeat(20)),
+                    json!({}),
+                ),
+                true,
+            ),
+            (tool_use(turns * 4 + 1, &id, "Bash"), false),
+            (
+                tool_result(
+                    turns * 4 + 2,
+                    &id,
+                    json!({"toolUseResult": {"stdout": blob}}),
+                ),
+                false,
+            ),
+            (
+                assistant(
+                    turns * 4 + 3,
+                    &format!("text-{turns}"),
+                    json!([{"type": "text", "text": "answer ".repeat(1 + turns % 50)}]),
+                    json!({}),
+                ),
+                false,
+            ),
+        ];
+        for (line, prompt) in lines {
+            let mut entry: Value = serde_json::from_str(&line).unwrap();
+            entry["sessionId"] = json!(SESSION);
+            entry["parentUuid"] = json!(parent);
+            if prompt {
+                entry["promptId"] = json!(format!("prompt-{turns}"));
+            }
+            parent = entry["uuid"].as_str().map(str::to_owned);
+            let line = entry.to_string();
+            out.write_all(line.as_bytes()).unwrap();
+            out.write_all(b"\n").unwrap();
+            written += line.len() + 1;
+        }
+    }
+    out.flush().unwrap();
+    turns
 }

@@ -17,6 +17,21 @@ pub(crate) type ProjectorFn = Arc<
 >;
 
 impl FakeAdapterPort {
+    /// The REST projection: the 1:1 echo, or the real pipeline once a test
+    /// sets `real_display` (to see what the display does across messages).
+    pub(crate) fn project(
+        &self,
+        raw: &[ChatMessage],
+        categories: Option<&ToolCategories>,
+    ) -> Vec<DisplayMessage> {
+        if self.real_display.load(std::sync::atomic::Ordering::SeqCst) {
+            return mainframe_display::display_pipeline::prepare_messages_for_client(
+                raw, categories,
+            );
+        }
+        Self::convert(raw, categories)
+    }
+
     /// A 1:1 echo (same id/timestamp/type, leaf content verbatim, `Node`
     /// content dropped) shared by `prepare_messages_for_client` and
     /// `display_projector`, so REST and live paths answer identically.

@@ -16,6 +16,10 @@ use mainframe_types::sync::LockExt as _;
 /// covers a window plus its snap margin.
 const PAGE_TURNS: usize = 16;
 
+/// The last raw list and display built while paging, kept so a window no
+/// idle record changes is not projected twice.
+type Probed = std::sync::Mutex<Option<(Vec<ChatMessage>, Vec<DisplayMessage>)>>;
+
 /// The newest part of a chat's display history, and whether older turns exist.
 pub struct AdapterWindow {
     pub messages: Vec<DisplayMessage>,
@@ -56,25 +60,25 @@ impl ChatManager {
         }
         let session = self.history_session(chat_id)?;
         let categories = self.shared.deps.get_tool_categories(chat_id);
-        let full =
-            |raw: &[ChatMessage]| enough(&self.display_of(chat_id, raw, categories.as_ref()));
+        let last = Probed::default();
+        let probe = |raw: &[ChatMessage]| {
+            let raw = remap_history_for(raw.to_vec(), chat_id);
+            let display = self.display_of(chat_id, &raw, categories.as_ref());
+            let done = enough(&display);
+            *last.lock_recover() = Some((raw, display));
+            done
+        };
         let page = session
             .load_history_window(WindowRequest {
                 turns: page_turns,
-                enough: &move |messages| full(&remap_history_for(messages.to_vec(), chat_id)),
+                enough: &probe,
             })
             .await
             .ok()??;
         if page.messages.is_empty() {
             return None;
         }
-        // The idle-compaction records the normal load folds in; a held prompt
-        // is the one thing left out, because whether it was delivered cannot
-        // be told from a partial list. The full load's tail then differs and
-        // the client resyncs.
-        let raw = remap_history_for(page.messages, chat_id);
-        let raw = self.shared.merge_idle_provenance(chat_id, raw).ok()?;
-        let messages = self.display_of(chat_id, &raw, categories.as_ref());
+        let messages = self.window_display(chat_id, page.messages, page.older, &last)?;
         // A load that filled the cache while the pages were read has already
         // settled this chat; a marker left now would judge the wrong window.
         if self.shared.messages.lock_recover().get(chat_id).is_some() {
@@ -88,6 +92,31 @@ impl ChatManager {
             messages,
             has_older: page.older,
         })
+    }
+
+    /// The display of the page with the idle-compaction records the normal
+    /// load folds in, as it would fold them into the full list: markers
+    /// settled before the page stay out. A held prompt is the one thing left
+    /// out, because whether it was delivered cannot be told from a partial
+    /// list; the full load's tail then differs and the client resyncs.
+    fn window_display(
+        &self,
+        chat_id: &str,
+        messages: Vec<ChatMessage>,
+        older: bool,
+        probed: &Probed,
+    ) -> Option<Vec<DisplayMessage>> {
+        let raw = remap_history_for(messages, chat_id);
+        let raw = self.shared.merge_idle_window(chat_id, raw, older).ok()?;
+        let reused = probed
+            .lock_recover()
+            .take()
+            .filter(|(seen, _)| *seen == raw)
+            .map(|(_, display)| display);
+        Some(reused.unwrap_or_else(|| {
+            let categories = self.shared.deps.get_tool_categories(chat_id);
+            self.display_of(chat_id, &raw, categories.as_ref())
+        }))
     }
 
     fn display_of(

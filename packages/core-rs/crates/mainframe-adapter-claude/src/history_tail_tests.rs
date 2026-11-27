@@ -8,10 +8,9 @@ async fn matches_the_full_window_at_every_turn_boundary() {
     let text = Builder::default().turns(24).text();
     for turns in [1, 2, 3, 5, 8, 13, 23, 24, 40] {
         for read in READS {
-            let tail = parity(&text, turns, read)
-                .await
-                .expect("a plain file settles");
-            assert_eq!(tail.older, turns < 24, "turns {turns}");
+            let tail = parity(&text, turns, read).await;
+            // A window of all the file's turns has no older part to cut.
+            assert_eq!(tail.is_some(), turns < 24, "turns {turns}");
         }
     }
 }
@@ -31,7 +30,7 @@ async fn matches_with_replies_to_hidden_prompts() {
     }
     build.turns(2);
     let text = build.text();
-    for turns in 1..=9 {
+    for turns in 1..=8 {
         for read in READS {
             parity(&text, turns, read).await.expect("chains resolve");
         }
@@ -49,7 +48,7 @@ async fn groups_a_hidden_prompt_reply_as_the_full_read_does() {
         .reply("late");
     let text = build.text();
     let tail = parity(&text, 1, 64).await.expect("settles");
-    let late = tail.messages.last().unwrap();
+    let late = tail.last().unwrap();
     let meta = late.metadata.as_ref().unwrap();
     assert!(meta.contains_key(mainframe_types::transcript_presentation::TURN_GROUP_KEY));
     assert!(meta.contains_key(mainframe_types::transcript_presentation::HIDDEN_PROMPT_EVENT_KEY));
@@ -65,15 +64,12 @@ async fn a_compaction_marker_leads_the_turn_after_it() {
         .reply("fine")
         .turns(2);
     let text = build.text();
-    for turns in 1..=7 {
+    for turns in 1..=6 {
         for read in READS {
             let tail = parity(&text, turns, read).await.expect("settles");
-            let first = tail.messages.first().unwrap();
+            let first = tail.first().unwrap();
             if turns == 3 {
-                assert!(
-                    is_compaction_marker(first),
-                    "the marker comes with its turn"
-                );
+                assert!(first.id.starts_with('c'), "the marker comes with its turn");
             }
         }
     }
@@ -98,7 +94,7 @@ async fn matches_with_sidechain_meta_and_malformed_lines() {
     // An unterminated last line, as while the CLI is writing.
     let mut text = build.text();
     text.push_str("{\"type\":\"assistant\",\"uuid\":\"half");
-    for turns in 1..=7 {
+    for turns in 1..=6 {
         for read in READS {
             parity(&text, turns, read).await.expect("settles");
         }
@@ -151,7 +147,7 @@ async fn matches_with_a_sub_agent_launched_and_finished_in_the_window() {
     );
     build.record(line, None).reply("delegated").turns(2);
     let text = build.text();
-    for turns in 1..=7 {
+    for turns in 1..=6 {
         for read in READS {
             parity(&text, turns, read).await.expect("settles");
         }
@@ -161,24 +157,20 @@ async fn matches_with_a_sub_agent_launched_and_finished_in_the_window() {
 #[tokio::test]
 async fn a_claude_session_answers_a_window_through_the_adapter_trait() {
     use mainframe_adapter_api::{Adapter, WindowRequest};
-    let file = write(&Builder::default().turns(40).text());
-    let base = std::path::Path::new(&file.path).parent().unwrap();
+    // Above the size a tail read is worth it for.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(format!("{SESSION}.jsonl"));
+    generate(&path, 10);
     let session = crate::adapter::ClaudeAdapter::default().create_session(
         mainframe_types::adapter::SessionOptions {
-            project_path: base.to_string_lossy().into_owned(),
+            project_path: dir.path().to_string_lossy().into_owned(),
             chat_id: Some(SESSION.into()),
-            session_file_path: Some(file.path.clone()),
+            session_file_path: Some(path.to_string_lossy().into_owned()),
             mainframe_chat_id: "chat".into(),
             fork_source: None,
         },
     );
-    let enough = |messages: &[ChatMessage]| {
-        messages
-            .iter()
-            .filter(|message| is_turn_start(message))
-            .count()
-            >= 10
-    };
+    let enough = |messages: &[ChatMessage]| prompts(messages) >= 10;
     let page = session
         .load_history_window(WindowRequest {
             turns: 16,
@@ -193,8 +185,5 @@ async fn a_claude_session_answers_a_window_through_the_adapter_trait() {
         json_of(&page.messages),
         json_of(&full[full.len() - page.messages.len()..])
     );
-    assert_eq!(
-        page.messages.iter().filter(|m| is_turn_start(m)).count(),
-        16
-    );
+    assert_eq!(prompts(&page.messages), 16);
 }
