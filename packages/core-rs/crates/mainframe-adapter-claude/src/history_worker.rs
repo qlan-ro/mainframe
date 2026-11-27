@@ -12,14 +12,24 @@ pub(crate) async fn load_discovered_history(
     ),
     mainframe_adapter_api::AdapterError,
 > {
-    load_with_reader(session_id, discovered, base, messages, reader::open_reader).await
+    let mode = parallel::ParseMode::detect();
+    load_with_reader(
+        session_id,
+        discovered,
+        base,
+        messages,
+        mode,
+        reader::open_reader,
+    )
+    .await
 }
 
-async fn load_with_reader<R: std::io::BufRead>(
+pub(super) async fn load_with_reader<R: std::io::BufRead + Send>(
     session_id: &str,
     discovered: &DiscoveredFiles,
     base: &str,
     messages: bool,
+    mode: parallel::ParseMode,
     open: impl Fn(&str) -> std::io::Result<R> + Send + 'static,
 ) -> Result<
     (
@@ -43,8 +53,8 @@ async fn load_with_reader<R: std::io::BufRead>(
         let mut facts = history_agent_facts::AgentFacts::default();
         for path in parents {
             let result = open(&path).and_then(|reader| {
-                reader::read_chunks(reader, |line| {
-                    let Ok(entry) = serde_json::from_slice(line.as_bytes()) else {
+                parallel::read_parsed(reader, mode, |line, entry| {
+                    let Some(entry) = entry else {
                         paths.observe_plan(line, &base);
                         return;
                     };
@@ -69,6 +79,7 @@ async fn load_with_reader<R: std::io::BufRead>(
 
 #[cfg(test)]
 mod tests {
+    use super::parallel::ParseMode;
     use super::*;
     use mainframe_adapter_api::Adapter;
     use mainframe_types::adapter::SessionOptions;
@@ -103,10 +114,17 @@ mod tests {
         std::fs::write(children.join("agent-child.jsonl"), message("child")).unwrap();
         let discovered =
             discover_session_jsonl_files_in_dir("session", dir.path().to_str().unwrap()).await;
-        let (rows, _) = load_with_reader("session", &discovered, "", true, move |path| {
-            assert!(!Path::new(path).starts_with(&children));
-            reader::open_reader(path)
-        })
+        let (rows, _) = load_with_reader(
+            "session",
+            &discovered,
+            "",
+            true,
+            ParseMode::detect(),
+            move |path| {
+                assert!(!Path::new(path).starts_with(&children));
+                reader::open_reader(path)
+            },
+        )
         .await
         .unwrap();
         assert_eq!(
@@ -142,7 +160,7 @@ mod tests {
             complete: true,
         };
         let failed = path.clone();
-        let open = move |file: &str| -> io::Result<Box<dyn BufRead>> {
+        let open = move |file: &str| -> io::Result<Box<dyn BufRead + Send>> {
             assert_eq!(file, failed, "cold restore opened a child transcript");
             if mid_read {
                 return Ok(Box::new(BufReader::new(
@@ -151,9 +169,10 @@ mod tests {
             }
             Err(io::Error::other("injected open failure"))
         };
-        let (rows, carried) = load_with_reader("session", &files, base, true, open)
-            .await
-            .unwrap();
+        let (rows, carried) =
+            load_with_reader("session", &files, base, true, ParseMode::detect(), open)
+                .await
+                .unwrap();
         assert_eq!(rows.len(), usize::from(mid_read));
         assert!(carried.sources.is_none());
         assert!(carried.plans.is_empty());
