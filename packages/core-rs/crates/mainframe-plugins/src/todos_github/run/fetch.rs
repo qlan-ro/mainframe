@@ -2,87 +2,31 @@
 //! before spending an extra GitHub call: `issue_field_times` only matters when
 //! both sides moved a dated field since the baseline.
 
-use serde_json::Value;
-
-use crate::PluginError;
 use crate::context::PluginContext;
-use crate::db_context::text;
-use crate::github_port::{IssueSnapshot, RepoRef};
-use crate::todos::safe_json_array;
-use crate::todos_github::reconcile::{self, Baseline, Reconciliation};
+use crate::github_port::{IssueFieldTimes, IssueSnapshot, IssueState, RepoRef};
+use crate::todos::repo;
+use crate::todos::types::{Todo, TodoStatus};
+use crate::todos_github::reconcile::{self, Baseline, Reconciliation, project_status};
 use crate::todos_github::{store, touch};
 
-use super::handle_port_error;
+use super::{StopReason, handle_port_error};
 
-pub(super) struct LocalRow {
-    pub number: i64,
-    pub title: String,
-    pub body: String,
-    pub status: String,
-    pub labels: Vec<String>,
-}
-
-pub(super) async fn fetch_local(
-    ctx: &PluginContext,
-    todo_id: &str,
-) -> Result<Option<LocalRow>, PluginError> {
-    let row = ctx
-        .db
-        .query_one(
-            "SELECT number, title, body, status, labels FROM todos WHERE id = ?".into(),
-            vec![text(todo_id.to_string())],
-        )
-        .await?;
-    Ok(row.map(|row| {
-        let raw_labels = row.get("labels").and_then(Value::as_str).unwrap_or("[]");
-        let labels = safe_json_array(raw_labels, "labels", todo_id)
-            .into_iter()
-            .filter_map(|v| v.as_str().map(str::to_string))
-            .collect();
-        LocalRow {
-            number: row.get("number").and_then(Value::as_i64).unwrap_or(0),
-            title: str_col(&row, "title"),
-            body: str_col(&row, "body"),
-            status: str_col(&row, "status"),
-            labels,
-        }
-    }))
-}
-
-fn str_col(row: &crate::db_context::Row, key: &str) -> String {
-    row.get(key)
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string()
-}
-
-/// Mirrors `reconcile::state`'s open/closed projection and its
-/// in-progress-close exception (kept local to avoid exposing reconcile's
-/// private internals crate-wide for a call-avoidance heuristic only).
-pub(super) fn needs_field_times(
-    local: &LocalRow,
-    baseline: &Baseline,
-    issue: &IssueSnapshot,
-) -> bool {
-    let issue_state = project_issue_state(issue);
+/// Whether both sides moved the title, or the state, since the baseline —
+/// the only disputes the per-field timeline can settle.
+fn needs_field_times(local: &Todo, baseline: &Baseline, issue: &IssueSnapshot) -> bool {
+    let issue_state = issue_state(issue);
     let title_dispute = local.title != baseline.title && issue.title != baseline.title;
-
-    let local_projected = if local.status == "done" {
-        "closed"
-    } else {
-        "open"
-    };
-    let in_progress_close = local.status == "in_progress" && issue_state == "closed";
-    let state_dispute =
-        !in_progress_close && local_projected != baseline.state && issue_state != baseline.state;
-
+    let in_progress_close = local.status == TodoStatus::InProgress && issue_state == "closed";
+    let state_dispute = !in_progress_close
+        && project_status(local.status.as_str()) != baseline.state
+        && issue_state != baseline.state;
     title_dispute || state_dispute
 }
 
-pub(super) fn project_issue_state(issue: &IssueSnapshot) -> &'static str {
+fn issue_state(issue: &IssueSnapshot) -> &'static str {
     match issue.state {
-        crate::github_port::IssueState::Open => "open",
-        crate::github_port::IssueState::Closed => "closed",
+        IssueState::Open => "open",
+        IssueState::Closed => "closed",
     }
 }
 
@@ -96,17 +40,15 @@ pub(super) async fn plan_pair(
     repo: &RepoRef,
     credential_label: &str,
     pair: &store::Pair,
-) -> Result<Option<(LocalRow, Reconciliation)>, (&'static str, String)> {
-    let Some(local) = fetch_local(ctx, &pair.todo_id)
-        .await
-        .map_err(super::internal)?
-    else {
+) -> Result<Option<(Todo, Reconciliation)>, StopReason> {
+    let Some(local) = repo::fetch(ctx, &pair.todo_id).await? else {
         return Ok(None);
     };
+    let issue_number = pair.issue_number.unsigned_abs();
 
     let issue = match ctx
         .github
-        .get_issue(repo, pair.issue_number as u64, credential_label)
+        .get_issue(repo, issue_number, credential_label)
         .await
     {
         Ok(issue) => issue,
@@ -123,58 +65,45 @@ pub(super) async fn plan_pair(
     let field_times = if needs_field_times(&local, &baseline, &issue) {
         match ctx
             .github
-            .issue_field_times(repo, pair.issue_number as u64, credential_label)
+            .issue_field_times(repo, issue_number, credential_label)
             .await
         {
             Ok(times) => times,
             Err(err) => return handle_port_error(ctx, pair, err).await.map(|_| None),
         }
     } else {
-        Default::default()
+        IssueFieldTimes::default()
     };
 
-    let touched = touch::read_touch(ctx, &pair.todo_id)
-        .await
-        .map_err(super::internal)?;
+    let todo_id = pair.todo_id.clone();
+    let touched = ctx
+        .db()?
+        .call(move |db| Ok(touch::touch_times(db, &todo_id)?))
+        .await?;
 
     let plan = reconcile::reconcile(
-        &to_local_task(&local),
-        &to_remote_view(&issue, field_times),
+        &reconcile::LocalTask {
+            title: local.title.clone(),
+            body: local.body.clone(),
+            status: local.status.as_str().to_string(),
+            labels: local.labels.clone(),
+        },
+        &remote_view(issue, field_times),
         &baseline,
-        &to_touch_times(&touched),
+        &touched,
     );
 
     Ok(Some((local, plan)))
 }
 
-fn to_local_task(row: &LocalRow) -> reconcile::LocalTask {
-    reconcile::LocalTask {
-        title: row.title.clone(),
-        body: row.body.clone(),
-        status: row.status.clone(),
-        labels: row.labels.clone(),
-    }
-}
-
-fn to_remote_view(
-    issue: &IssueSnapshot,
-    field_times: crate::github_port::IssueFieldTimes,
-) -> reconcile::RemoteIssueView {
+fn remote_view(issue: IssueSnapshot, field_times: IssueFieldTimes) -> reconcile::RemoteIssueView {
     reconcile::RemoteIssueView {
-        title: issue.title.clone(),
-        body: issue.body.clone(),
-        state: project_issue_state(issue).to_string(),
-        labels: issue.labels.clone(),
-        updated_at: issue.updated_at.clone(),
+        state: issue_state(&issue).to_string(),
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels,
+        updated_at: issue.updated_at,
         title_at: field_times.title_at,
         state_at: field_times.state_at,
-    }
-}
-
-fn to_touch_times(touch: &std::collections::HashMap<String, String>) -> reconcile::TouchTimes {
-    reconcile::TouchTimes {
-        title_at: touch.get("title").cloned(),
-        body_at: touch.get("body").cloned(),
-        state_at: touch.get("state").cloned(),
     }
 }

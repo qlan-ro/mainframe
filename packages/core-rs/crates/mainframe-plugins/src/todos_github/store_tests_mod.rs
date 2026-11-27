@@ -14,7 +14,7 @@ mod runs;
 use mainframe_types::time::now_iso8601;
 
 use crate::todos;
-use crate::todos_github::store::{Link, Pair};
+use crate::todos_github::store::{Link, Pair, PairState};
 
 /// A fresh todos+github db, migrated for both plugin surfaces.
 async fn setup() -> todos::tests::Harness {
@@ -41,7 +41,7 @@ fn sample_pair(todo_id: &str, project_id: &str, issue_number: i64) -> Pair {
         repo: "widgets".to_string(),
         issue_number,
         issue_url: format!("https://github.com/acme/widgets/issues/{issue_number}"),
-        pair_state: "clean".to_string(),
+        pair_state: PairState::Clean,
         state_reason: None,
         base_title: "Title".to_string(),
         base_body: "Body".to_string(),

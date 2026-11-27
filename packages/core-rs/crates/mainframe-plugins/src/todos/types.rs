@@ -112,8 +112,8 @@ impl FromRow for Todo {
             status: stored_enum(&id, "status", row.get("status")?),
             type_field: stored_enum(&id, "type", row.get("type")?),
             priority: stored_enum(&id, "priority", row.get("priority")?),
-            labels: stored_json_array(&id, "labels", row.get("labels")?),
-            assignees: stored_json_array(&id, "assignees", row.get("assignees")?),
+            labels: stored_string_array(&id, "labels", row.get("labels")?),
+            assignees: stored_string_array(&id, "assignees", row.get("assignees")?),
             milestone: row.get("milestone")?,
             dependencies: stored_json_array(&id, "dependencies", row.get("dependencies")?),
             order_index: row.get("order_index")?,
@@ -152,7 +152,9 @@ where
     }
 }
 
-fn stored_json_array<T: DeserializeOwned>(
+/// A JSON array column; NULL, `''` and a malformed value (historical
+/// double-encoded arrays, for example) read as empty, the last one logged.
+pub(crate) fn stored_json_array<T: DeserializeOwned>(
     todo_id: &str,
     column: &str,
     raw: Option<String>,
@@ -172,20 +174,14 @@ fn stored_json_array<T: DeserializeOwned>(
     }
 }
 
-/// Parse a JSON array column defensively for the GitHub sync's raw-row
-/// readers — historical double-encoded values (e.g. `[\"a\"]`) must not fail a
-/// sync; a single bad row falls back to `[]`.
-pub(crate) fn safe_json_array(raw: &str, column: &str, todo_id: &str) -> Vec<Value> {
-    let source = if raw.is_empty() { "[]" } else { raw };
-    match serde_json::from_str::<Value>(source) {
-        Ok(Value::Array(items)) => items,
-        Ok(_) => Vec::new(),
-        Err(err) => {
-            tracing::warn!(
-                todo_id, column, raw, error = %err,
-                "malformed JSON column, defaulting to []"
-            );
-            Vec::new()
-        }
-    }
+/// A JSON array of strings, read like [`stored_json_array`]; entries that are
+/// not strings are dropped rather than emptying the whole list.
+pub(crate) fn stored_string_array(todo_id: &str, column: &str, raw: Option<String>) -> Vec<String> {
+    stored_json_array::<Value>(todo_id, column, raw)
+        .into_iter()
+        .filter_map(|value| match value {
+            Value::String(text) => Some(text),
+            _ => None,
+        })
+        .collect()
 }

@@ -6,13 +6,13 @@ use mainframe_types::time::now_iso8601;
 
 use crate::PluginError;
 use crate::context::PluginContext;
-use crate::db_context::text;
 use crate::github_port::{GitHubPortError, RepoRef};
+use crate::todos::input::CreateTodo;
+use crate::todos::repo;
 use crate::todos_github::labels::syncable_labels;
-use crate::todos_github::store;
+use crate::todos_github::store::{self, Pair, PairState};
 
 use super::Imported;
-use super::fetch::fetch_todo_number;
 
 /// Why one issue could not be imported. The text becomes the `Skipped`
 /// row's reason.
@@ -24,6 +24,8 @@ pub(super) enum ImportError {
     Store(#[from] PluginError),
 }
 
+/// Creates the task and its pair in one transaction, so a pair that cannot
+/// be written (the issue was imported concurrently) leaves no task behind.
 pub(super) async fn import_one(
     ctx: &PluginContext,
     project_id: &str,
@@ -33,75 +35,49 @@ pub(super) async fn import_one(
 ) -> Result<Imported, ImportError> {
     let issue = ctx
         .github
-        .get_issue(repo, issue_number as u64, credential_label)
+        // `import_issues` passes only positive numbers, so this is exact.
+        .get_issue(repo, issue_number.unsigned_abs(), credential_label)
         .await?;
     let labels = syncable_labels(&issue.labels);
     let now = now_iso8601();
     let todo_id = nanoid::nanoid!();
-    let todo_number = insert_local_todo(
-        ctx,
-        &todo_id,
-        project_id,
-        &issue.title,
-        &issue.body,
-        &labels,
-        &now,
-    )
-    .await?;
-
-    store::insert_pair(
-        ctx,
-        &store::Pair {
-            todo_id: todo_id.clone(),
-            project_id: project_id.to_string(),
-            owner: repo.owner.clone(),
-            repo: repo.repo.clone(),
-            issue_number,
-            issue_url: issue.html_url.clone(),
-            pair_state: "clean".to_string(),
-            state_reason: None,
-            base_title: issue.title.clone(),
-            base_body: issue.body.clone(),
-            base_state: "open".to_string(),
-            base_labels: labels,
-            base_at: now.clone(),
-            created_at: now,
-        },
-    )
-    .await?;
+    let todo = CreateTodo {
+        project_id: project_id.to_string(),
+        title: issue.title.clone(),
+        body: issue.body.clone(),
+        labels: labels.clone(),
+        ..Default::default()
+    };
+    let pair = Pair {
+        todo_id: todo_id.clone(),
+        project_id: project_id.to_string(),
+        owner: repo.owner.clone(),
+        repo: repo.repo.clone(),
+        issue_number,
+        issue_url: issue.html_url,
+        pair_state: PairState::Clean,
+        state_reason: None,
+        base_title: issue.title,
+        base_body: issue.body,
+        base_state: "open".to_string(),
+        base_labels: labels,
+        base_at: now.clone(),
+        created_at: now,
+    };
+    let todo_number = ctx
+        .db()?
+        .call_mut(move |db| {
+            let transaction = db.transaction()?;
+            let number = repo::insert_row(&transaction, &pair.todo_id, &todo, &pair.created_at)?;
+            store::insert_pair_in(&transaction, &pair)?;
+            transaction.commit()?;
+            Ok(number)
+        })
+        .await?;
 
     Ok(Imported {
         issue_number,
         todo_id,
         todo_number,
     })
-}
-
-async fn insert_local_todo(
-    ctx: &PluginContext,
-    todo_id: &str,
-    project_id: &str,
-    title: &str,
-    body: &str,
-    labels: &[String],
-    at: &str,
-) -> Result<i64, PluginError> {
-    ctx.db
-        .execute(
-            "INSERT INTO todos (id, number, project_id, title, body, status, labels, created_at, updated_at)
-             VALUES (?, (SELECT COALESCE(MAX(number), 0) + 1 FROM todos WHERE project_id = ?), ?, ?, ?, 'open', ?, ?, ?)"
-                .into(),
-            vec![
-                text(todo_id.to_string()),
-                text(project_id.to_string()),
-                text(project_id.to_string()),
-                text(title.to_string()),
-                text(body.to_string()),
-                text(serde_json::to_string(labels).unwrap_or_else(|_| "[]".to_string())),
-                text(at.to_string()),
-                text(at.to_string()),
-            ],
-        )
-        .await?;
-    Ok(fetch_todo_number(ctx, todo_id).await?.unwrap_or(0))
 }

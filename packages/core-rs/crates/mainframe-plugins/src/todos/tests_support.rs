@@ -3,7 +3,8 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use mainframe_types::chat::Chat;
+use mainframe_adapter_api::BoxFuture;
+use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::events::DaemonEvent;
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
 use mainframe_types::settings_kv::{MemorySettings, SettingsKv};
@@ -41,28 +42,15 @@ fn make_chat(id: &str, project_id: &str) -> Chat {
 }
 
 impl PluginHostDb for FakeHostDb {
-    fn chats_list(&self, _project_id: &str) -> Result<Vec<Chat>, crate::PluginError> {
-        Ok(Vec::new())
-    }
-    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
-        Ok(None)
-    }
-    fn chats_create(
-        &self,
-        project_id: &str,
-        adapter_id: &str,
-        model: Option<&str>,
-        permission_mode: Option<&str>,
-    ) -> Result<Chat, crate::PluginError> {
-        Ok({
-            self.created.lock().unwrap().push((
-                project_id.to_string(),
-                adapter_id.to_string(),
-                model.map(str::to_string),
-                permission_mode.map(str::to_string),
-            ));
-            make_chat("chat-1", project_id)
-        })
+    fn create_chat(&self, new_chat: NewChat) -> BoxFuture<'_, Result<Chat, crate::PluginError>> {
+        let chat = make_chat("chat-1", &new_chat.project_id);
+        self.created.lock().unwrap().push((
+            new_chat.project_id,
+            new_chat.adapter_id,
+            new_chat.model,
+            new_chat.permission_mode,
+        ));
+        Box::pin(async move { Ok(chat) })
     }
     fn settings(&self) -> &dyn SettingsKv {
         &self.settings

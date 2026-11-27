@@ -14,6 +14,7 @@ use super::tests::{create_todo, id_of, read, setup, setup_with_settings, state};
 use super::tests_support::{FakeHostDb, build_context};
 use super::{activate, migrations};
 use crate::PluginError;
+use crate::db_context::test_sql::RawSql as _;
 
 #[tokio::test]
 async fn start_session_404_for_missing() {
@@ -122,7 +123,6 @@ async fn attachment_400_when_filename_or_data_missing() {
     for body in [
         json!({ "data": "base64data" }),
         json!({ "filename": "file.txt" }),
-        json!({ "filename": "file.txt", "data": "", "sizeBytes": -1 }),
     ] {
         let resp = post_attachment(state(&h), Path(id.clone()), Json(body.clone())).await;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{body}");
@@ -142,6 +142,7 @@ async fn attachment_accepts_zero_byte_file() {
     let (status, body) = read(resp).await;
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(body["attachment"]["filename"], json!("empty.txt"));
+    assert_eq!(body["attachment"]["sizeBytes"], json!(0));
     assert_eq!(
         body["attachment"]["mimeType"],
         json!("application/octet-stream")
@@ -181,9 +182,8 @@ async fn legacy_database_converges_to_schema_version_one() {
     migrations::run(&ctx).await.unwrap();
 
     let rows = ctx
-        .db
-        .query_all(
-            "SELECT id, number, project_id, dependencies FROM todos ORDER BY number".into(),
+        .raw_query_all(
+            "SELECT id, number, project_id, dependencies FROM todos ORDER BY number",
             vec![],
         )
         .await
@@ -196,9 +196,7 @@ async fn legacy_database_converges_to_schema_version_one() {
         ]
     );
     let tables = ctx
-        .db
-        .query_all(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'github_%' ORDER BY name".into(),
+        .raw_query_all("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'github_%' ORDER BY name",
             vec![],
         )
         .await
@@ -217,8 +215,7 @@ async fn legacy_database_converges_to_schema_version_one() {
         ]
     );
     let version = ctx
-        .db
-        .query_one("PRAGMA user_version".into(), vec![])
+        .raw_query_one("PRAGMA user_version", vec![])
         .await
         .unwrap()
         .unwrap();

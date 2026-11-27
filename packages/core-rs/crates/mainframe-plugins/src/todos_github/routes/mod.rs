@@ -1,6 +1,6 @@
-//! The todos-plugin GitHub sub-router: raw-JSON handlers (no `ok`/`fail`
-//! envelope — that convention is the daemon's own routes, not this plugin's,
-//! per the frozen wire contract) mounted under `/github` by `todos::routes()`.
+//! The todos-plugin GitHub sub-router, mounted under `/github` by
+//! `todos::routes()`. Handlers answer raw JSON without the daemon's
+//! `ok`/`fail` envelope; the UI client expects that shape.
 
 pub mod link;
 pub mod pairs;
@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 use crate::PluginContext;
 use crate::PluginError;
 use crate::github_port::GitHubPortError;
-use crate::todos_github::store;
+use crate::todos_github::store::{self, PairState};
 
 pub fn router() -> Router<Arc<PluginContext>> {
     Router::new()
@@ -37,7 +37,7 @@ pub fn router() -> Router<Arc<PluginContext>> {
         .route("/report", get(sync::get_report))
 }
 
-// ─── Response helpers (mirrors todos/respond.rs, private to this crate's HTTP layer) ─
+// ─── Response helpers ─────────────────────────────────────────────────────────
 
 pub(super) fn json_response(status: StatusCode, body: Value) -> Response {
     (status, axum::Json(body)).into_response()
@@ -166,7 +166,7 @@ pub(super) struct PairFields<'a> {
     pub todo_number: i64,
     pub issue_number: i64,
     pub issue_url: &'a str,
-    pub pair_state: &'a str,
+    pub pair_state: PairState,
     pub state_reason: Option<&'a str>,
 }
 

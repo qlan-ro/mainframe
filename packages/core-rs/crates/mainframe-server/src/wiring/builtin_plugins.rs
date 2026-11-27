@@ -57,8 +57,7 @@ const TODOS_MANIFEST: &str = r#"{
   }
 }"#;
 
-/// Load claude, codex, then todos — the same order + set as `index.ts`. Duplicate
-/// ids are a no-op (matches `loadBuiltin`'s early return).
+/// Loads claude, codex, then todos. Loading an id twice is a no-op.
 pub(crate) async fn load_builtin_plugins(
     plugin_manager: &PluginManager,
     data_dir: &Path,

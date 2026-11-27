@@ -20,7 +20,7 @@ use crate::todos_github::routes::{pairs, sync};
 use crate::todos_github::run_test_support::{
     CREDENTIAL, insert_pair, insert_todo, issue, link_project,
 };
-use crate::todos_github::store;
+use crate::todos_github::store::{self, PairState};
 use crate::todos_github::test_support;
 
 use super::{qs, read, todo_field};
@@ -142,7 +142,7 @@ async fn ac25_a_transferred_issue_is_remotely_unlinked_without_following_the_mov
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(pair.pair_state, "remotely-unlinked");
+    assert_eq!(pair.pair_state, PairState::RemotelyUnlinked);
     assert_eq!(
         fake.call_count(),
         1,
@@ -212,7 +212,8 @@ async fn ac29_an_auth_failure_leaves_the_unreached_pair_untouched_with_a_credent
         .unwrap()
         .unwrap();
     assert_eq!(
-        untouched.pair_state, "clean",
+        untouched.pair_state,
+        PairState::Clean,
         "a pair the run never reached must be left untouched"
     );
 }
@@ -290,5 +291,5 @@ async fn ac29_a_rate_limited_run_preserves_baselines_already_written_before_it_s
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(unreached.pair_state, "clean");
+    assert_eq!(unreached.pair_state, PairState::Clean);
 }

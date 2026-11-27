@@ -51,8 +51,7 @@ const MIGRATIONS: &[Migration] = &[Migration {
 }];
 
 pub(crate) async fn run(ctx: &PluginContext) -> Result<(), PluginError> {
-    ctx.db
-        .actor()?
+    ctx.db()?
         .call(|db| Ok(run_versioned(db, MIGRATIONS, TARGET_VERSION)?))
         .await
 }

@@ -15,6 +15,7 @@ use crate::todos_github::run::{RunError, run_sync};
 use crate::todos_github::run_test_support::{
     insert_pair, insert_todo, issue, link_project, todo_title,
 };
+use crate::todos_github::store::PairState;
 use crate::todos_github::test_support::setup;
 use crate::todos_github::{store, touch};
 
@@ -183,7 +184,7 @@ async fn a_run_that_resolves_a_dispute_marks_the_pair_overwritten() {
     let ctx = &harness.ctx;
 
     insert_todo(ctx, "t1", project, "Local title", "body", "open", &[]).await;
-    touch::stamp_create(ctx, "t1", "2026-01-10T00:00:00Z")
+    touch::testing::stamp_create(ctx, "t1", "2026-01-10T00:00:00Z")
         .await
         .unwrap();
     link_project(ctx, project).await;
@@ -203,7 +204,7 @@ async fn a_run_that_resolves_a_dispute_marks_the_pair_overwritten() {
     run_sync(ctx, project).await.unwrap();
 
     let pair = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
-    assert_eq!(pair.pair_state, "overwritten");
+    assert_eq!(pair.pair_state, PairState::Overwritten);
 }
 
 #[tokio::test]
@@ -233,14 +234,19 @@ async fn a_clean_run_recovers_a_pair_from_a_previous_error() {
         &[],
     )
     .await;
-    store::set_pair_state(ctx, "t1", "errored", Some("previous network error"))
-        .await
-        .unwrap();
+    store::set_pair_state(
+        ctx,
+        "t1",
+        PairState::Errored,
+        Some("previous network error"),
+    )
+    .await
+    .unwrap();
 
     run_sync(ctx, project).await.unwrap();
 
     let pair = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
-    assert_eq!(pair.pair_state, "clean");
+    assert_eq!(pair.pair_state, PairState::Clean);
     assert_eq!(pair.state_reason, None);
 }
 

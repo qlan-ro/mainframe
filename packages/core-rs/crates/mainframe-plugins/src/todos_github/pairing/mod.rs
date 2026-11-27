@@ -5,16 +5,16 @@
 //! baseline written here already matches the content verbatim, so there is
 //! nothing for the next sync run to mistake for a local edit.
 
-mod fetch;
 mod import;
 mod publish;
 
 use crate::PluginError;
 use crate::context::PluginContext;
 use crate::github_port::{CreateIssue, GitHubPortError, RepoRef};
+use crate::todos::repo;
+use crate::todos::types::TodoStatus;
 use crate::todos_github::labels::syncable_labels;
 use crate::todos_github::store;
-use fetch::fetch_todo_number;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoteIssue {
@@ -66,6 +66,13 @@ fn port_err(err: GitHubPortError) -> PairingError {
     PairingError::Port(err)
 }
 
+fn linked_repo(link: &store::Link) -> RepoRef {
+    RepoRef {
+        owner: link.owner.clone(),
+        repo: link.repo.clone(),
+    }
+}
+
 pub(crate) async fn list_remote_issues(
     ctx: &PluginContext,
     project_id: &str,
@@ -73,38 +80,30 @@ pub(crate) async fn list_remote_issues(
     let link = store::read_link(ctx, project_id)
         .await?
         .ok_or(PairingError::NotLinked)?;
-    let repo = RepoRef {
-        owner: link.owner.clone(),
-        repo: link.repo.clone(),
-    };
     let issues = ctx
         .github
-        .list_open_issues(&repo, &link.credential_label)
+        .list_open_issues(&linked_repo(&link), &link.credential_label)
         .await
         .map_err(port_err)?;
+    let paired = store::paired_todo_numbers(ctx, project_id, &link.owner, &link.repo).await?;
 
     let mut out = Vec::with_capacity(issues.len());
     for issue in issues {
-        let issue_number = issue.number as i64;
-        let pair =
-            store::read_pair_by_issue(ctx, project_id, &link.owner, &link.repo, issue_number)
-                .await?;
-        let paired_todo_number = match pair {
-            Some(pair) => fetch_todo_number(ctx, &pair.todo_id).await?,
-            None => None,
-        };
+        let number = i64::try_from(issue.number)
+            .map_err(|_| PluginError::Invariant("GitHub issue number out of range"))?;
         out.push(RemoteIssue {
-            number: issue_number,
+            number,
             title: issue.title,
             labels: issue.labels,
-            paired_todo_number,
+            paired_todo_number: paired.get(&number).copied(),
         });
     }
     Ok(out)
 }
 
-/// Skips (rather than fails) an issue already paired or one the port
-/// couldn't fetch, so one bad number never blocks the rest of the batch.
+/// Skips (rather than fails) a non-positive number, an issue already paired,
+/// or one the port couldn't fetch, so one bad number never blocks the rest of
+/// the batch.
 pub(crate) async fn import_issues(
     ctx: &PluginContext,
     project_id: &str,
@@ -113,13 +112,17 @@ pub(crate) async fn import_issues(
     let link = store::read_link(ctx, project_id)
         .await?
         .ok_or(PairingError::NotLinked)?;
-    let repo = RepoRef {
-        owner: link.owner.clone(),
-        repo: link.repo.clone(),
-    };
+    let repo = linked_repo(&link);
 
     let mut result = ImportResult::default();
     for &issue_number in issue_numbers {
+        if issue_number <= 0 {
+            result.skipped.push(Skipped {
+                issue_number,
+                reason: "not an issue number".to_string(),
+            });
+            continue;
+        }
         let existing =
             store::read_pair_by_issue(ctx, project_id, &link.owner, &link.repo, issue_number)
                 .await?;
@@ -156,15 +159,12 @@ pub(crate) async fn publish_task(
     if store::read_pair_by_todo(ctx, todo_id).await?.is_some() {
         return Err(PairingError::AlreadyPaired);
     }
-    let todo = publish::fetch_local_todo(ctx, todo_id)
+    let todo = repo::fetch(ctx, todo_id)
         .await?
         .ok_or(PairingError::TodoNotFound)?;
-    let repo = RepoRef {
-        owner: link.owner.clone(),
-        repo: link.repo.clone(),
-    };
+    let repo = linked_repo(&link);
     let labels = syncable_labels(&todo.labels);
-    let closing = todo.status == "done";
+    let closing = todo.status == TodoStatus::Done;
 
     let create = CreateIssue {
         title: todo.title.clone(),
@@ -182,8 +182,7 @@ pub(crate) async fn publish_task(
             .map_err(port_err)?;
     }
 
-    let pair =
-        publish::build_published_pair(todo_id, project_id, &repo, &issue, todo, labels, closing);
+    let pair = publish::build_published_pair(project_id, &repo, &issue, todo, labels, closing)?;
     store::insert_pair(ctx, &pair).await?;
     Ok(pair)
 }

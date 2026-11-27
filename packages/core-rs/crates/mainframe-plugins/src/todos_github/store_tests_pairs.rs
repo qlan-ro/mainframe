@@ -3,7 +3,8 @@ use serde_json::json;
 
 use crate::PluginError;
 use crate::todos;
-use crate::todos_github::store;
+use crate::todos_github::reconcile::Baseline;
+use crate::todos_github::store::{self, PairState};
 
 use super::{sample_pair, setup};
 
@@ -57,17 +58,25 @@ async fn baseline_read_and_write() {
     store::insert_pair(&h.ctx, &sample_pair("todo-1", "p1", 42))
         .await
         .unwrap();
-    store::write_baseline(
-        &h.ctx,
-        "todo-1",
-        "New title",
-        "New body",
-        "closed",
-        &["feature".to_string()],
-        "2026-07-31T00:00:00Z",
-    )
-    .await
-    .unwrap();
+    let baseline = Baseline {
+        title: "New title".to_string(),
+        body: "New body".to_string(),
+        state: "closed".to_string(),
+        labels: vec!["feature".to_string()],
+    };
+    h.ctx
+        .db()
+        .unwrap()
+        .call(move |db| {
+            Ok(store::write_baseline_in(
+                db,
+                "todo-1",
+                &baseline,
+                "2026-07-31T00:00:00Z",
+            )?)
+        })
+        .await
+        .unwrap();
     let pair = store::read_pair_by_todo(&h.ctx, "todo-1")
         .await
         .unwrap()
@@ -86,24 +95,24 @@ async fn pair_state_transitions() {
         .await
         .unwrap();
 
-    store::set_pair_state(&h.ctx, "todo-1", "overwritten", None)
+    store::set_pair_state(&h.ctx, "todo-1", PairState::Overwritten, None)
         .await
         .unwrap();
     let pair = store::read_pair_by_todo(&h.ctx, "todo-1")
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(pair.pair_state, "overwritten");
+    assert_eq!(pair.pair_state, PairState::Overwritten);
     assert_eq!(pair.state_reason, None);
 
-    store::set_pair_state(&h.ctx, "todo-1", "errored", Some("network error"))
+    store::set_pair_state(&h.ctx, "todo-1", PairState::Errored, Some("network error"))
         .await
         .unwrap();
     let pair = store::read_pair_by_todo(&h.ctx, "todo-1")
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(pair.pair_state, "errored");
+    assert_eq!(pair.pair_state, PairState::Errored);
     assert_eq!(pair.state_reason, Some("network error".to_string()));
 }
 

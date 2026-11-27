@@ -1,11 +1,13 @@
 //! Pure GitHub sync reconciliation: a 3-way comparison of the
 //! local task, the remote issue, and the stored baseline decides what
 //! changed — never a clock alone (spec "What a sync run does"). No I/O here;
-//! `run.rs` is the only caller and owns every side effect.
+//! the `run` module is the only caller and owns every side effect.
 
 mod fields;
 mod labels;
 mod state;
+
+pub(crate) use state::project_status;
 
 /// The local task's synced fields, read fresh for this run. `status` is the
 /// real three-value board status — `state.rs` needs it verbatim to detect the

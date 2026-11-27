@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::extract::{Json, Path};
 use serde_json::json;
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::{IssueSnapshot, IssueState};
 use crate::todos::patch_todo;
 use crate::todos_github::fake_github::FakeGitHub;
@@ -54,9 +54,8 @@ async fn ac14_a_workflow_label_only_write_never_advances_the_tracked_local_recen
     )
     .await;
     h.ctx
-        .db
-        .execute(
-            "INSERT INTO github_touch (todo_id, field, changed_at) VALUES (?, 'body', ?)".into(),
+        .raw_execute(
+            "INSERT INTO github_touch (todo_id, field, changed_at) VALUES (?, 'body', ?)",
             vec![
                 text("t1".to_string()),
                 text("2026-01-15T00:00:00Z".to_string()),

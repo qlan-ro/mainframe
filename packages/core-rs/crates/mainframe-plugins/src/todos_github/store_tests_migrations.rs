@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::todos;
 
 use super::setup;
@@ -10,9 +10,8 @@ async fn migration_creates_every_table_on_a_fresh_db() {
     let h = setup().await;
     let rows = h
         .ctx
-        .db
-        .query_all(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'github_%'".into(),
+        .raw_query_all(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'github_%'",
             vec![],
         )
         .await
@@ -42,9 +41,8 @@ async fn migration_is_additive_over_preexisting_todos() {
     todos::migrations::run(&h.ctx).await.unwrap();
     let rows = h
         .ctx
-        .db
-        .query_all(
-            "SELECT id FROM todos WHERE project_id = ?".into(),
+        .raw_query_all(
+            "SELECT id FROM todos WHERE project_id = ?",
             vec![text("p1".to_string())],
         )
         .await

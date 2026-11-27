@@ -5,7 +5,8 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use mainframe_types::chat::Chat;
+use mainframe_adapter_api::BoxFuture;
+use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::plugin::{PluginCapability, PluginManifest};
 
 use super::context::{EmitSink, PluginContextDeps, PluginHostDb, build_plugin_context};
@@ -14,27 +15,16 @@ use super::github_port::{GitHubIssues, RepoRef};
 #[derive(Default)]
 struct NullHostDb;
 impl PluginHostDb for NullHostDb {
-    fn chats_list(&self, _p: &str) -> Result<Vec<Chat>, crate::PluginError> {
-        Ok(Vec::new())
-    }
-    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
-        Ok(None)
-    }
-    fn chats_create(
-        &self,
-        p: &str,
-        a: &str,
-        _m: Option<&str>,
-        _mode: Option<&str>,
-    ) -> Result<Chat, crate::PluginError> {
-        Ok({
-            serde_json::from_value(serde_json::json!({
-                "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
+    fn create_chat(&self, new_chat: NewChat) -> BoxFuture<'_, Result<Chat, crate::PluginError>> {
+        Box::pin(async move {
+            Ok(serde_json::from_value(serde_json::json!({
+                "id": "chat-1", "adapterId": new_chat.adapter_id,
+                "projectId": new_chat.project_id, "status": "active",
                 "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
                 "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
                 "lastContextTokensInput": 0,
             }))
-            .unwrap()
+            .unwrap())
         })
     }
     fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {

@@ -10,8 +10,7 @@ use axum::response::{IntoResponse, Response};
 use serde_json::{Value, json};
 
 use crate::PluginContext;
-use crate::PluginError;
-use crate::db_context::{Row, text};
+use crate::todos::repo;
 use crate::todos_github::pairing::{self, ImportResult, RemoteIssue};
 use crate::todos_github::store;
 
@@ -28,34 +27,25 @@ pub(crate) async fn get_pairs(
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    let rows = match ctx
-        .db
-        .query_all(
-            "SELECT github_pairs.*, todos.number as todo_number FROM github_pairs
-             JOIN todos ON todos.id = github_pairs.todo_id
-             WHERE github_pairs.project_id = ?
-             ORDER BY github_pairs.created_at, github_pairs.todo_id"
-                .into(),
-            vec![text(project_id)],
-        )
-        .await
-    {
+    let rows = match store::pairs_with_todo_numbers(&ctx, &project_id).await {
         Ok(rows) => rows,
         Err(err) => return server_error(err),
     };
-    let pairs: Vec<Value> = rows.into_iter().map(pair_row_json).collect();
+    let pairs: Vec<Value> = rows
+        .iter()
+        .map(|(pair, todo_number)| stored_pair_json(pair, *todo_number))
+        .collect();
     json_response(StatusCode::OK, json!({ "pairs": pairs }))
 }
 
-fn pair_row_json(row: Row) -> Value {
-    let todo_id = row.get("todo_id").and_then(Value::as_str).unwrap_or("");
+fn stored_pair_json(pair: &store::Pair, todo_number: i64) -> Value {
     pair_json(PairFields {
-        todo_id,
-        todo_number: row.get("todo_number").and_then(Value::as_i64).unwrap_or(0),
-        issue_number: row.get("issue_number").and_then(Value::as_i64).unwrap_or(0),
-        issue_url: row.get("issue_url").and_then(Value::as_str).unwrap_or(""),
-        pair_state: row.get("pair_state").and_then(Value::as_str).unwrap_or(""),
-        state_reason: row.get("state_reason").and_then(Value::as_str),
+        todo_id: &pair.todo_id,
+        todo_number,
+        issue_number: pair.issue_number,
+        issue_url: &pair.issue_url,
+        pair_state: pair.pair_state,
+        state_reason: pair.state_reason.as_deref(),
     })
 }
 
@@ -148,34 +138,12 @@ pub(crate) async fn post_publish(
         Ok(pair) => pair,
         Err(err) => return pairing_error_response(err),
     };
-    let todo_number = match todo_number(&ctx, &todo_id).await {
-        Ok(n) => n,
+    let todo_number = match repo::fetch(&ctx, &todo_id).await {
+        Ok(todo) => todo.map_or(0, |todo| todo.number),
         Err(err) => return server_error(err),
     };
     json_response(
         StatusCode::OK,
-        json!({
-            "pair": pair_json(PairFields {
-                todo_id: &pair.todo_id,
-                todo_number,
-                issue_number: pair.issue_number,
-                issue_url: &pair.issue_url,
-                pair_state: &pair.pair_state,
-                state_reason: pair.state_reason.as_deref(),
-            }),
-        }),
+        json!({ "pair": stored_pair_json(&pair, todo_number) }),
     )
-}
-
-async fn todo_number(ctx: &PluginContext, todo_id: &str) -> Result<i64, PluginError> {
-    let row = ctx
-        .db
-        .query_one(
-            "SELECT number FROM todos WHERE id = ?".into(),
-            vec![text(todo_id.to_string())],
-        )
-        .await?;
-    Ok(row
-        .and_then(|r| r.get("number").and_then(Value::as_i64))
-        .unwrap_or(0))
 }

@@ -5,7 +5,6 @@ fn upload(filename: &str, bytes: &[u8]) -> AttachmentUpload {
         filename: filename.into(),
         mime_type: "application/octet-stream".into(),
         data: mainframe_types::base64_data::encode(bytes),
-        size_bytes: bytes.len() as i64,
     }
 }
 
@@ -18,6 +17,7 @@ async fn save_list_get_delete_roundtrip() {
         .await
         .unwrap();
     assert_eq!(meta.filename, "notes.txt");
+    assert_eq!(meta.size_bytes, 5);
 
     let list = ctx.list("todo-1").await.unwrap();
     assert_eq!(list.len(), 1);
@@ -84,4 +84,34 @@ async fn traversal_ids_are_rejected() {
     ctx.delete("todo-1", "..").await.unwrap();
     ctx.delete("..", &kept.id).await.unwrap();
     assert_eq!(ctx.list("todo-1").await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn list_returns_attachments_oldest_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = FsAttachmentContext::new(dir.path().join("attachments"));
+    let entity = dir.path().join("attachments").join("todo-1");
+    std::fs::create_dir_all(&entity).unwrap();
+    for (id, created_at) in [("b", "2026-01-02T00:00:00Z"), ("a", "2026-01-01T00:00:00Z")] {
+        let meta = PluginAttachmentMeta {
+            id: id.into(),
+            filename: format!("{id}.txt"),
+            mime_type: "text/plain".into(),
+            size_bytes: 1,
+            created_at: created_at.into(),
+        };
+        std::fs::write(
+            entity.join(format!("{id}.json")),
+            serde_json::to_vec(&meta).unwrap(),
+        )
+        .unwrap();
+    }
+    let ids: Vec<String> = ctx
+        .list("todo-1")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|meta| meta.id)
+        .collect();
+    assert_eq!(ids, ["a", "b"]);
 }

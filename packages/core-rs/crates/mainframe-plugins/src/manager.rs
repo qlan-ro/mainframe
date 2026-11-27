@@ -24,16 +24,14 @@ use crate::context::{
 };
 use crate::github_port::GitHubIssues;
 
-/// Tracks panel/action registrations per plugin (the `panelEvents`/`actionEvents`
-/// maps), kept outside the loaded-plugin entries so the tracking emit sink does
-/// not form a reference cycle back through `PluginContext`.
+/// Tracks panel/action registrations per plugin, kept outside the
+/// loaded-plugin entries so the tracking emit sink does not form a reference
+/// cycle back through `PluginContext`.
 #[derive(Default)]
 struct Tracker {
-    /// pluginId → the `plugin.panel.registered` events, in insertion order
-    /// (keyed by panelId). A `Vec<(panelId, event)>` — not a `HashMap` — so the
-    /// legacy `.panel` (= `panels[0]`) and the `.panels[]` array are deterministic.
-    /// HashMap iteration order is randomized per launch, which would make the
-    /// `/api/plugins` listing non-deterministic.
+    /// pluginId → the `plugin.panel.registered` events in registration order,
+    /// keyed by panelId. A `Vec` rather than a map so the listing's legacy
+    /// `panel` (the first panel) and `panels` array are stable across launches.
     panels: DashMap<String, Vec<(String, DaemonEvent)>>,
     /// pluginId → the `plugin.action.registered` events.
     actions: DashMap<String, Vec<DaemonEvent>>,
@@ -44,8 +42,7 @@ impl Tracker {
         match event {
             DaemonEvent::PluginPanelRegistered { panel_id, .. } => {
                 let mut list = self.panels.entry(plugin_id.to_string()).or_default();
-                // `Map.set(panelId, event)`: replace in place if the panel is
-                // re-registered (preserving its slot), else append.
+                // A re-registered panel keeps its slot; a new one is appended.
                 match list.iter_mut().find(|(pid, _)| pid == panel_id) {
                     Some(slot) => slot.1 = event.clone(),
                     None => list.push((panel_id.clone(), event.clone())),
@@ -143,8 +140,7 @@ struct ManagerInner {
     tracker: Arc<Tracker>,
 }
 
-/// Constructor dependencies (`PluginManagerDeps`, minus the dropped
-/// `pluginsDirs`).
+/// Constructor dependencies for [`PluginManager`].
 pub struct PluginManagerDeps {
     pub host_db: Arc<dyn PluginHostDb>,
     pub emit: EmitSink,
@@ -174,9 +170,9 @@ impl PluginManager {
         }
     }
 
-    /// `loadBuiltin(manifest, activate)` — build the context (with a tracking emit
-    /// sink), run `activate` to obtain the sub-router, and register the plugin.
-    /// Duplicate ids are a no-op, matching the early `return`.
+    /// Builds the plugin's context (with a tracking emit sink), runs
+    /// `activate` to obtain its sub-router, and registers it. Loading an id
+    /// that is already loaded is a no-op.
     pub async fn load_builtin<F, Fut>(
         &self,
         manifest: PluginManifest,
@@ -216,7 +212,7 @@ impl PluginManager {
         Ok(())
     }
 
-    /// `unloadAll()` — run every plugin's onUnload callbacks and clear state.
+    /// Runs every plugin's unload callbacks and forgets all plugins.
     pub fn unload_all(&self) {
         for entry in self.inner.loaded.iter() {
             for cb in entry.value().ctx.take_unload_callbacks() {
@@ -229,11 +225,7 @@ impl PluginManager {
     }
 
     #[cfg(test)]
-    pub(crate) fn get_plugin(&self, id: &str) -> bool {
-        self.inner.loaded.contains_key(id)
-    }
-
-    pub fn get_all(&self) -> Vec<String> {
+    pub(crate) fn loaded_ids(&self) -> Vec<String> {
         self.inner.loaded.iter().map(|e| e.key().clone()).collect()
     }
 
@@ -251,8 +243,8 @@ impl PluginManager {
     }
 }
 
-/// Wrap the real emit sink so panel/action events are recorded before fan-out
-/// (the `trackingEmitEvent` closure).
+/// Wraps the real emit sink so panel/action events are recorded before
+/// fan-out.
 fn tracking_emit(tracker: Arc<Tracker>, plugin_id: String, real: EmitSink) -> EmitSink {
     Arc::new(move |event: DaemonEvent| {
         tracker.record(&plugin_id, &event);
@@ -272,10 +264,7 @@ async fn list_plugins(State(inner): State<Arc<ManagerInner>>) -> Response {
             obj.insert("id".into(), json!(p.manifest.id));
             obj.insert("name".into(), json!(p.manifest.name));
             obj.insert("version".into(), json!(p.manifest.version));
-            obj.insert(
-                "capabilities".into(),
-                serde_json::to_value(&p.manifest.capabilities).unwrap_or(Value::Null),
-            );
+            obj.insert("capabilities".into(), json!(p.manifest.capabilities));
             // Legacy `panel` (= `panels[0]`) is absent when there are no
             // panels: omit the key entirely rather than emit `null`.
             if let Some(first) = panels.first() {
@@ -300,7 +289,7 @@ async fn plugin_detail(State(inner): State<Arc<ManagerInner>>, Path(id): Path<St
                     "name": p.manifest.name,
                     "version": p.manifest.version,
                     "description": p.manifest.description,
-                    "capabilities": serde_json::to_value(&p.manifest.capabilities).unwrap_or(Value::Null),
+                    "capabilities": p.manifest.capabilities,
                 })),
             )
                 .into_response()

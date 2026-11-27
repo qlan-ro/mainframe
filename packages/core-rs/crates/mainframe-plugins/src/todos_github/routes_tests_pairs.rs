@@ -4,6 +4,7 @@ use axum::extract::{Json, Path};
 use axum::http::StatusCode;
 use serde_json::json;
 
+use crate::db_context::test_sql::RawSql as _;
 use crate::github_port::{GitHubPortError, IssueState};
 use crate::todos_github::fake_github::FakeGitHub;
 use crate::todos_github::routes::pairs;
@@ -16,7 +17,7 @@ use super::{qs, read, setup};
 
 #[tokio::test]
 async fn get_pairs_includes_remotely_unlinked_pairs() {
-    use crate::todos_github::store;
+    use crate::todos_github::store::{self, PairState};
 
     let h = setup(FakeGitHub::default()).await;
     link_project(&h.ctx, "p1").await;
@@ -36,11 +37,8 @@ async fn get_pairs_includes_remotely_unlinked_pairs() {
     // `run_test_support::insert_todo` hardcodes number 1 (fixture built for
     // single-todo run tests) — insert t2's row directly so it gets number 2.
     h.ctx
-        .db
-        .execute(
-            "INSERT INTO todos (id, number, project_id, title, body, status, labels, created_at, updated_at)
-             VALUES ('t2', 2, 'p1', 'Deleted issue', 'body', 'open', '[]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-                .into(),
+        .raw_execute("INSERT INTO todos (id, number, project_id, title, body, status, labels, created_at, updated_at)
+             VALUES ('t2', 2, 'p1', 'Deleted issue', 'body', 'open', '[]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
             vec![],
         )
         .await
@@ -57,7 +55,7 @@ async fn get_pairs_includes_remotely_unlinked_pairs() {
         &[],
     )
     .await;
-    store::set_pair_state(&h.ctx, "t2", "remotely-unlinked", Some("not found"))
+    store::set_pair_state(&h.ctx, "t2", PairState::RemotelyUnlinked, Some("not found"))
         .await
         .unwrap();
 

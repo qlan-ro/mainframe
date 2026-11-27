@@ -7,7 +7,7 @@ use std::sync::Arc;
 use axum::extract::Json;
 use serde_json::json;
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::IssueState;
 use crate::todos_github::fake_github::FakeGitHub;
 use crate::todos_github::routes::sync;
@@ -55,9 +55,8 @@ async fn ac15_an_applied_inbound_change_is_not_stamped_as_a_local_edit() {
     );
     let touch_rows = h
         .ctx
-        .db
-        .query_one(
-            "SELECT COUNT(*) as n FROM github_touch WHERE todo_id = ? AND field = 'title'".into(),
+        .raw_query_one(
+            "SELECT COUNT(*) as n FROM github_touch WHERE todo_id = ? AND field = 'title'",
             vec![text("t1".to_string())],
         )
         .await

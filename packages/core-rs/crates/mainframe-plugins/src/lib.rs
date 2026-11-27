@@ -1,12 +1,11 @@
-//! The builtin plugin registry, the capability contexts (db / attachments / ui
-//! / events / config), the manifest validator, the chat/project service
-//! surfaces, and the builtin `todos` plugin.
+//! The builtin plugin registry, the capability-gated plugin context (storage,
+//! attachments, ui, chat creation, GitHub Issues), and the builtin `todos`
+//! plugin with its GitHub sync.
 //!
-//! Plugins are **builtin-only**: `claude` and `codex` are their own native
-//! crates; `todos` lives here. There is no dynamic third-party plugin loading
-//! and no JS runtime — the manifest/capability model is kept so a WASM loader
-//! can add loading later, and the `manager` registers plugins through
-//! `load_builtin` only.
+//! Plugins are builtin-only: `claude` and `codex` are their own native crates
+//! and register here only for the listing; `todos` lives here. There is no
+//! dynamic plugin loading, so `PluginManager::load_builtin` is the only way
+//! in.
 #![forbid(unsafe_code)]
 #![cfg_attr(
     test,
@@ -19,25 +18,23 @@
 )]
 
 pub mod attachment_context;
+pub mod chat_service;
 pub mod context;
 pub mod db_context;
 pub mod github_port;
 mod github_port_guard;
 pub mod manager;
-pub mod services;
 pub mod todos;
-pub mod todos_github;
-pub mod ui_context;
+mod todos_github;
+mod ui_context;
 
 #[cfg(test)]
 mod github_port_tests;
 
 pub use context::{
-    AttachmentData, AttachmentUpload, ChatService, CreateChatArgs, CreateChatResult, EmitSink,
-    NotifyOptions, PluginAttachments, PluginContext, PluginContextDeps, PluginDatabase,
-    PluginHostDb, PluginUi, build_plugin_context,
+    EmitSink, NotifyOptions, PluginContext, PluginContextDeps, PluginHostDb, PluginUi,
+    build_plugin_context,
 };
-pub use db_context::PluginDatabaseContext;
 pub use github_port::{
     CreateIssue, GitHubIssues, GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot,
     IssueState, RepoRef,
@@ -59,8 +56,7 @@ pub enum PluginError {
     /// answer the request.
     #[error("plugin database worker {0}")]
     Worker(&'static str),
-    /// A store failure that is not one of the flattened variants above (a
-    /// dead worker, a broken invariant).
+    /// A store failure that is not one of the flattened variants above.
     #[error(transparent)]
     Db(mainframe_db::DbError),
     /// Returned when a gated subsystem is used without its manifest
