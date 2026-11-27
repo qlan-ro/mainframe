@@ -20,6 +20,10 @@ export function isAtBottom(element: HTMLElement): boolean {
 export function createPinState() {
   return {
     pinned: true,
+    /** The transcript is opening: follow growth before paint until it settles (`followResize`). */
+    opening: true,
+    quietFrames: 0,
+    openingFrame: null as number | null,
     /** The `pinned` value subscribers last heard. */
     published: true,
     listeners: new Set<() => void>(),
@@ -50,6 +54,7 @@ export function publishPinned(state: PinState) {
 /** Runs during render on a session switch, so it changes state without notifying. */
 export function resetPin(state: PinState) {
   state.pinned = true;
+  state.opening = true;
   state.repinOnRelease = false;
   state.anchor = null;
   state.bottom = Infinity;
@@ -71,6 +76,44 @@ export function scheduleFollow(viewportElement: React.RefObject<HTMLDivElement |
     const viewport = viewportElement.current;
     if (viewport && state.pinned && !state.locks) viewport.scrollTop = viewport.scrollHeight;
   });
+}
+
+/** Whole frames without a resize after which an opening transcript counts as settled. */
+const OPENING_QUIET_FRAMES = 2;
+
+/** Ends the opening phase once the list stops resizing (see `followResize`). */
+function watchOpeningSettle(state: PinState) {
+  state.quietFrames = 0;
+  if (state.openingFrame !== null) return;
+  const tick = () => {
+    state.openingFrame = null;
+    if (!state.opening) return;
+    state.quietFrames++;
+    if (state.quietFrames > OPENING_QUIET_FRAMES) state.opening = false;
+    else state.openingFrame = requestAnimationFrame(tick);
+  };
+  state.openingFrame = requestAnimationFrame(tick);
+}
+
+/**
+ * The content resized. While the transcript opens (a fresh mount or a session
+ * switch), the pin jumps to the tail right here, inside the resize callback,
+ * so each frame paints at the tail while the virtualized list measures its
+ * rows. The opening ends at the reader's first scroll input, a lock, an unpin,
+ * or once the list stops resizing; from then on, following waits for the next
+ * frame. Ending early only costs that one frame, never a jump.
+ */
+export function followResize(viewportElement: React.RefObject<HTMLDivElement | null>, state: PinState) {
+  const viewport = viewportElement.current;
+  if (!state.opening || !viewport || !state.pinned || state.locks) {
+    scheduleFollow(viewportElement, state);
+    return;
+  }
+  cancelFollow(state);
+  viewport.scrollTop = viewport.scrollHeight;
+  state.bottom = viewport.scrollHeight - viewport.clientHeight;
+  state.top = viewport.scrollTop;
+  watchOpeningSettle(state);
 }
 
 export function trackPosition(element: HTMLDivElement, state: PinState, followGrowth = true) {
@@ -131,6 +174,7 @@ function settleAfterInteraction(element: HTMLDivElement, state: PinState) {
  */
 export function beginLock(viewportElement: React.RefObject<HTMLDivElement | null>, state: PinState) {
   state.anchor = null;
+  state.opening = false;
   state.locks++;
   const generation = state.generation;
   cancelFollow(state);
@@ -165,6 +209,7 @@ export function trackUserScroll(element: HTMLDivElement, state: PinState) {
     if (event.type === 'keydown' && (event.target as Element).closest('input, textarea, [contenteditable="true"]'))
       return;
     state.userScrollUntil = performance.now() + 300;
+    state.opening = false;
     if (event instanceof KeyboardEvent) scrollToBoundary(element, state, event);
   };
   const startDrag = () => {
