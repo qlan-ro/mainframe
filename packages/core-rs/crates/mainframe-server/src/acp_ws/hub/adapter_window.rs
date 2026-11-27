@@ -65,7 +65,7 @@ impl FacadeHub {
                 let turns = turn_window::turn_count(turns);
                 manager
                     .adapter_first_window_by(&chat_id, turns.max(PAGE_TURNS), &move |messages| {
-                        turn_window::count_turns(messages) >= turns
+                        turn_window::TurnIndex::new(messages).count() >= turns
                     })
                     .await?
             }

@@ -59,32 +59,33 @@ async fn a_request_without_turns_is_unchanged() {
 }
 
 #[tokio::test]
-async fn hidden_prompts_queued_prompts_markers_and_the_running_turn_count_as_the_rules_say() {
+async fn hidden_replies_queued_prompts_and_the_running_turn_follow_the_user_turn_rule() {
     let mut port = fixture(8);
-    // u0 a1 a2 | u3 a4 | hidden(a5) a6 | marker(7)
+    // u0 a1 a2 | u3 a4 hidden(a5) a6 | queued(7)
     for index in 0..8 {
         kind(&mut port, index, DisplayMessageType::Assistant);
     }
     for index in [0, 3] {
         kind(&mut port, index, DisplayMessageType::User);
     }
+    flag(&mut port, 5, "turnGroup", json!("g2"));
     flag(
         &mut port,
         5,
         "hiddenPromptEvent",
         json!("Background task finished"),
     );
+    // The hidden-prompt reply is inside the turn that began at u3.
     let (_, replay) = first(&port, json!({"turns":1})).await;
-    assert_eq!(replay.items[0].id(), "message:0:top:m5");
-    let (_, replay) = first(&port, json!({"turns":2})).await;
     assert_eq!(replay.items[0].id(), "message:0:top:m3");
-    // A queued prompt rides at the end without counting; the running turn does.
+    let (_, replay) = first(&port, json!({"turns":2})).await;
+    assert_eq!(replay.items[0].id(), "message:0:top:m0");
+    // A queued prompt rides at the end without counting.
     kind(&mut port, 7, DisplayMessageType::User);
     flag(&mut port, 7, "queued", json!(true));
     let (_, replay) = first(&port, json!({"turns":1})).await;
-    assert_eq!(replay.items[0].id(), "message:0:top:m5");
-    // The queued prompt has no items yet.
-    assert_eq!(replay.items.len(), 2);
+    assert_eq!(replay.items[0].id(), "message:0:top:m3");
+    assert_eq!(replay.items.len(), 4);
 }
 
 #[tokio::test]
@@ -149,4 +150,42 @@ fn pages_by_turns_count_back_from_the_floor() {
         Default::default(),
     );
     assert_eq!(page.start, 70);
+}
+
+#[test]
+fn the_requested_turns_survive_when_the_bytes_sent_are_small() {
+    // Five turns, each with a 400 KB screenshot: the desktop client receives each
+    // image as a short reference, so four turns fit far under the 1 MB limit.
+    let image = "A".repeat(400_000);
+    let messages: Vec<DisplayMessage> = (1..=5)
+        .flat_map(|n| {
+            [
+                json!({"id":format!("u{n}"),"chatId":"chat","type":"user","timestamp":"now",
+                    "content":[{"type":"text","text":"look"}]}),
+                json!({"id":format!("a{n}"),"chatId":"chat","type":"assistant","timestamp":"now","content":[
+                    {"type":"tool_call","id":format!("t{n}"),"name":"Read","input":{},"category":"default",
+                     "result":{"content":"screenshot","isError":false,
+                        "images":[{"mediaType":"image/png","data":image}]}}]}),
+            ]
+        })
+        .map(|value| serde_json::from_value(value).unwrap())
+        .collect();
+    let params = HistoryPageParams {
+        session_id: "chat_1".into(),
+        before: "message:0:top:u5".into(),
+        containers: None,
+        items: None,
+        turns: Some(4),
+        until_item_id: None,
+    };
+    let options = crate::history_page::PageOptions {
+        previews: true,
+        lazy_tool_images: true,
+        ..Default::default()
+    };
+    let page = crate::history_page::prepare(&messages, &params, options);
+    assert_eq!(page.start, 0);
+    assert_eq!(page.containers.len(), 8);
+    let sent = serde_json::to_vec(&page.result.updates).unwrap().len();
+    assert!(sent < 20_000, "{sent}");
 }

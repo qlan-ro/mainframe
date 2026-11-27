@@ -88,25 +88,26 @@ fn prepare_for(
         floor_item_id: Some(params.before.clone()),
         context_item_ids: None,
     };
-    let Some(start) = page_start(messages, params, before) else {
+    let index = (params.turns.is_some() && params.until_item_id.is_none())
+        .then(|| turn_window::TurnIndex::new(messages));
+    let Some(start) = page_start(messages, params, before, index.as_ref()) else {
         page.result.stale = Some(true);
         return page;
     };
     if start >= before {
         return page;
     }
-    let by_turns = params.turns.is_some() && params.until_item_id.is_none();
-    page.start = if by_turns {
+    page.start = if index.is_some() {
         start
     } else {
         history_window::snap(messages, start)
     };
     page.containers = history_window::encode_range(messages, None, page.start, before);
-    if by_turns {
-        page.start = turn_window::fit(
-            messages,
+    if let Some(index) = &index {
+        page.start = index.fit(
             page.start,
             &mut page.containers,
+            &turn_window::Wire::new(options.previews, messages.len()),
             turn_window::MAX_WINDOW_BYTES,
         );
     }
@@ -152,14 +153,15 @@ fn page_start(
     messages: &[DisplayMessage],
     params: &HistoryPageParams,
     before: usize,
+    turns: Option<&turn_window::TurnIndex<'_>>,
 ) -> Option<usize> {
     match &params.until_item_id {
         Some(target) => history_window::find_item(messages, target),
-        None => Some(match params.turns {
-            Some(turns) => {
-                turn_window::start_before(messages, before, turn_window::turn_count(turns))
+        None => Some(match (params.turns, turns) {
+            (Some(count), Some(index)) => {
+                index.start_before(before, turn_window::turn_count(count))
             }
-            None => before.saturating_sub(history_window::page_size(params.containers)),
+            _ => before.saturating_sub(history_window::page_size(params.containers)),
         }),
     }
 }

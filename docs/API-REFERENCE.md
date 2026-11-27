@@ -965,22 +965,27 @@ with `fullReplay:true`. Item cursors retain their full-history behavior.
 
 **Windows by turns (todo #503).** `window.turns` (clamped to 1..200) replaces
 `containers` and `items`: the first window and every older page (`history_page`'s
-`turns`) are the last N whole turns, with no item trim, so a window never starts
-mid-turn. A turn starts at a visible user message (queued and steered prompts do
-not count) or at an assistant container that opens a hidden-prompt group (a
-`hiddenPromptEvent`, or a `turnGroup` that differs from the container before it),
-and runs to the next start. A compaction marker leads the turn after it. The
-running turn counts. One safety rule: when the selected turns encode to more than
-about 1 MB of JSON, whole turns drop from the top until it fits, always keeping
-the newest turn, so a single oversized turn is still sent whole. Tool-result
+`turns`) are the last N turns, with no item trim. A turn is the span from one
+visible user message to the next; a queued prompt and a steered one are not
+boundaries. Everything up to the next boundary, background-task replies included,
+is one turn, so a window always starts at a real user message and never mid-turn.
+A compaction or provider-switch marker leads the turn after it. The running turn
+counts. A page whose floor sits inside a turn (after `untilItemId` or
+`history_around`) includes that turn's earlier part without counting it among the
+N. One safety rule: when the selected turns would send more than about 1 MB of
+JSON, whole turns drop from the top (a turn with the markers that lead it),
+always keeping the newest, so a single oversized turn is sent whole. The size is
+what is sent to a client that sends `turns`: tool images count as short
+references, and tool results older than the newest 20 containers count as 2 KB
+previews when the connection opted into `replayResultPreviews`. Tool-result
 previews keep their existing rule. A request without `turns` behaves exactly as
 before, so a client that sends `{containers, items}` (mobile) is unaffected. The
 persisted first-window cache is keyed on the exact `window` object, so a
 different `turns` is a cache miss, not an error. A first window for an uncached
 Codex chat reads `thread/turns/list` pages until the list holds that many turn
-starts. The desktop UI sends `{turns: N}` for the first window and for pages, `N`
-being the Settings, Chat, "Turns to load at a time" preference (2 to 50, default
-10), and `{floorItemId, turns: N}` on a revision resume. REST history
+boundaries. The desktop UI sends `{turns: N}` for the first window and for pages,
+`N` being the Settings, Chat, "Turns to load at a time" preference (2 to 50,
+default 10), and `{floorItemId, turns: N}` on a revision resume. REST history
 and MCP `chat_read` still return the whole transcript. Search support is advertised
 separately as `historySearch:true`.
 
