@@ -12,7 +12,16 @@ use std::io::Cursor;
 fn stream(raw: &[u8], thread: &str, capacity: usize) -> Option<Vec<ChatMessage>> {
     let reader = || BufReader::with_capacity(capacity, Cursor::new(raw.to_vec()));
     let start = forked_start(reader())?;
-    convert_rollout_stream(reader(), thread, start).ok()
+    convert_rollout_stream(reader(), thread, start, &|_| true)
+        .ok()
+        .map(|scanned| scanned.messages)
+}
+
+/// The production path: only scan-relevant messages are retained.
+fn stream_scan(raw: &[u8], thread: &str, capacity: usize) -> Option<Scanned> {
+    let reader = || BufReader::with_capacity(capacity, Cursor::new(raw.to_vec()));
+    let start = forked_start(reader())?;
+    convert_rollout_stream(reader(), thread, start, &is_scan_relevant).ok()
 }
 
 fn render(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
@@ -36,6 +45,15 @@ fn assert_parity(raw: &str) {
         assert_eq!(render(&new), render(&old), "capacity {capacity}");
         assert_eq!(
             format!("{:?}", scan_history_for_prs(&new)),
+            format!("{:?}", scan_history_for_prs(&old)),
+            "capacity {capacity}"
+        );
+        let kept = stream_scan(raw.as_bytes(), "t", capacity).expect("valid utf-8");
+        assert_eq!(kept.total, old.len(), "capacity {capacity}");
+        assert!(kept.messages.len() <= old.len());
+        assert!(kept.messages.iter().all(is_scan_relevant));
+        assert_eq!(
+            format!("{:?}", scan_history_for_prs(&kept.messages)),
             format!("{:?}", scan_history_for_prs(&old)),
             "capacity {capacity}"
         );
@@ -211,6 +229,10 @@ async fn read_rollout_history_streams_a_file_inside_the_sessions_root() {
         .await
         .expect("messages");
     assert_eq!(scan_history_for_prs(&messages).len(), 1);
+    // A rollout with turns but no PRs is empty, not missing: no fallback.
+    std::fs::write(&path, no_pr_turn("t2", "c2").join("\n")).unwrap();
+    let none = read_rollout_history(path.to_str().unwrap(), "t", Some(&deps)).await;
+    assert!(none.is_some_and(|messages| messages.is_empty()));
     std::fs::write(&path, "").unwrap();
     assert!(
         read_rollout_history(path.to_str().unwrap(), "t", Some(&deps))

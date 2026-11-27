@@ -1,4 +1,5 @@
 use super::budget::Budget;
+use super::history_worker::background_threads;
 use super::parallel::{ParseMode, read_parsed};
 use super::parallel_fixture::{leaked_budget, synthetic};
 use std::io::{BufReader, Cursor};
@@ -125,4 +126,62 @@ fn workers_return_after_a_panic() {
     }));
     assert!(outcome.is_err());
     assert_eq!(budget.free(), 4);
+}
+
+#[test]
+fn a_background_load_holds_at_most_its_cap_and_a_foreground_load_gets_the_rest() {
+    static BACKGROUND: AtomicUsize = AtomicUsize::new(0);
+    static FOREGROUND: AtomicUsize = AtomicUsize::new(0);
+    let bytes = synthetic(40);
+    let budget = leaked_budget(8);
+    let background = ParseMode {
+        probe: Some(&BACKGROUND),
+        ..mode(budget, 8)
+    }
+    .limited_to(background_threads(8));
+    let foreground = ParseMode {
+        probe: Some(&FOREGROUND),
+        ..mode(budget, 8)
+    };
+    let mut free_meanwhile = None;
+    let mut seen = Vec::new();
+    // The foreground load runs while the background one still holds its permit.
+    read_parsed(
+        BufReader::new(Cursor::new(bytes.clone())),
+        background,
+        |line, _| {
+            seen.push(line.to_owned());
+            if free_meanwhile.is_none() {
+                free_meanwhile = Some(budget.free());
+                assert_eq!(lines(foreground, &bytes), serial_lines(&bytes));
+            }
+        },
+    )
+    .unwrap();
+    assert_eq!(seen, serial_lines(&bytes));
+    assert_eq!(free_meanwhile, Some(6), "the background load holds 2 of 8");
+    assert_eq!(BACKGROUND.load(Ordering::Relaxed), 2);
+    assert_eq!(
+        FOREGROUND.load(Ordering::Relaxed),
+        6,
+        "the foreground load gets the other 6, not serial"
+    );
+    assert_eq!(budget.peak(8), 8);
+    assert_eq!(budget.free(), 8);
+}
+
+#[test]
+fn background_mode_never_raises_a_smaller_mode() {
+    assert_eq!(ParseMode::serial().background().threads, 1);
+    assert_eq!(mode(leaked_budget(8), 8).limited_to(2).threads, 2);
+    assert_eq!(
+        mode(leaked_budget(8), 8).background().threads,
+        background_threads(std::thread::available_parallelism().map_or(1, usize::from)).min(8)
+    );
+}
+
+#[test]
+fn the_background_cap_is_two_or_half_the_cores_and_at_least_one() {
+    let caps: Vec<_> = [1, 2, 3, 4, 8, 32].map(background_threads).into();
+    assert_eq!(caps, [1, 1, 1, 2, 2, 2]);
 }

@@ -114,7 +114,7 @@ pub(crate) use history_child::load as load_child;
 #[path = "history_agent_facts.rs"]
 mod history_agent_facts;
 #[path = "history_worker.rs"]
-mod history_worker;
+pub(crate) mod history_worker;
 pub(crate) use history_worker::load_discovered_history;
 
 pub(crate) async fn run_history_worker<T: Send + 'static>(

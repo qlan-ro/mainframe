@@ -2,6 +2,7 @@ use crate::rollout_fork::ForkStartScan;
 use crate::rollout_reader::{RolloutReaderDeps, parse_response_items, resolve_rollout_path};
 use crate::rollout_stream::{CHUNK_SIZE, visit_lines};
 use crate::types::{ThreadItem, ThreadReadTurn};
+use mainframe_adapter_api::pr_detection::is_scan_relevant;
 use mainframe_types::chat::ChatMessage;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -9,9 +10,15 @@ use std::io::{BufRead, BufReader};
 use std::ops::ControlFlow;
 use std::path::Path;
 
-/// Rebuilds a chat's messages from its rollout for the cold-load PR scan.
+/// Rebuilds the PR-scan-relevant messages of a chat from its rollout.
 /// The file is streamed, never held whole: only the response items of the
-/// turn being read stay in memory.
+/// turn being read stay in memory, and after each turn only the messages
+/// `is_scan_relevant` accepts are kept.
+///
+/// `None` means there is no usable rollout (missing, unreadable, or it
+/// converts to no messages at all), so the caller may fall back to
+/// `thread/read`. `Some` with an empty list means the rollout was read and
+/// holds no PR links; the caller must not fall back.
 pub(crate) async fn read_rollout_history(
     path: &str,
     thread: &str,
@@ -19,10 +26,16 @@ pub(crate) async fn read_rollout_history(
 ) -> Option<Vec<ChatMessage>> {
     let path = resolve_rollout_path(path, Some(thread), deps).await?;
     let thread = thread.to_owned();
-    let messages = tokio::task::spawn_blocking(move || convert_rollout_file(&path, &thread))
+    let scanned = tokio::task::spawn_blocking(move || convert_rollout_file(&path, &thread))
         .await
         .ok()??;
-    (!messages.is_empty()).then_some(messages)
+    (scanned.total > 0).then_some(scanned.messages)
+}
+
+/// The messages kept from a rollout, and how many it converted to in all.
+struct Scanned {
+    messages: Vec<ChatMessage>,
+    total: usize,
 }
 
 fn open(path: &Path) -> std::io::Result<BufReader<std::fs::File>> {
@@ -33,9 +46,9 @@ fn open(path: &Path) -> std::io::Result<BufReader<std::fs::File>> {
 }
 
 /// `None` when the file cannot be read, including invalid UTF-8 anywhere in it.
-fn convert_rollout_file(path: &Path, thread: &str) -> Option<Vec<ChatMessage>> {
+fn convert_rollout_file(path: &Path, thread: &str) -> Option<Scanned> {
     let start = forked_start(open(path).ok()?)?;
-    convert_rollout_stream(open(path).ok()?, thread, start).ok()
+    convert_rollout_stream(open(path).ok()?, thread, start, &is_scan_relevant).ok()
 }
 
 /// First pass: only a forked child needs it, and it stops at the handoff line.
@@ -50,13 +63,15 @@ fn forked_start(reader: impl BufRead) -> Option<usize> {
 /// is flushed when the next turn starts or the file ends, so its pending
 /// tool-call maps and `has_users` see exactly the same lines as before. Lines
 /// that cannot produce items (neither a `response_item` nor a `user_message`
-/// event) are not kept.
+/// event) are not kept. Of the converted messages only those `keep` accepts
+/// are retained, as each group is flushed.
 fn convert_rollout_stream(
     reader: impl BufRead,
     thread: &str,
     start: usize,
-) -> std::io::Result<Vec<ChatMessage>> {
-    let mut groups = Groups::new(thread);
+    keep: &dyn Fn(&ChatMessage) -> bool,
+) -> std::io::Result<Scanned> {
+    let mut groups = Groups::new(thread, keep);
     let mut index = 0usize;
     visit_lines(reader, |line| {
         index += 1;
@@ -66,12 +81,17 @@ fn convert_rollout_stream(
         ControlFlow::Continue(())
     })?;
     groups.flush("inProgress");
-    Ok(groups.out)
+    Ok(Scanned {
+        messages: groups.out,
+        total: groups.total,
+    })
 }
 
 struct Groups<'a> {
     thread: &'a str,
+    keep: &'a dyn Fn(&ChatMessage) -> bool,
     out: Vec<ChatMessage>,
+    total: usize,
     counter: usize,
     kept: Vec<String>,
     turn: Option<String>,
@@ -79,10 +99,12 @@ struct Groups<'a> {
 }
 
 impl<'a> Groups<'a> {
-    fn new(thread: &'a str) -> Self {
+    fn new(thread: &'a str, keep: &'a dyn Fn(&ChatMessage) -> bool) -> Self {
         Self {
             thread,
+            keep,
             out: Vec::new(),
+            total: 0,
             counter: 0,
             kept: Vec::new(),
             turn: None,
@@ -94,8 +116,10 @@ impl<'a> Groups<'a> {
     fn flush(&mut self, status: &str) {
         let lines: Vec<&str> = self.kept.iter().map(String::as_str).collect();
         let items = parse_response_items(&lines, &mut self.counter, self.has_users);
+        let messages = convert_group(items, self.turn.take(), status, self.thread);
+        self.total += messages.len();
         self.out
-            .extend(convert_group(items, self.turn.take(), status, self.thread));
+            .extend(messages.into_iter().filter(|m| (self.keep)(m)));
         self.kept.clear();
         self.has_users = false;
     }

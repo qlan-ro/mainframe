@@ -43,6 +43,8 @@ export interface ChatActionHost {
   /** The controller's deduped load — resolves instantly once seeded. */
   load(): Promise<void>;
   sendPrompt(text: string, meta: PromptSendMeta): Promise<{ queued: boolean; queuedMessageId?: string }>;
+  /** Tells the chat's transcript the user sent something (`user-sent.ts`). Call only once a send is really under way. */
+  announceUserSend(): void;
 }
 
 function refuseIfDirectoryMissing(host: ChatActionHost): boolean {
@@ -87,6 +89,7 @@ export async function sendChatMessage(host: ChatActionHost, message: AppendMessa
   };
   host.dispatch({ type: 'local.message.queued', pending });
   host.dispatch({ type: 'run.started', optimistic: true });
+  host.announceUserSend();
 
   let attachmentIds: string[] | undefined;
   try {
@@ -144,6 +147,7 @@ export async function retryChatMessage(host: ChatActionHost, clientId: string, r
   markRetrying(unsentId);
   host.dispatch({ type: 'local.message.retrying', clientId });
   host.dispatch({ type: 'run.started', optimistic: true });
+  host.announceUserSend();
 
   try {
     if (remedy === 'unarchive_native_session') await unarchiveNativeSession(host.getPort(), host.getDaemonId());
@@ -215,6 +219,7 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
   const rows = held.claimFrom(chatId, firstId, press);
   // Another press holds the claims, and gives them back itself.
   if (rows.length === 0) return;
+  let announced = false;
   try {
     // The prompt needs the facade client; failing here, nothing has gone out.
     await host.load();
@@ -223,6 +228,10 @@ export async function sendHeldMessages(host: ChatActionHost, firstId: string): P
       const { messageId, content, attachmentIds } = row;
       // Removed meanwhile, with its chat say, stopped, or no longer this press's: not sent.
       if (!held.startSending(chatId, messageId, press)) continue;
+      // Once, as the first row starts going out and before the prompt resolves, like `sendChatMessage`:
+      // a CLI cold start must not land the jump on a reader who has since scrolled on.
+      if (!announced) host.announceUserSend();
+      announced = true;
       let queuedMessageId: string | undefined;
       try {
         ({ queuedMessageId } = await host.sendPrompt(content, attachmentIds ? { attachmentIds } : {}));

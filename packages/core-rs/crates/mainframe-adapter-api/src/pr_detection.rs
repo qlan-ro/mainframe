@@ -14,7 +14,7 @@ mod text;
 pub use command::{
     ToolUseMeta, is_pr_create_command, is_pr_mutation_command, parse_pr_identifier_from_args,
 };
-pub use history::scan_history_for_prs;
+pub use history::{is_scan_relevant, scan_history_for_prs};
 pub use live::LivePrScanner;
 pub use parse::{
     extract_pr_from_tool_result, parse_azure_pr_url, parse_gitlab_mr_url, parse_pr_url,

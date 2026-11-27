@@ -1,5 +1,31 @@
 use super::*;
 
+/// Workers a background load (a turn-end refresh) may hold; a chat the user
+/// opens meanwhile gets the rest of the budget.
+const BACKGROUND_THREADS: usize = 2;
+
+pub(super) fn background_threads(cores: usize) -> usize {
+    BACKGROUND_THREADS.min(cores / 2).max(1)
+}
+
+impl parallel::ParseMode {
+    /// This mode limited to [`BACKGROUND_THREADS`] workers, and to half the
+    /// cores, so work nobody is waiting on cannot starve a foreground load.
+    /// Never raises a mode.
+    pub(super) fn background(self) -> Self {
+        let cores = std::thread::available_parallelism().map_or(1, usize::from);
+        self.limited_to(background_threads(cores))
+    }
+
+    pub(super) fn limited_to(self, cap: usize) -> Self {
+        Self {
+            threads: self.threads.min(cap),
+            batch_bytes: self.batch_bytes.min(cap * reader::CHUNK_SIZE / 2),
+            ..self
+        }
+    }
+}
+
 pub(crate) async fn load_discovered_history(
     session_id: &str,
     discovered: &DiscoveredFiles,
@@ -12,7 +38,49 @@ pub(crate) async fn load_discovered_history(
     ),
     mainframe_adapter_api::AdapterError,
 > {
+    load_discovered_history_in(
+        session_id,
+        discovered,
+        base,
+        messages,
+        parallel::ParseMode::detect(),
+    )
+    .await
+}
+
+/// [`load_discovered_history`], capped to a few workers when `background`:
+/// for loads nobody waits on.
+pub(crate) async fn load_discovered_history_as(
+    background: bool,
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+    base: &str,
+    messages: bool,
+) -> Result<
+    (
+        Vec<ChatMessage>,
+        mainframe_adapter_api::CollectedHistoryFiles,
+    ),
+    mainframe_adapter_api::AdapterError,
+> {
     let mode = parallel::ParseMode::detect();
+    let mode = if background { mode.background() } else { mode };
+    load_discovered_history_in(session_id, discovered, base, messages, mode).await
+}
+
+async fn load_discovered_history_in(
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+    base: &str,
+    messages: bool,
+    mode: parallel::ParseMode,
+) -> Result<
+    (
+        Vec<ChatMessage>,
+        mainframe_adapter_api::CollectedHistoryFiles,
+    ),
+    mainframe_adapter_api::AdapterError,
+> {
     load_with_reader(
         session_id,
         discovered,

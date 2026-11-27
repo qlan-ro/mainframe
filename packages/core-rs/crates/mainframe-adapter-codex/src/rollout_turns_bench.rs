@@ -67,7 +67,7 @@ fn bench_pr_scan() {
         let raw = std::fs::read_to_string(&path).unwrap();
         scan_history_for_prs(&convert_rollout_whole_string(&raw, "t"))
     };
-    let run_new = || scan_history_for_prs(&convert_rollout_file(&path, "t").unwrap());
+    let run_new = || scan_history_for_prs(&convert_rollout_file(&path, "t").unwrap().messages);
     let timed = |name: &str, f: &dyn Fn() -> Vec<mainframe_types::adapter::DetectedPr>| {
         let started = std::time::Instant::now();
         let links = f();

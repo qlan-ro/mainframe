@@ -121,6 +121,21 @@ impl ClaudeSession {
         *self.history_files.lock_recover() = Some(files);
         Ok(messages)
     }
+    /// [`load_history`](Self::load_history) with a capped parse budget, for a
+    /// refresh nobody is waiting on.
+    pub async fn load_history_background(&self) -> Result<Vec<ChatMessage>, AdapterError> {
+        let (messages, files) = match self.discover_history().await {
+            Some((id, base, found)) => {
+                crate::history::history_worker::load_discovered_history_as(
+                    true, &id, &found, &base, true,
+                )
+                .await?
+            }
+            None => Default::default(),
+        };
+        *self.history_files.lock_recover() = Some(files);
+        Ok(messages)
+    }
     pub(super) async fn read_history(
         &self,
         messages: bool,

@@ -1,14 +1,16 @@
 /**
  * "The user sent something in this chat", keyed by chat id.
  *
- * Every send the user makes goes through the chat controller: the composer's
- * send, queue and steer, Compact conversation and review-panel comments (all
- * `aui.thread.append` → `onNew` → `sendMessage`), Send now on a held row
- * (`sendHeld`) and Resume on a paused queue (`resumeQueue`). The controller
- * emits here; the transcript's bottom pin and the older-page prepend anchor
- * listen. A prompt the daemon dispatches by itself (a queued prompt released
- * at turn end) or one another agent sends never passes through those methods,
- * so it never fires this.
+ * Every send the user makes announces itself through `announceUserSend` (from
+ * `chat-actions.ts`, and `resumeQueue` in the controller),
+ * once something is really under way: the composer's send, queue and steer, Compact conversation and review-panel comments (all
+ * `aui.thread.append` → `onNew` → `sendMessage`), Retry on a "Failed to send"
+ * bubble, Send now on a held row (`sendHeld`) and Resume on a paused queue
+ * (`resumeQueue`, after the request succeeds). A send refused before it starts
+ * (missing working directory, empty input) announces nothing. The transcript's
+ * bottom pin and the older-page prepend anchor listen. A prompt the daemon
+ * dispatches by itself (a queued prompt released at turn end) or one another
+ * agent sends never passes through those paths, so it never fires this.
  */
 const listeners = new Map<string, Set<() => void>>();
 
