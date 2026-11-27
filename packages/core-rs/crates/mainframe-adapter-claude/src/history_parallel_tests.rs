@@ -194,6 +194,38 @@ async fn read_failure_keeps_complete_lines_in_both_modes() {
     }
 }
 
+/// The load result hides read errors (`complete: false`), so check the
+/// reader itself: both modes must report the failure after the same lines.
+#[test]
+fn read_failure_is_reported_by_both_modes() {
+    let bytes = synthetic(3);
+    for fail_at in [bytes.len() / 3, bytes.len() / 2 + 5] {
+        let run = |mode| {
+            let drip = Drip {
+                data: bytes.clone(),
+                pos: 0,
+                step: 50,
+                fail_at: Some(fail_at),
+            };
+            let mut seen = Vec::new();
+            let result = super::parallel::read_parsed_in(
+                &super::budget::Budget::new(8),
+                BufReader::with_capacity(97, drip),
+                mode,
+                |line, _| seen.push(line.to_owned()),
+            );
+            (result.is_err(), seen)
+        };
+        let (serial_failed, serial) = run(ParseMode::serial());
+        assert!(serial_failed && !serial.is_empty());
+        for batch in [64, 3000] {
+            let (failed, seen) = run(tiny(4, batch));
+            assert!(failed, "parallel read lost the error, batch {batch}");
+            assert_eq!(seen, serial, "fail_at {fail_at}, batch {batch}");
+        }
+    }
+}
+
 #[test]
 fn empty_and_newline_only_inputs_match() {
     for bytes in [&b""[..], b"\n", b"\n\n\n", b"{}", b"{}\r\n{}\r", b"\r\n"] {

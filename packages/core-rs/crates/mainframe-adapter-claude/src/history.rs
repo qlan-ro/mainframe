@@ -24,6 +24,8 @@ fn is_strict_true(v: Option<&Value>) -> bool {
 #[path = "history_reader.rs"]
 mod reader;
 use reader::visit_lines;
+#[path = "history_parallel_budget.rs"]
+mod budget;
 #[path = "history_parallel.rs"]
 mod parallel;
 
@@ -301,6 +303,9 @@ impl HistoryLoad {
 #[cfg(test)]
 #[path = "history_queue_tests.rs"]
 mod history_queue_tests;
+#[cfg(test)]
+#[path = "history_parallel_budget_tests.rs"]
+mod parallel_budget_tests;
 #[cfg(test)]
 #[path = "history_parallel_fixture.rs"]
 mod parallel_fixture;
