@@ -107,7 +107,7 @@ fn prepare_for(
         page.start = index.fit(
             page.start,
             &mut page.containers,
-            &turn_window::Wire::new(options.previews, messages.len()),
+            &turn_window::Wire::new(options.previews, options.lazy_tool_images, messages.len()),
             turn_window::MAX_WINDOW_BYTES,
         );
     }

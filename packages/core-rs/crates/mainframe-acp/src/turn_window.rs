@@ -148,13 +148,17 @@ impl<'a> TurnIndex<'a> {
             .map(|(offset, items)| wire.bytes(start + offset, items))
             .collect();
         let mut total: usize = sizes.iter().sum();
+        let bytes_before = total;
+        let end_all = start + containers.len();
+        let turns_before = (start..end_all).filter(|&i| self.is_start(i)).count();
         let mut first = 0;
         while total > limit {
-            let from = start + first + 1;
             let end = start + containers.len();
-            let next = (from..end)
+            // The turn the window now starts in, then the one after it.
+            let next = (start + first..end)
                 .find(|&index| self.is_start(index))
-                .map(|index| self.boundary(index).max(from) - start);
+                .and_then(|current| (current + 1..end).find(|&index| self.is_start(index)))
+                .map(|index| self.boundary(index) - start);
             let Some(next) = next else {
                 break;
             };
@@ -162,6 +166,18 @@ impl<'a> TurnIndex<'a> {
             first = next;
         }
         containers.drain(..first);
+        if first > 0 {
+            tracing::debug!(
+                turns_before = turns_before,
+                turns_after = (start + first..end_all)
+                    .filter(|&i| self.is_start(i))
+                    .count(),
+                bytes_before,
+                bytes_after = total,
+                limit,
+                "trimmed a turn window to the size limit"
+            );
+        }
         start + first
     }
 }
@@ -171,13 +187,18 @@ impl<'a> TurnIndex<'a> {
 /// references instead of base64.
 pub struct Wire {
     previews: bool,
+    lazy_images: bool,
     total: usize,
 }
 
 impl Wire {
     /// `total` is the transcript's container count.
-    pub fn new(previews: bool, total: usize) -> Self {
-        Self { previews, total }
+    pub fn new(previews: bool, lazy_images: bool, total: usize) -> Self {
+        Self {
+            previews,
+            lazy_images,
+            total,
+        }
     }
 
     /// Bytes container `index` (absolute) puts on the wire.
@@ -199,7 +220,11 @@ impl Wire {
         } else {
             item
         };
-        let (image_bytes, images) = tool_images(item);
+        let (image_bytes, images) = if self.lazy_images {
+            tool_images(item)
+        } else {
+            (0, 0)
+        };
         encoded_bytes(item).saturating_sub(image_bytes) + images * IMAGE_REFERENCE_BYTES
     }
 }

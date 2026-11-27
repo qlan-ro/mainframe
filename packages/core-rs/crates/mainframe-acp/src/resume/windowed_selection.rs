@@ -105,7 +105,7 @@ fn select(
         start = turn_window::TurnIndex::new(snapshot.messages).fit(
             start,
             &mut containers,
-            &turn_window::Wire::new(previews, snapshot.messages.len()),
+            &turn_window::Wire::new(previews, true, snapshot.messages.len()),
             turn_window::MAX_WINDOW_BYTES,
         );
     }

@@ -164,7 +164,7 @@ fn encoded(messages: &[DisplayMessage]) -> Vec<Vec<EncodedItem>> {
 }
 
 fn wire(messages: &[DisplayMessage]) -> Wire {
-    Wire::new(true, messages.len())
+    Wire::new(true, true, messages.len())
 }
 
 #[test]
@@ -245,13 +245,13 @@ fn the_size_guard_measures_what_is_sent_not_the_full_images_and_results() {
     let full = encoded_bytes(&item);
     assert!(full > 500_000);
     // The newest containers keep their results but a lazy image is a reference.
-    let newest = Wire::new(true, 1).bytes(0, std::slice::from_ref(&item));
+    let newest = Wire::new(true, true, 1).bytes(0, std::slice::from_ref(&item));
     assert!((100_000..110_000).contains(&newest), "{newest}");
     // An old container also has its result cut to a preview.
-    let old = Wire::new(true, 100).bytes(0, std::slice::from_ref(&item));
+    let old = Wire::new(true, true, 100).bytes(0, std::slice::from_ref(&item));
     assert!(old < 4_000, "{old}");
     // Without previews the result stays whole.
-    let plain = Wire::new(false, 100).bytes(0, std::slice::from_ref(&item));
+    let plain = Wire::new(false, true, 100).bytes(0, std::slice::from_ref(&item));
     assert!((100_000..110_000).contains(&plain), "{plain}");
 }
 
@@ -269,3 +269,6 @@ fn a_single_oversized_turn_is_sent_whole_even_with_hidden_replies_inside() {
     assert_eq!(index.fit(0, &mut containers, &wire(&messages), 100), 0);
     assert_eq!(containers.len(), 5);
 }
+
+#[path = "turn_window_tests_more.rs"]
+mod more;
