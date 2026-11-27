@@ -22,7 +22,6 @@ import { installProviderCliStatusSubscriber } from '@/store/cli-update';
 import { seedProviderCliStatusesFor } from '@/store/cli-update-seed';
 import { installPortTunnelSubscriber } from '@/store/port-tunnels';
 import { seedPortTunnels } from '@/store/port-tunnels-seed';
-import { startBootChatPrewarm } from '@/features/sessions/runtime/boot-chat-prewarm';
 import { initLspPort } from '../lib/lsp';
 import { DaemonPortProvider } from '../features/sessions/runtime/daemon-port-context';
 import { ActiveDaemonProvider, useActiveDaemon } from '../features/daemon/active-daemon-context';
@@ -65,8 +64,6 @@ function DaemonGatedShell({ fallbackPort }: { fallbackPort: number }) {
   // Daemon switch / first port: reset baseline + reseed.
   useEffect(() => {
     if (activePort <= 0) return;
-    // First, so the daemon starts loading the remembered chat's history before the list is even asked for.
-    startBootChatPrewarm(activePort);
     seedAdaptersFor(activePort);
     seedQuota(activePort);
     seedProviderCliStatusesFor(activePort);

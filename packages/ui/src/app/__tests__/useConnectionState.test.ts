@@ -37,6 +37,10 @@ import { renderHook, act } from '@testing-library/react';
 // ---------------------------------------------------------------------------
 
 const setActiveDaemonMock = vi.fn();
+const prewarmMock = vi.fn();
+vi.mock('../../features/sessions/runtime/boot-chat-prewarm', () => ({
+  startBootChatPrewarm: (...args: unknown[]) => prewarmMock(...args),
+}));
 vi.mock('../../lib/daemon/active-daemon', () => ({
   setActiveDaemon: (...args: unknown[]) => setActiveDaemonMock(...args),
   getActiveDaemon: vi.fn(() => ({
@@ -245,5 +249,38 @@ describe('useConnectionState', () => {
       baseUrl: 'http://127.0.0.1:31415',
       token: null,
     });
+  });
+
+  it('asks for the remembered chat once, right after the local target is seeded', async () => {
+    mockGetDaemonPort.mockResolvedValue(31415);
+    mockGetDaemonStatus.mockResolvedValue('ready');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true } as Response));
+    setActiveDaemonMock.mockImplementation(() => {
+      expect(prewarmMock).not.toHaveBeenCalled();
+    });
+
+    renderHook(() => useConnectionState());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6500);
+    });
+
+    expect(prewarmMock).toHaveBeenCalledTimes(1);
+    expect(prewarmMock).toHaveBeenCalledWith(31415);
+  });
+
+  it('does not ask before the daemon answers', async () => {
+    mockGetDaemonPort.mockResolvedValue(31415);
+    mockGetDaemonStatus.mockResolvedValue('ready');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false } as Response));
+
+    renderHook(() => useConnectionState());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(prewarmMock).not.toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getHost } from '../lib/host';
 import { getActiveDaemon, setActiveDaemon } from '../lib/daemon/active-daemon';
+import { startBootChatPrewarm } from '../features/sessions/runtime/boot-chat-prewarm';
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
@@ -95,6 +96,9 @@ export function useConnectionState(): {
             baseUrl: `http://127.0.0.1:${currentPort}`,
             token: null,
           });
+          // The earliest the daemon is known to answer: ask for the remembered chat now, not after
+          // the shell has mounted, loaded the session list and picked a chat to open.
+          startBootChatPrewarm(currentPort);
         }
       }
       pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);

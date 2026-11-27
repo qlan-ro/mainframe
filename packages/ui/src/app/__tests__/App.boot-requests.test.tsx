@@ -1,6 +1,5 @@
 /**
  * What the shell asks the daemon for while booting, and in what order:
- *  - the remembered chat is requested first, before the list-driven open;
  *  - each seed (adapters, quota, CLI status, port tunnels) is requested once, not again when
  *    the boot socket connects;
  *  - a real reconnect after a drop reseeds once.
@@ -29,9 +28,6 @@ vi.mock('../../lib/daemon/ws-client', () => ({
     },
   },
 }));
-vi.mock('@/features/sessions/runtime/boot-chat-prewarm', () => ({
-  startBootChatPrewarm: vi.fn((port: number) => calls.push(`prewarm:${port}`)),
-}));
 vi.mock('@/store/adapters-seed', () => ({ seedAdaptersFor: vi.fn(() => calls.push('adapters')) }));
 vi.mock('@/store/quota-seed', () => ({ seedQuota: vi.fn(() => calls.push('quota')) }));
 vi.mock('@/store/cli-update-seed', () => ({ seedProviderCliStatusesFor: vi.fn(() => calls.push('cli')) }));
@@ -54,11 +50,11 @@ beforeEach(() => {
 });
 
 describe('App boot requests', () => {
-  it('requests the remembered chat before any seed', async () => {
+  it('seeds each catalog once as the shell mounts', async () => {
     await act(async () => {
       render(<App />);
     });
-    expect(calls).toEqual(['prewarm:31415', 'adapters', 'quota', 'cli', 'tunnels']);
+    expect(calls).toEqual(['adapters', 'quota', 'cli', 'tunnels']);
   });
 
   it('does not seed again when the boot socket connects', async () => {
@@ -67,7 +63,7 @@ describe('App boot requests', () => {
     });
     act(() => setConnected(true));
     expect(calls.filter((call) => call === 'adapters')).toHaveLength(1);
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(4);
   });
 
   it('reseeds once when the socket reconnects after a drop', async () => {
@@ -78,6 +74,5 @@ describe('App boot requests', () => {
     act(() => setConnected(false));
     act(() => setConnected(true));
     expect(calls.filter((call) => call === 'adapters')).toHaveLength(2);
-    expect(calls.filter((call) => call === 'prewarm:31415')).toHaveLength(1);
   });
 });
