@@ -2,6 +2,8 @@
 
 Todo #482. Follows section 7.3 of the [composer study](2026-11-26-composer-shadcn-study.md) (PR #978), and runs on the assistant-ui 0.15.38 set from PR #979.
 
+**Status, 27 November:** shipped behind a setting, off by default (todo #493): Settings › Chat › "Mentions and commands as chips (preview)". The dev flag in section 2 is gone, typed tokens chip once finished, edit mode and quote segments use a chip editor, and the harness below has four more checks (32 in each engine). The owner's in-app check (section 5) gates making it the default.
+
 ## 1. Verdict
 
 **Go, with one check first.** `@assistant-ui/react-lexical` 0.2.25 gives real atomic chips. The caret steps over a chip in one press, Backspace and Delete remove it whole, and undo, copy and paste, draft restore and session labels all keep it a chip. The text sent to the daemon is unchanged. Every composer behaviour the harness covers passes in WebKit and Chromium (28 of 28 in each).
