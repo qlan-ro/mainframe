@@ -2,7 +2,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { useSideAwareThreadId } from '@/features/side-chat/side-chat-scope';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
-import { useDelayedVisible } from '@/lib/use-delayed-visible';
+import { LOADING_MIN_VISIBLE_MS, useDelayedVisible } from '@/lib/use-delayed-visible';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useChatExtras } from '../runtime/chat-extras';
@@ -29,8 +29,6 @@ export function LoadErrorBanner() {
 
 /** Shown only when a load outlasts this, so a cached or fast open never flashes it. */
 export const LOADING_DELAY_MS = 200;
-/** Once shown it stays this long, so a load ending just after the delay does not flicker. */
-export const LOADING_MIN_VISIBLE_MS = 300;
 
 export function ChatThreadLoadingSpinner() {
   const extras = useChatExtras();

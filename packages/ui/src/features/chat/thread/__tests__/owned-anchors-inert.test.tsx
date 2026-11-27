@@ -25,7 +25,10 @@ let viewport: HTMLDivElement;
 let writes: number[];
 let rowTop: number;
 
+const supports = vi.fn((_property: string, _value: string) => true);
 beforeEach(() => {
+  supports.mockReturnValue(true);
+  vi.stubGlobal('CSS', { supports });
   f.first = 'old';
   f.floor = 'old-item';
   writes = [];
@@ -48,7 +51,10 @@ beforeEach(() => {
     ({ top: rowTop, bottom: rowTop + 40 }) as DOMRect;
   document.body.append(viewport);
 });
-afterEach(() => viewport.remove());
+afterEach(() => {
+  viewport.remove();
+  vi.unstubAllGlobals();
+});
 
 function controller(owned: boolean) {
   const release = vi.fn();
@@ -89,6 +95,26 @@ describe('the prepend anchor', () => {
     const { beginInteraction } = prepend(true);
     expect(beginInteraction).not.toHaveBeenCalled();
     expect(writes).toEqual([]);
+  });
+});
+
+describe('the row anchor on a browser that cannot anchor', () => {
+  it('stays in charge under the owner: it keeps the row where it was', () => {
+    supports.mockReturnValue(false);
+    const { value } = controller(true);
+    const row = document.createElement('div');
+    viewport.append(row);
+    row.getBoundingClientRect = () => ({ top: rowTop, bottom: rowTop + 40 }) as DOMRect;
+    const hook = renderHook(({ open }) => useRowAnchor(open), {
+      initialProps: { open: false },
+      wrapper: ({ children }) => <TranscriptScrollProvider value={value}>{children}</TranscriptScrollProvider>,
+    });
+    hook.result.current.rowRef.current = row as HTMLDivElement;
+    act(() => hook.result.current.beforeToggle());
+    rowTop = 260;
+    hook.rerender({ open: true });
+    expect(supports).toHaveBeenCalledWith('overflow-anchor', 'auto');
+    expect(writes.length).toBeGreaterThan(0);
   });
 });
 

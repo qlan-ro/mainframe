@@ -89,7 +89,8 @@ vi.mock('../../runtime/chat-extras', () => ({
 }));
 
 import { ChatThread } from '../ChatThread';
-import { LOADING_DELAY_MS, LOADING_MIN_VISIBLE_MS } from '../ChatThreadIndicators';
+import { LOADING_DELAY_MS } from '../ChatThreadIndicators';
+import { LOADING_MIN_VISIBLE_MS } from '@/lib/use-delayed-visible';
 
 const settle = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 

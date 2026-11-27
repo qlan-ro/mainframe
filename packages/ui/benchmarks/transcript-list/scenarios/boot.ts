@@ -10,6 +10,9 @@
  *   hiddenFrames    frames with rows in the DOM but none visible
  *   wrongFrames     visible frames before the tail shows
  *   lastRowOnFirstFrame, firstFrameGap, firstFrameScrollTop: state on the first visible frame
+ *   newestMoved     how far the newest row's bottom edge moved against the viewport's bottom edge from the
+ *                   first visible frame on (until 40 frames after the tail first shows): a short tail that
+ *                   paints at the top and then jumps to the bottom moves by the empty space under it
  */
 import { controls } from '../controls';
 import { gapOf, round } from '../probe';
@@ -26,6 +29,7 @@ export interface BootResult {
   mountMs: number;
   firstFrameScrollTop: number;
   firstFrameGap: number;
+  newestMoved: number;
 }
 
 const SHOWN = { visibilityProperty: true, opacityProperty: true } as CheckVisibilityOptions;
@@ -51,7 +55,11 @@ export function watchBoot(start: number): Promise<BootResult> {
       mountMs: NaN,
       firstFrameScrollTop: NaN,
       firstFrameGap: NaN,
+      newestMoved: 0,
     };
+    let settle = -1;
+    let lowest = Infinity;
+    let highest = -Infinity;
     const tick = () => {
       frame++;
       const now = round(performance.now() - start);
@@ -74,13 +82,24 @@ export function watchBoot(start: number): Promise<BootResult> {
             firstFrameScrollTop: round(el.scrollTop),
             firstFrameGap: round(gapOf(el)),
           });
-        if (tailShown) {
+        if (anyShown && last) {
+          const offset = last.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom;
+          lowest = Math.min(lowest, offset);
+          highest = Math.max(highest, offset);
+          result.newestMoved = round(highest - lowest);
+        }
+        if (tailShown && settle < 0) {
           result.mountMs = now;
+          settle = 40;
+        }
+        if (settle >= 0 && --settle < 0) {
           resolve(result);
           return;
         }
-        if (anyShown) result.wrongFrames++;
-        else result.hiddenFrames++;
+        if (!tailShown) {
+          if (anyShown) result.wrongFrames++;
+          else result.hiddenFrames++;
+        }
       }
       if (frame < 600) requestAnimationFrame(tick);
       else resolve(result);

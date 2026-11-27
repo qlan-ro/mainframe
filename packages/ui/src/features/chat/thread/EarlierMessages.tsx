@@ -8,13 +8,10 @@ import { useChatExtras } from '../runtime/chat-extras';
 import { useTranscriptScroll } from './transcript-scroll-context';
 
 import { usePrependAnchor } from './use-prepend-anchor';
-import { useDelayedVisible } from '@/lib/use-delayed-visible';
+import { LOADING_MIN_VISIBLE_MS, useDelayedVisible } from '@/lib/use-delayed-visible';
 export { HISTORY_PREPEND_EVENT } from './use-prepend-anchor';
 
 const SCROLL_GESTURES = ['wheel', 'touchmove', 'keydown', SCROLLBAR_DRAG_EVENT];
-
-/** A fast page must not flash the indicator: once it shows it stays this long. */
-export const LOADING_MIN_VISIBLE_MS = 300;
 
 export function EarlierMessages() {
   const extras = useChatExtras();
@@ -106,7 +103,6 @@ function OwnedBoundary({
       data-state={state}
       className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground outline-none focus-visible:focus-line"
       aria-live="polite"
-      aria-busy={held}
     >
       {state === 'loading' && (
         <>

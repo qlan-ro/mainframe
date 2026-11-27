@@ -16,6 +16,9 @@ export const CASES = [
   { id: 'P5-open', query: '', run: null, repeat: 5 },
   { id: 'P6-open-10', query: '&groups=10', run: null, repeat: 5 },
   { id: 'P6-open-20', query: '&groups=20', run: null, repeat: 5 },
+  // A short tail: the real shape's newest rows are shorter than the viewport, so a tail-first mount that shows them
+  // before the list overflows paints them at the top and then jumps them to the bottom. Boot only; `newestMoved` is the jump.
+  { id: 'B-short', query: '&shape=real&window=24', run: null, repeat: 5 },
   { id: 'P6-open-400', query: '&groups=400&total=400', run: null, repeat: 3 },
   { id: 'P6-scroll-400', query: '&groups=400&total=400', run: 'p6scroll', options: {} },
   { id: 'P6-stream-400', query: '&groups=400&total=400', run: 'p4follow', options: { seconds: 5 } },

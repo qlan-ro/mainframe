@@ -26,11 +26,10 @@ import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel
 import { onUserSent } from '../controller/user-sent';
 import { AT_BOTTOM_PX, isAtBottom } from './bottom-pin';
 import { HISTORY_PREPEND_EVENT } from './history-prepend-event';
+import { anchoringSupported } from './scroll-anchoring';
 import { listenForScrollInput } from './scroll-owner-input';
 import type { TranscriptScrollController } from './transcript-scroll-context';
 
-const anchoring =
-  typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('overflow-anchor', 'auto');
 const BLOCKS = 'p, pre, table, li, h2, h3, img, [data-message-id], [data-history-item-id]';
 
 /** What the reader is looking at: the block a third of the way down the viewport. */
@@ -74,6 +73,8 @@ export function useScrollOwner(
     listeners: new Set<() => void>(),
     restore: null as null | ReturnType<typeof readerAnchor>,
     near: null as Near | null,
+    /** The frame that clears a record no resize used (a page that changed nothing's height). */
+    staleFrame: 0,
   });
   const publish = useCallback(() => {
     const current = state.current;
@@ -114,14 +115,23 @@ export function useScrollOwner(
         at: hit.row.getBoundingClientRect().top - contentEl.getBoundingClientRect().top,
         scrollTop: el.scrollTop,
       };
-    } else if (!anchoring) current.restore = hit;
+    } else if (!anchoringSupported()) current.restore = hit;
+  }, []);
+  /** Keeps the owner at the tail from a layout effect, for rows that land before the resize observer exists. */
+  const followNow = useCallback(() => {
+    const el = viewportElement.current;
+    if (!el || !state.current.following) return;
+    el.scrollTop = el.scrollHeight;
+    state.current.lastTop = el.scrollTop;
   }, []);
   useLayoutEffect(() => {
     state.current.near = null;
     state.current.restore = null;
+    cancelAnimationFrame(state.current.staleFrame);
     pinToBottom();
   }, [threadId, pinToBottom]);
   useEffect(() => (threadId == null ? undefined : onUserSent(threadId, pinToBottom)), [threadId, pinToBottom]);
+  useEffect(() => () => cancelAnimationFrame(state.current.staleFrame), []);
   useEffect(() => {
     const jump = (event: Event) => {
       if ((event as CustomEvent<ActivityJump>).detail.chatId === chatId) release();
@@ -168,6 +178,22 @@ export function useScrollOwner(
       current.lastTop = top;
       publish();
     };
+    // A record is for the commit that follows it: its resize comes in the next frame. Once rows have changed
+    // and that frame has passed, a record nobody used belongs to a change that moved nothing; drop it, or a later
+    // resize would use it. Tied to the DOM change, not to the clock, so a slow commit keeps its record.
+    const staleCheck = () => {
+      if (!current.near && !current.restore) return;
+      cancelAnimationFrame(current.staleFrame);
+      current.staleFrame = requestAnimationFrame(() => {
+        current.staleFrame = requestAnimationFrame(() => {
+          current.staleFrame = 0;
+          current.near = null;
+          current.restore = null;
+        });
+      });
+    };
+    const mutations = new MutationObserver(staleCheck);
+    mutations.observe(content, { childList: true, subtree: true });
     const observer = new ResizeObserver(onResize);
     observer.observe(content);
     observer.observe(viewport);
@@ -182,6 +208,7 @@ export function useScrollOwner(
     });
     return () => {
       observer.disconnect();
+      mutations.disconnect();
       viewport.removeEventListener('scroll', onScroll);
       stopInput();
     };
@@ -222,11 +249,12 @@ export function useScrollOwner(
       isInteracting: () => false,
       beginInteraction: () => () => undefined,
       beforePrepend,
+      followNow,
       chatId,
       findOwner,
       tailPending,
     }),
-    [viewport, isFollowing, beforePrepend, chatId, findOwner, tailPending],
+    [viewport, isFollowing, beforePrepend, followNow, chatId, findOwner, tailPending],
   );
   return { controller, setViewport, setContent, isPinned, subscribePinned, pinToBottom };
 }

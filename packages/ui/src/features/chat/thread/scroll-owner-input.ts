@@ -6,8 +6,7 @@
 const UP_KEYS = new Set(['ArrowUp', 'PageUp', 'Home']);
 const DOWN_KEYS = new Set(['ArrowDown', 'PageDown', ' ']);
 const FIELDS = 'input, textarea, [contenteditable="true"]';
-/** A click on a disclosure (a row the reader opens) is the reader taking over: it reads what opens. */
-/** Only one that is closed and opens a row: collapsing a row, or a menu's trigger, is not the reader taking over. */
+/** A click on a disclosure (a row the reader opens) is the reader taking over: it reads what opens. Only one that is closed and opens a row: collapsing a row, or a menu's trigger, is not the reader taking over. */
 const DISCLOSURE = '[aria-expanded="false"]:not([aria-haspopup])';
 
 export interface ScrollInputHandlers {

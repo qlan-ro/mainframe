@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EarlierMessages, LOADING_MIN_VISIBLE_MS } from '../EarlierMessages';
+import { EarlierMessages } from '../EarlierMessages';
+import { LOADING_MIN_VISIBLE_MS } from '@/lib/use-delayed-visible';
 import { TranscriptScrollProvider, type TranscriptScrollController } from '../transcript-scroll-context';
 
 const f = vi.hoisted(() => ({

@@ -22,8 +22,8 @@ let scrollBy: ReturnType<typeof vi.fn>;
 let row: HTMLElement;
 let rowTop = 100;
 
-function Harness() {
-  owner = useScrollOwner('thread', 'chat');
+function Harness({ thread = 'thread' }: { thread?: string }) {
+  owner = useScrollOwner(thread, 'chat');
   return (
     <div ref={owner.setViewport} data-testid="viewport" tabIndex={-1}>
       <div ref={owner.setContent} data-testid="content">
@@ -60,6 +60,9 @@ function mount() {
   return view;
 }
 
+let frames: FrameRequestCallback[] = [];
+const runFrame = () => act(() => frames.splice(0).forEach((frame) => frame(0)));
+
 const grow = (by: number) => {
   layout.height += by;
   act(() => resize());
@@ -67,6 +70,9 @@ const grow = (by: number) => {
 const following = () => owner.controller.isFollowing();
 
 beforeEach(() => {
+  frames = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+  vi.stubGlobal('cancelAnimationFrame', () => {});
   for (const name of Object.keys(DRIVEN))
     originals[name] = Object.getOwnPropertyDescriptor(Element.prototype, name) ?? {
       value: undefined,
@@ -285,5 +291,70 @@ describe('a page above a reader near the top', () => {
     rowTop += 500;
     act(() => resize());
     expect(scrollBy).toHaveBeenCalledWith({ top: 500, behavior: 'instant' });
+  });
+});
+
+describe('a landing record that no resize used', () => {
+  const readNearTop = () => {
+    const view = mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 22;
+    rowTop = 400;
+    return view;
+  };
+
+  const rowsChange = () =>
+    act(() => void viewport.querySelector('[data-testid="content"]')!.appendChild(document.createElement('i')));
+  // MutationObserver callbacks are microtasks: wait for them.
+  const settled = () => act(async () => void (await Promise.resolve()));
+
+  it('is dropped two frames after the rows changed, so a later resize does not use it', async () => {
+    readNearTop();
+    act(() => owner.controller.beforePrepend?.());
+    rowsChange();
+    await settled();
+    runFrame();
+    runFrame();
+    layout.height += 500;
+    rowTop += 500;
+    act(() => resize());
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('is still there for the resize of the frame the page commits in, and for a slow commit', async () => {
+    readNearTop();
+    act(() => owner.controller.beforePrepend?.());
+    runFrame();
+    runFrame();
+    runFrame();
+    rowsChange();
+    await settled();
+    runFrame();
+    layout.height += 500;
+    rowTop += 500;
+    act(() => resize());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 500, behavior: 'instant' });
+  });
+});
+
+describe('a chat switch', () => {
+  it('brings follow back, clears a pending landing record and re-pins', () => {
+    const view = mount();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    layout.top = 22;
+    rowTop = 400;
+    act(() => owner.controller.beforePrepend?.());
+    expect(owner.controller.isFollowing()).toBe(false);
+    layout.height = 3000;
+
+    view.rerender(<Harness thread="other" />);
+
+    expect(owner.controller.isFollowing()).toBe(true);
+    expect(layout.top).toBe(2500);
+    layout.height += 500;
+    rowTop += 500;
+    act(() => resize());
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(layout.top).toBe(3000);
   });
 });

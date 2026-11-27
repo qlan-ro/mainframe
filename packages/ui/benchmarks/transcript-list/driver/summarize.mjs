@@ -128,6 +128,14 @@ const PROPS = {
       `${fmt(median(boots.map((b) => b.firstVisibleMs)))} / ${fmt(median(boots.map((b) => b.mountMs)))} ms`,
     );
   },
+  'B-short: newest row moves': (e, v) => {
+    const boots = of(e, v, 'B-short')
+      .filter((r) => r.boot)
+      .map((r) => r.boot);
+    if (!boots.length || boots.every((b) => b.newestMoved === undefined)) return verdict(null, 'n/a');
+    const moved = max(boots.map((b) => b.newestMoved));
+    return verdict(moved <= 1, `${fmt(moved)} px over the first frames`);
+  },
   'P6 mount 40': (e, v) => {
     const m = median(mounts(e, v, 'P5-open'));
     const base = median(mounts(e, v.includes('@') ? `v0@${v.split('@')[1]}` : 'v0', 'P5-open'));

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { anchoringSupported } from '../../thread/scroll-anchoring';
 import { useTranscriptScroll } from '../../thread/transcript-scroll-context';
 
 function scrollParent(element: HTMLElement): HTMLElement | null {
@@ -21,7 +22,8 @@ export function useRowAnchor(open: boolean) {
   const cleanup = useRef<(() => void) | null>(null);
   const beforeToggle = (automatic = false) => {
     // The plain list's browser anchoring holds the row; the owner stops following when the reader opens one.
-    if (controller?.owned) return;
+    // Where the browser cannot anchor (WebKit before macOS 15) this anchor stays in charge.
+    if (controller?.owned && anchoringSupported()) return;
     cleanup.current?.();
     const row = rowRef.current;
     const viewport = row && (scrollParent(row) ?? controller?.viewportElement.current);

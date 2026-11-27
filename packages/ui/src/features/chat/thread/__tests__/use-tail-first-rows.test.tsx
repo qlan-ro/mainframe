@@ -159,3 +159,47 @@ describe('tail-first mount', () => {
     expect(pending).toHaveBeenLastCalledWith(false);
   });
 });
+
+describe('a tail shorter than the viewport', () => {
+  /** A viewport 500 px high whose content is `rowHeight` per mounted row. */
+  const sized = (rowHeight: number) => {
+    const state = { mounted: 0 };
+    const viewport = document.createElement('div');
+    Object.defineProperties(viewport, {
+      clientHeight: { get: () => 500 },
+      scrollHeight: { get: () => Math.max(500, state.mounted * rowHeight) },
+    });
+    const controller = owner(vi.fn(), { viewportElement: { current: viewport } });
+    const use = (rows: { id: string }[]) => {
+      const shown = useTailFirstRows(rows, controller);
+      state.mounted = shown.length;
+      return shown;
+    };
+    return { use };
+  };
+
+  it('mounts further slices before the first paint until the content overflows the viewport', () => {
+    const rows = make(60);
+    const { use } = sized(30);
+    // Six rows are 180 px, eighteen are 540 px: the second slice fills the viewport, in the first commit.
+    const { result } = renderHook(() => use(rows));
+    expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
+  });
+
+  it('stops at the whole window when it never overflows', () => {
+    const rows = make(40);
+    const { use } = sized(2);
+    const { result } = renderHook(() => use(rows));
+    expect(result.current).toHaveLength(40);
+  });
+
+  it('keeps to the newest rows, and waits for the next task, when they already overflow', () => {
+    const rows = make(40);
+    const { use } = sized(200);
+    const { result, unmount } = renderHook(() => use(rows));
+    expect(result.current).toHaveLength(FIRST_ROWS);
+    tick();
+    expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
+    unmount();
+  });
+});

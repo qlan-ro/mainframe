@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { useFindInChatStore } from '../find/find-in-chat-store';
@@ -21,6 +21,11 @@ interface Row {
  * can use the owner's record up). A jump to a row, and Find in the chat that owns it, show every
  * row once and for all: closing Find does not unmount them. A page of older messages that lands
  * meanwhile joins the rows still to come.
+ *
+ * The newest rows must fill the viewport before the first paint: if they are shorter, they would
+ * paint at the top of an empty list and jump to the bottom when the next slice made it overflow.
+ * So while the content does not overflow the viewport and rows are still waiting, the next slice
+ * mounts in a layout effect (committed before paint), until it overflows or the window runs out.
  */
 export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScrollController | null): T[] {
   const [state, setState] = useState<{ startId: string | null; done: boolean }>({ startId: null, done: false });
@@ -50,6 +55,7 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     let frame = 0;
     const timer = setTimeout(() => {
       frame = requestAnimationFrame(() => {
+        frame = 0;
         const { rows: all, scroll: owner } = latest.current;
         const at = all.findIndex((row) => row.id === state.startId);
         if (at <= 0) return;
@@ -60,10 +66,22 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     }, 0);
     return () => {
       clearTimeout(timer);
-      cancelAnimationFrame(frame);
+      if (frame) cancelAnimationFrame(frame);
     };
   }, [startIndex, state.startId]);
   const pending = startIndex > 0;
+  useLayoutEffect(() => {
+    if (!pending) return;
+    const viewport = scroll?.viewportElement.current;
+    if (!viewport || viewport.clientHeight === 0) return;
+    // The owner's resize observer is created after the first paint, so keep the tail in view from here.
+    scroll?.followNow?.();
+    if (viewport.scrollHeight > viewport.clientHeight) return;
+    const at = rows.findIndex((row) => row.id === state.startId);
+    if (at <= 0) return;
+    const next = Math.max(0, at - STEP_ROWS);
+    setState({ startId: rows[next]!.id, done: next === 0 });
+  });
   const setPending = scroll?.tailPending?.set;
   useEffect(() => {
     setPending?.(pending);
