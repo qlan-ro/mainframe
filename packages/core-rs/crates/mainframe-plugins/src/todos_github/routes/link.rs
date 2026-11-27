@@ -11,7 +11,6 @@ use mainframe_types::time::now_iso8601;
 use serde_json::{Value, json};
 
 use crate::PluginContext;
-use crate::db_context::text;
 use crate::todos_github::{run, store};
 
 use super::{
@@ -69,12 +68,6 @@ pub(crate) async fn put_link(
         return bad_request("credentialLabel required");
     };
 
-    match store::read_link(&ctx, &project_id).await {
-        Ok(Some(_)) => return conflict("This project is already linked to a GitHub repository."),
-        Ok(None) => {}
-        Err(err) => return server_error(err),
-    }
-
     let link = store::Link {
         project_id,
         owner,
@@ -84,10 +77,11 @@ pub(crate) async fn put_link(
         last_synced_at: None,
         created_at: now_iso8601(),
     };
-    if let Err(err) = store::insert_link(&ctx, &link).await {
-        return server_error(err);
+    match store::insert_link(&ctx, &link).await {
+        Ok(true) => json_response(StatusCode::OK, json!({ "link": link_json(&link) })),
+        Ok(false) => conflict("This project is already linked to a GitHub repository."),
+        Err(err) => server_error(err),
     }
-    json_response(StatusCode::OK, json!({ "link": link_json(&link) }))
 }
 
 pub(crate) async fn delete_link(
@@ -98,23 +92,8 @@ pub(crate) async fn delete_link(
         Ok(v) => v,
         Err(resp) => return resp,
     };
-    if let Err(err) = ctx
-        .db
-        .execute(
-            "DELETE FROM github_pairs WHERE project_id = ?".into(),
-            vec![text(project_id.clone())],
-        )
-        .await
-    {
-        return server_error(err);
+    match store::delete_link(&ctx, &project_id).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(err) => server_error(err),
     }
-    // `keep = 0` prunes every run (and, transitively, every report row) for
-    // the project — the same query the periodic ten-run prune uses.
-    if let Err(err) = store::prune_runs(&ctx, &project_id, 0).await {
-        return server_error(err);
-    }
-    if let Err(err) = store::delete_link(&ctx, &project_id).await {
-        return server_error(err);
-    }
-    StatusCode::NO_CONTENT.into_response()
 }

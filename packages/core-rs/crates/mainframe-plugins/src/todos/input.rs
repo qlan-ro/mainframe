@@ -25,7 +25,7 @@ fn body_text<'de, D: Deserializer<'de>>(deserializer: D) -> Result<String, D::Er
     Ok(optional_text(deserializer)?.unwrap_or_default())
 }
 
-#[derive(Deserialize)]
+#[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CreateTodo {
     pub project_id: String,
@@ -49,8 +49,8 @@ pub(crate) struct CreateTodo {
 }
 
 impl CreateTodo {
-    /// `TodoSchema.safeParse` — `None` (→ 400) on any failure, including an
-    /// empty `projectId` or `title` and an enum value outside the known set.
+    /// `None` (→ 400) on any failure, including an empty `projectId` or
+    /// `title` and an enum value outside the known set.
     pub fn parse(value: Value) -> Option<Self> {
         let input: Self = serde_json::from_value(value).ok()?;
         let valid = !input.title.is_empty()
@@ -63,7 +63,7 @@ impl CreateTodo {
 }
 
 /// A partial update: every field is optional and `null` means "leave as is".
-#[derive(Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub(crate) struct PatchTodo {
     pub title: Option<String>,
     pub body: Option<String>,

@@ -15,7 +15,7 @@ use crate::todos_github::run::run_sync;
 use crate::todos_github::run_test_support::{
     insert_pair, insert_todo, issue, link_project, run_count,
 };
-use crate::todos_github::store;
+use crate::todos_github::store::{self, PairState};
 use crate::todos_github::test_support::setup;
 
 /// A single pair already at rest: local, remote, and baseline agree on every
@@ -101,9 +101,9 @@ async fn a_request_error_marks_the_pair_errored_and_the_run_continues() {
     assert!(run.failure_kind.is_none());
 
     let errored = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
-    assert_eq!(errored.pair_state, "errored");
+    assert_eq!(errored.pair_state, PairState::Errored);
     let untouched = store::read_pair_by_todo(ctx, "t2").await.unwrap().unwrap();
-    assert_eq!(untouched.pair_state, "clean");
+    assert_eq!(untouched.pair_state, PairState::Clean);
 }
 
 #[tokio::test]
@@ -131,7 +131,7 @@ async fn a_not_found_pair_is_marked_remotely_unlinked_and_skipped_next_run() {
     run_sync(ctx, project).await.unwrap();
 
     let pair = store::read_pair_by_todo(ctx, "t1").await.unwrap().unwrap();
-    assert_eq!(pair.pair_state, "remotely-unlinked");
+    assert_eq!(pair.pair_state, PairState::RemotelyUnlinked);
     assert_eq!(fake.call_count(), 1);
 
     run_sync(ctx, project).await.unwrap();
@@ -197,7 +197,7 @@ async fn a_rate_limited_error_stops_the_run_and_preserves_already_written_baseli
         "the baseline written before the stop must survive"
     );
     let unreached = store::read_pair_by_todo(ctx, "t2").await.unwrap().unwrap();
-    assert_eq!(unreached.pair_state, "clean");
+    assert_eq!(unreached.pair_state, PairState::Clean);
 
     let get_issue_2_calls = fake
         .calls

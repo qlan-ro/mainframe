@@ -2,9 +2,9 @@
 //! todo/issue at a chosen baseline, and a bare `IssueSnapshot`.
 
 use crate::PluginContext;
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::{IssueSnapshot, IssueState};
-use crate::todos_github::store::{self, Link, Pair};
+use crate::todos_github::store::{self, Link, Pair, PairState};
 
 pub(super) const OWNER: &str = "acme";
 pub(super) const REPO: &str = "widgets";
@@ -19,11 +19,8 @@ pub(super) async fn insert_todo(
     status: &str,
     labels: &[&str],
 ) {
-    ctx.db
-        .execute(
-            "INSERT INTO todos (id, number, project_id, title, body, status, labels, created_at, updated_at)
-             VALUES (?, 1, ?, ?, ?, ?, ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-                .into(),
+    ctx.raw_execute("INSERT INTO todos (id, number, project_id, title, body, status, labels, created_at, updated_at)
+             VALUES (?, 1, ?, ?, ?, ?, ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
             vec![
                 text(id.to_string()),
                 text(project_id.to_string()),
@@ -78,7 +75,7 @@ pub(super) async fn insert_pair(
             repo: REPO.to_string(),
             issue_number,
             issue_url: format!("https://github.com/{OWNER}/{REPO}/issues/{issue_number}"),
-            pair_state: "clean".to_string(),
+            pair_state: PairState::Clean,
             state_reason: None,
             base_title: base_title.to_string(),
             base_body: base_body.to_string(),
@@ -111,15 +108,14 @@ pub(super) fn issue(
 }
 
 async fn todo_row_str(ctx: &PluginContext, id: &str, column: &str) -> String {
-    ctx.db
-        .query_one(
-            format!("SELECT {column} FROM todos WHERE id = ?"),
-            vec![text(id.to_string())],
-        )
-        .await
-        .unwrap()
-        .and_then(|row| row.get(column).and_then(|v| v.as_str().map(str::to_string)))
-        .unwrap_or_default()
+    ctx.raw_query_one(
+        &format!("SELECT {column} FROM todos WHERE id = ?"),
+        vec![text(id.to_string())],
+    )
+    .await
+    .unwrap()
+    .and_then(|row| row.get(column).and_then(|v| v.as_str().map(str::to_string)))
+    .unwrap_or_default()
 }
 
 pub(super) async fn todo_title(ctx: &PluginContext, id: &str) -> String {
@@ -131,13 +127,12 @@ fn labels_json(labels: &[&str]) -> String {
 }
 
 pub(super) async fn run_count(ctx: &PluginContext, project_id: &str) -> i64 {
-    ctx.db
-        .query_one(
-            "SELECT COUNT(*) as n FROM github_runs WHERE project_id = ?".into(),
-            vec![text(project_id.to_string())],
-        )
-        .await
-        .unwrap()
-        .and_then(|row| row.get("n").and_then(|v| v.as_i64()))
-        .unwrap_or(0)
+    ctx.raw_query_one(
+        "SELECT COUNT(*) as n FROM github_runs WHERE project_id = ?",
+        vec![text(project_id.to_string())],
+    )
+    .await
+    .unwrap()
+    .and_then(|row| row.get("n").and_then(|v| v.as_i64()))
+    .unwrap_or(0)
 }

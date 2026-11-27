@@ -15,24 +15,25 @@ use crate::context::{EmitSink, NotifyOptions, PluginUi};
 pub(crate) type NotifyGate =
     Box<dyn Fn() -> mainframe_adapter_api::BoxFuture<'static, bool> + Send + Sync>;
 
-pub struct UiContextImpl {
+pub(crate) struct UiContextImpl {
     plugin_id: String,
     emit: EmitSink,
     is_notify_enabled: Option<NotifyGate>,
     active_panel_ids: Mutex<HashSet<String>>,
 }
 
-/// `createPluginUIContext(pluginId, emitEvent, deps)`.
-pub(crate) fn create_plugin_ui_context(
-    plugin_id: &str,
-    emit: EmitSink,
-    is_notify_enabled: Option<NotifyGate>,
-) -> UiContextImpl {
-    UiContextImpl {
-        plugin_id: plugin_id.to_string(),
-        emit,
-        is_notify_enabled,
-        active_panel_ids: Mutex::new(HashSet::new()),
+impl UiContextImpl {
+    pub(crate) fn new(
+        plugin_id: &str,
+        emit: EmitSink,
+        is_notify_enabled: Option<NotifyGate>,
+    ) -> Self {
+        Self {
+            plugin_id: plugin_id.to_string(),
+            emit,
+            is_notify_enabled,
+            active_panel_ids: Mutex::new(HashSet::new()),
+        }
     }
 }
 
@@ -62,20 +63,16 @@ impl PluginUi for UiContextImpl {
                 });
             }
             None => {
-                // Remove all panels owned by this plugin.
-                let ids: Vec<String> = self
-                    .active_panel_ids
-                    .lock_recover()
-                    .iter()
-                    .cloned()
-                    .collect();
+                // Remove all panels owned by this plugin. Taking the set
+                // under one lock means a panel added meanwhile is neither
+                // dropped unannounced nor announced twice.
+                let ids = std::mem::take(&mut *self.active_panel_ids.lock_recover());
                 for panel_id in ids {
                     (self.emit)(DaemonEvent::PluginPanelUnregistered {
                         plugin_id: self.plugin_id.clone(),
                         panel_id: Some(panel_id),
                     });
                 }
-                self.active_panel_ids.lock_recover().clear();
             }
         }
     }

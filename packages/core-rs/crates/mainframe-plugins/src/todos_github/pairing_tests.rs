@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::{GitHubPortError, IssueState};
 use crate::todos_github::fake_github::{Call, FakeGitHub};
 use crate::todos_github::pairing::{self, PairingError};
@@ -15,15 +15,14 @@ use crate::todos_github::store;
 use crate::todos_github::test_support::setup;
 
 async fn todo_count(ctx: &crate::PluginContext, project_id: &str) -> i64 {
-    ctx.db
-        .query_one(
-            "SELECT COUNT(*) as n FROM todos WHERE project_id = ?".into(),
-            vec![text(project_id.to_string())],
-        )
-        .await
-        .unwrap()
-        .and_then(|row| row.get("n").and_then(|v| v.as_i64()))
-        .unwrap_or(0)
+    ctx.raw_query_one(
+        "SELECT COUNT(*) as n FROM todos WHERE project_id = ?",
+        vec![text(project_id.to_string())],
+    )
+    .await
+    .unwrap()
+    .and_then(|row| row.get("n").and_then(|v| v.as_i64()))
+    .unwrap_or(0)
 }
 
 #[tokio::test]
@@ -46,9 +45,8 @@ async fn import_creates_one_todo_per_issue_verbatim_open_and_syncable_labels_onl
     let todo_id = result.imported[0].todo_id.clone();
 
     let row = ctx
-        .db
-        .query_one(
-            "SELECT * FROM todos WHERE id = ?".into(),
+        .raw_query_one(
+            "SELECT * FROM todos WHERE id = ?",
             vec![text(todo_id.clone())],
         )
         .await

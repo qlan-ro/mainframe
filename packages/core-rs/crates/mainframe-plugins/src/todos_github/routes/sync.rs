@@ -9,8 +9,6 @@ use axum::http::StatusCode;
 use serde_json::{Value, json};
 
 use crate::PluginContext;
-use crate::PluginError;
-use crate::db_context::{Row, text};
 use crate::todos_github::run::{self, RunError};
 use crate::todos_github::store;
 
@@ -33,8 +31,8 @@ pub(crate) async fn post_sync(
         }
         Err(RunError::Failed(err)) => return server_error(err),
     };
-    let overwrites = match report_row_count(&ctx, &run.id).await {
-        Ok(n) => n,
+    let overwrites = match store::read_report(&ctx, &run.id).await {
+        Ok(rows) => rows.len(),
         Err(err) => return server_error(err),
     };
     json_response(
@@ -52,7 +50,7 @@ pub(crate) async fn get_report(
         Err(resp) => return resp,
     };
     let run = match params.get("runId") {
-        Some(run_id) => read_run_by_id(&ctx, &project_id, run_id).await,
+        Some(run_id) => store::read_run(&ctx, &project_id, run_id).await,
         None => store::latest_run(&ctx, &project_id).await,
     };
     let run = match run {
@@ -72,66 +70,7 @@ pub(crate) async fn get_report(
     )
 }
 
-async fn report_row_count(ctx: &PluginContext, run_id: &str) -> Result<i64, PluginError> {
-    let row = ctx
-        .db
-        .query_one(
-            "SELECT COUNT(*) as n FROM github_report_rows WHERE run_id = ?".into(),
-            vec![text(run_id.to_string())],
-        )
-        .await?;
-    Ok(row
-        .and_then(|r| r.get("n").and_then(Value::as_i64))
-        .unwrap_or(0))
-}
-
-async fn read_run_by_id(
-    ctx: &PluginContext,
-    project_id: &str,
-    run_id: &str,
-) -> Result<Option<store::Run>, PluginError> {
-    let row = ctx
-        .db
-        .query_one(
-            "SELECT * FROM github_runs WHERE id = ? AND project_id = ?".into(),
-            vec![text(run_id.to_string()), text(project_id.to_string())],
-        )
-        .await?;
-    Ok(row.map(row_to_run))
-}
-
-fn row_to_run(row: Row) -> store::Run {
-    store::Run {
-        id: str_col(&row, "id"),
-        project_id: str_col(&row, "project_id"),
-        started_at: str_col(&row, "started_at"),
-        finished_at: str_col(&row, "finished_at"),
-        pairs_reconciled: int_col(&row, "pairs_reconciled"),
-        reached: int_col(&row, "reached"),
-        total: int_col(&row, "total"),
-        failure_kind: row
-            .get("failure_kind")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-        failure_message: row
-            .get("failure_message")
-            .and_then(Value::as_str)
-            .map(str::to_string),
-    }
-}
-
-fn str_col(row: &Row, key: &str) -> String {
-    row.get(key)
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string()
-}
-
-fn int_col(row: &Row, key: &str) -> i64 {
-    row.get(key).and_then(Value::as_i64).unwrap_or(0)
-}
-
-fn run_summary_json(run: &store::Run, overwrites: i64) -> Value {
+fn run_summary_json(run: &store::Run, overwrites: usize) -> Value {
     json!({
         "runId": run.id,
         "finishedAt": run.finished_at,

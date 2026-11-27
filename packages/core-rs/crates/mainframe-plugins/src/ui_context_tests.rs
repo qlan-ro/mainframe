@@ -11,7 +11,7 @@ fn sink() -> (Arc<Mutex<Vec<DaemonEvent>>>, EmitSink) {
 #[test]
 fn add_and_remove_panel_emit_events() {
     let (seen, emit) = sink();
-    let ui = create_plugin_ui_context("todos", emit, None);
+    let ui = UiContextImpl::new("todos", emit, None);
     let panel = ui.add_panel(UiZone::Fullview, "Tasks", Some("square-check"));
     ui.remove_panel(Some(&panel));
     let events = seen.lock().unwrap();
@@ -28,7 +28,7 @@ fn add_and_remove_panel_emit_events() {
 #[tokio::test]
 async fn notify_gate_drops_when_disabled() {
     let (seen, emit) = sink();
-    let ui = create_plugin_ui_context("todos", emit, Some(Box::new(|| Box::pin(async { false }))));
+    let ui = UiContextImpl::new("todos", emit, Some(Box::new(|| Box::pin(async { false }))));
     ui.notify(NotifyOptions {
         title: "t".into(),
         body: "b".into(),
@@ -41,7 +41,7 @@ async fn notify_gate_drops_when_disabled() {
 #[test]
 fn panel_registration_survives_a_poisoned_lock() {
     let (seen, emit) = sink();
-    let ui = create_plugin_ui_context("todos", emit, None);
+    let ui = UiContextImpl::new("todos", emit, None);
     std::thread::scope(|scope| {
         assert!(
             scope

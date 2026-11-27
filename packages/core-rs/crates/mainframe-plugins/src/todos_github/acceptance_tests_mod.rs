@@ -47,7 +47,7 @@ use axum::response::Response;
 use serde_json::Value;
 
 use crate::PluginContext;
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::IssuePatch;
 use crate::todos_github::fake_github::{Call, FakeGitHub};
 
@@ -70,14 +70,13 @@ fn qs(pairs: &[(&str, &str)]) -> Query<HashMap<String, String>> {
 }
 
 async fn todo_field(ctx: &PluginContext, id: &str, column: &str) -> Option<String> {
-    ctx.db
-        .query_one(
-            format!("SELECT {column} FROM todos WHERE id = ?"),
-            vec![text(id.to_string())],
-        )
-        .await
-        .unwrap()
-        .and_then(|row| row.get(column).and_then(Value::as_str).map(str::to_string))
+    ctx.raw_query_one(
+        &format!("SELECT {column} FROM todos WHERE id = ?"),
+        vec![text(id.to_string())],
+    )
+    .await
+    .unwrap()
+    .and_then(|row| row.get(column).and_then(Value::as_str).map(str::to_string))
 }
 
 fn writes_happened(fake: &FakeGitHub) -> bool {

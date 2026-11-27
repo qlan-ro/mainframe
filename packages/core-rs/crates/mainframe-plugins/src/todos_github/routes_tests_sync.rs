@@ -4,7 +4,7 @@ use axum::extract::Json;
 use axum::http::StatusCode;
 use serde_json::{Value, json};
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::github_port::{GitHubPortError, IssueFieldTimes, IssueState};
 use crate::todos_github::fake_github::FakeGitHub;
 use crate::todos_github::routes::sync;
@@ -194,9 +194,8 @@ async fn get_report_returns_rows_with_winner_mapped_to_mainframe() {
     )
     .await;
     h.ctx
-        .db
-        .execute(
-            "INSERT INTO github_touch (todo_id, field, changed_at) VALUES (?, 'title', ?)".into(),
+        .raw_execute(
+            "INSERT INTO github_touch (todo_id, field, changed_at) VALUES (?, 'title', ?)",
             vec![
                 text("t1".to_string()),
                 text("2027-01-01T00:00:00Z".to_string()),

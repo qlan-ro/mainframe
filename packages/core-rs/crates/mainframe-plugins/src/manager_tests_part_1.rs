@@ -3,34 +3,27 @@ use crate::context::NotifyOptions;
 use crate::github_port::{
     CreateIssue, GitHubPortError, IssueFieldTimes, IssuePatch, IssueSnapshot, IssueState, RepoRef,
 };
-use mainframe_types::chat::Chat;
+use mainframe_adapter_api::BoxFuture;
+use mainframe_types::chat::{Chat, NewChat};
 use mainframe_types::plugin::{PluginCapability, UiZone};
 use std::sync::Mutex;
 
 #[derive(Default)]
 struct NullHostDb;
 impl PluginHostDb for NullHostDb {
-    fn chats_list(&self, _p: &str) -> Result<Vec<Chat>, crate::PluginError> {
-        Ok(Vec::new())
-    }
-    fn chats_get(&self, _id: &str) -> Result<Option<Chat>, crate::PluginError> {
-        Ok(None)
-    }
-    fn chats_create(
+    fn create_chat(
         &self,
-        p: &str,
-        a: &str,
-        _m: Option<&str>,
-        _mode: Option<&str>,
-    ) -> Result<Chat, crate::PluginError> {
-        Ok({
-            serde_json::from_value(json!({
-                "id": "chat-1", "adapterId": a, "projectId": p, "status": "active",
+        new_chat: NewChat,
+    ) -> BoxFuture<'_, Result<Chat, crate::PluginError>> {
+        Box::pin(async move {
+            Ok(serde_json::from_value(serde_json::json!({
+                "id": "chat-1", "adapterId": new_chat.adapter_id,
+                "projectId": new_chat.project_id, "status": "active",
                 "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
                 "totalCost": 0.0, "totalTokensInput": 0, "totalTokensOutput": 0,
                 "lastContextTokensInput": 0,
             }))
-            .unwrap()
+            .unwrap())
         })
     }
     fn settings(&self) -> &dyn mainframe_types::settings_kv::SettingsKv {
@@ -160,7 +153,7 @@ async fn load_builtin_registers_and_activates() {
     .await
     .unwrap();
     assert!(*activated.lock().unwrap());
-    assert!(mgr.get_plugin("test-builtin"));
+    assert!(mgr.loaded_ids().contains(&"test-builtin".to_string()));
 }
 
 #[tokio::test]
@@ -186,7 +179,7 @@ async fn duplicate_id_is_skipped() {
         !*second.lock().unwrap(),
         "activate must not run for a duplicate id"
     );
-    assert_eq!(mgr.get_all().len(), 1);
+    assert_eq!(mgr.loaded_ids().len(), 1);
 }
 
 #[tokio::test]
@@ -206,9 +199,9 @@ async fn unload_all_runs_callbacks_and_clears() {
     })
     .await
     .unwrap();
-    assert!(mgr.get_plugin("cleanup"));
+    assert!(mgr.loaded_ids().contains(&"cleanup".to_string()));
     mgr.unload_all();
-    assert_eq!(mgr.get_all().len(), 0);
+    assert_eq!(mgr.loaded_ids().len(), 0);
     assert_eq!(log.lock().unwrap().as_slice(), ["step1", "step2"]);
 }
 

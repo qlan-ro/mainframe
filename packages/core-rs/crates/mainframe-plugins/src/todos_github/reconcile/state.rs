@@ -18,7 +18,7 @@ pub(super) fn reconcile_state(
     baseline: &Baseline,
     touch: &TouchTimes,
 ) -> StateOutcome {
-    let local_projected = project(&local.status);
+    let local_projected = project_status(&local.status);
     let local_changed = local_projected != baseline.state;
     let remote_changed = remote.state != baseline.state;
 
@@ -84,7 +84,7 @@ fn resolve_dispute(
     let local_at = touch.state_at.as_deref();
     let remote_at = remote.state_at.as_deref();
     let (local_wins, rule) = decide_winner(local_at, remote_at);
-    let local_projected = project(&local.status);
+    let local_projected = project_status(&local.status);
 
     if local_wins {
         StateOutcome {
@@ -121,7 +121,8 @@ fn resolve_dispute(
     }
 }
 
-fn project(status: &str) -> &'static str {
+/// The issue state a board status maps to: only `done` is closed.
+pub(crate) fn project_status(status: &str) -> &'static str {
     if status == "done" { "closed" } else { "open" }
 }
 

@@ -10,9 +10,9 @@
 mod attachments;
 pub(crate) mod input;
 pub(crate) mod migrations;
-mod repo;
+pub(crate) mod repo;
 mod respond;
-mod routes;
+pub(crate) mod routes;
 pub(crate) mod types;
 
 #[cfg(test)]
@@ -35,10 +35,9 @@ use crate::PluginError;
 use crate::context::PluginContext;
 
 pub(crate) use routes::{delete_todo, move_todo, patch_todo, post_todo};
-pub(crate) use types::safe_json_array;
 
 /// The plugin's HTTP sub-router (relative to its `/todos` mount point).
-pub fn routes() -> Router<Arc<PluginContext>> {
+pub(crate) fn routes() -> Router<Arc<PluginContext>> {
     Router::new()
         .route("/todos", get(routes::get_todos).post(post_todo))
         .route("/todos/{id}", patch(patch_todo).delete(delete_todo))
@@ -55,8 +54,8 @@ pub fn routes() -> Router<Arc<PluginContext>> {
         .nest("/github", crate::todos_github::routes::router())
 }
 
-/// `activate(ctx)` — run migrations, register the panels/action, and return the
-/// finalized sub-router (the manager mounts it under `/<plugin id>`).
+/// Runs the migrations, registers the panels and the quick-create action, and
+/// returns the sub-router the manager mounts under `/<plugin id>`.
 pub async fn activate(ctx: Arc<PluginContext>) -> Result<Router<()>, PluginError> {
     migrations::run(&ctx).await?;
 

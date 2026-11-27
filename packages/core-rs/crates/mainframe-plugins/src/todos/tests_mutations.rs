@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use super::routes::{delete_todo, move_todo, patch_todo};
 use super::tests::{Harness, create_todo, id_of, list_todos, notifications, read, setup, state};
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 
 async fn patch(h: &Harness, id: &str, body: Value) -> (StatusCode, Value) {
     read(patch_todo(state(h), Path(id.to_string()), Json(body)).await).await
@@ -158,9 +158,8 @@ async fn get_tolerates_malformed_json_columns() {
     let bad_id = id_of(&bad);
     // Simulate the historical double-encoded value seen in production data.
     h.ctx
-        .db
-        .execute(
-            "UPDATE todos SET labels = ? WHERE id = ?".into(),
+        .raw_execute(
+            "UPDATE todos SET labels = ? WHERE id = ?",
             vec![
                 text(r#"[\"workflows\",\"design\"]"#.to_string()),
                 text(bad_id.clone()),
@@ -168,10 +167,23 @@ async fn get_tolerates_malformed_json_columns() {
         )
         .await
         .unwrap();
+    // A non-string entry drops that entry, not the whole list: an empty list
+    // would read as "labels removed" to the next GitHub sync.
+    let mixed_id =
+        id_of(&create_todo(&h, json!({ "projectId": "proj-1", "title": "Mixed" })).await);
+    h.ctx
+        .raw_execute(
+            "UPDATE todos SET labels = ? WHERE id = ?",
+            vec![text(r#"["bug",1]"#), text(mixed_id.clone())],
+        )
+        .await
+        .unwrap();
     let (status, body) = list_todos(&h, "proj-1").await;
     assert_eq!(status, StatusCode::OK);
     let todos = body["todos"].as_array().unwrap();
-    assert_eq!(todos.len(), 2);
+    assert_eq!(todos.len(), 3);
+    let mixed = todos.iter().find(|t| t["id"] == json!(mixed_id)).unwrap();
+    assert_eq!(mixed["labels"], json!(["bug"]));
     let corrupt = todos.iter().find(|t| t["id"] == json!(bad_id)).unwrap();
     assert_eq!(corrupt["labels"], json!([]));
     let good = todos
@@ -188,10 +200,8 @@ async fn unknown_stored_enums_round_trip_through_list_and_save_unchanged() {
     // An outside writer (the `todos` skill, a lane script) stores values this
     // build does not know.
     h.ctx
-        .db
-        .execute(
-            "UPDATE todos SET status = 'blocked', type = 'chore', priority = 'p0' WHERE id = ?"
-                .into(),
+        .raw_execute(
+            "UPDATE todos SET status = 'blocked', type = 'chore', priority = 'p0' WHERE id = ?",
             vec![text(id.clone())],
         )
         .await
@@ -210,9 +220,8 @@ async fn unknown_stored_enums_round_trip_through_list_and_save_unchanged() {
     assert_eq!(body["todo"]["status"], json!("blocked"));
     let stored = h
         .ctx
-        .db
-        .query_one(
-            "SELECT status, type, priority FROM todos WHERE id = ?".into(),
+        .raw_query_one(
+            "SELECT status, type, priority FROM todos WHERE id = ?",
             vec![text(id.clone())],
         )
         .await

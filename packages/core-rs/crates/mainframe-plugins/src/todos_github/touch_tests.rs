@@ -2,11 +2,11 @@ use axum::extract::{Json, Path};
 use axum::http::StatusCode;
 use serde_json::{Value, json};
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::todos;
-use crate::todos_github::store;
+use crate::todos_github::store::{self, PairState};
 use crate::todos_github::touch;
-use crate::todos_github::touch::read_touch;
+use crate::todos_github::touch::testing::read_touch;
 
 const OLD_STAMP: &str = "2020-01-01T00:00:00.000Z";
 
@@ -46,9 +46,8 @@ async fn move_status(h: &todos::tests::Harness, id: &str, status: &str) -> Statu
 async fn updated_at(h: &todos::tests::Harness, id: &str) -> String {
     let row = h
         .ctx
-        .db
-        .query_one(
-            "SELECT updated_at FROM todos WHERE id = ?".into(),
+        .raw_query_one(
+            "SELECT updated_at FROM todos WHERE id = ?",
             vec![text(id.to_string())],
         )
         .await
@@ -79,7 +78,9 @@ async fn patch_changing_title_stamps_only_title() {
     let h = setup().await;
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
-    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
+    touch::testing::stamp_create(&h.ctx, &id, OLD_STAMP)
+        .await
+        .unwrap();
     let before = read_touch(&h.ctx, &id).await.unwrap();
 
     assert_eq!(
@@ -154,9 +155,8 @@ async fn workflow_label_patch_advances_updated_at_but_stamps_nothing() {
     let id = todo["id"].as_str().unwrap().to_string();
     let touch_before = read_touch(&h.ctx, &id).await.unwrap();
     h.ctx
-        .db
-        .execute(
-            "UPDATE todos SET updated_at = ? WHERE id = ?".into(),
+        .raw_execute(
+            "UPDATE todos SET updated_at = ? WHERE id = ?",
             vec![text(OLD_STAMP.to_string()), text(id.clone())],
         )
         .await
@@ -203,7 +203,9 @@ async fn move_to_done_and_back_stamps_state() {
     let todo = create(&h).await;
     let id = todo["id"].as_str().unwrap().to_string();
 
-    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
+    touch::testing::stamp_create(&h.ctx, &id, OLD_STAMP)
+        .await
+        .unwrap();
     assert_eq!(move_status(&h, &id, "done").await, StatusCode::OK);
     let after_done = read_touch(&h.ctx, &id).await.unwrap();
     assert_ne!(
@@ -211,7 +213,9 @@ async fn move_to_done_and_back_stamps_state() {
         "crossing into done stamps state"
     );
 
-    touch::stamp_create(&h.ctx, &id, OLD_STAMP).await.unwrap();
+    touch::testing::stamp_create(&h.ctx, &id, OLD_STAMP)
+        .await
+        .unwrap();
     assert_eq!(move_status(&h, &id, "open").await, StatusCode::OK);
     let after_reopen = read_touch(&h.ctx, &id).await.unwrap();
     assert_ne!(
@@ -234,7 +238,7 @@ async fn deleting_a_todo_cascades_the_pair_and_the_touch_map() {
             repo: "widgets".to_string(),
             issue_number: 1,
             issue_url: "https://github.com/acme/widgets/issues/1".to_string(),
-            pair_state: "clean".to_string(),
+            pair_state: PairState::Clean,
             state_reason: None,
             base_title: "Original".to_string(),
             base_body: "Original body".to_string(),

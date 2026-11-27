@@ -1,13 +1,16 @@
 use mainframe_types::time::now_iso8601;
 
-use crate::db_context::text;
+use crate::db_context::test_sql::{RawSql as _, text};
 use crate::todos_github::store::{self, ReportRow, Run as StoreRun};
 
-use super::setup;
+use super::{sample_link, setup};
 
 #[tokio::test]
 async fn run_and_report_rows_insert_and_read() {
     let h = setup().await;
+    store::insert_link(&h.ctx, &sample_link("p1"))
+        .await
+        .unwrap();
     let run = StoreRun {
         id: "run-1".to_string(),
         project_id: "p1".to_string(),
@@ -19,7 +22,6 @@ async fn run_and_report_rows_insert_and_read() {
         failure_kind: None,
         failure_message: None,
     };
-    store::insert_run(&h.ctx, &run).await.unwrap();
     let row = ReportRow {
         id: "row-1".to_string(),
         run_id: "run-1".to_string(),
@@ -36,7 +38,7 @@ async fn run_and_report_rows_insert_and_read() {
         winning_value: "New title".to_string(),
         replaced_value: "Old title".to_string(),
     };
-    store::insert_report_rows(&h.ctx, &[row]).await.unwrap();
+    assert!(store::finish_run(&h.ctx, &run, &[row], 10).await.unwrap());
 
     let latest = store::latest_run(&h.ctx, "p1").await.unwrap().unwrap();
     assert_eq!(latest.id, "run-1");
@@ -49,6 +51,9 @@ async fn run_and_report_rows_insert_and_read() {
 #[tokio::test]
 async fn eleven_runs_prune_to_ten() {
     let h = setup().await;
+    store::insert_link(&h.ctx, &sample_link("p1"))
+        .await
+        .unwrap();
     for i in 0..11 {
         let run = StoreRun {
             id: format!("run-{i}"),
@@ -61,14 +66,12 @@ async fn eleven_runs_prune_to_ten() {
             failure_kind: None,
             failure_message: None,
         };
-        store::insert_run(&h.ctx, &run).await.unwrap();
-        store::prune_runs(&h.ctx, "p1", 10).await.unwrap();
+        store::finish_run(&h.ctx, &run, &[], 10).await.unwrap();
     }
     let rows = h
         .ctx
-        .db
-        .query_all(
-            "SELECT id FROM github_runs WHERE project_id = ?".into(),
+        .raw_query_all(
+            "SELECT id FROM github_runs WHERE project_id = ?",
             vec![text("p1".to_string())],
         )
         .await

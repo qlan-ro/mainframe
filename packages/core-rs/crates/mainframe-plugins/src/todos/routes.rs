@@ -1,6 +1,7 @@
 //! The CRUD, move and start-session handlers. Each handler validates the body,
-//! writes through `repo`, stamps the GitHub touch map, and answers with the
-//! re-read row so the response is exactly what was persisted.
+//! writes through `repo` (which stamps the GitHub touch map in the same
+//! transaction), and answers with the re-read row so the response is exactly
+//! what was persisted.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,8 +17,8 @@ use super::repo;
 use super::respond::{bad_request, json_response, not_found, server_error};
 use super::types::{Todo, TodoStatus};
 use crate::PluginError;
-use crate::context::{CreateChatArgs, NotifyOptions, PluginContext};
-use crate::todos_github::touch;
+use crate::chat_service::CreateChatArgs;
+use crate::context::{NotifyOptions, PluginContext};
 
 pub(super) async fn get_todos(
     State(ctx): State<Arc<PluginContext>>,
@@ -44,9 +45,6 @@ pub(crate) async fn post_todo(
     if let Err(err) = repo::insert(&ctx, &id, input, &now).await {
         return server_error(err);
     }
-    if let Err(err) = touch::stamp_create(&ctx, &id, &now).await {
-        return server_error(err);
-    }
     match repo::fetch(&ctx, &id).await {
         Ok(Some(todo)) => json_response(StatusCode::CREATED, json!({ "todo": todo })),
         Ok(None) => server_error(PluginError::Invariant("inserted row not found")),
@@ -68,10 +66,7 @@ pub(crate) async fn patch_todo(
         return bad_request("Invalid input");
     };
     let now = now_iso8601();
-    if let Err(err) = repo::update(&ctx, &id, &patch, &now).await {
-        return server_error(err);
-    }
-    if let Err(err) = touch::stamp_patch(&ctx, &id, &existing, &patch, &now).await {
+    if let Err(err) = repo::update(&ctx, &existing, &patch, &now).await {
         return server_error(err);
     }
     let updated = match repo::fetch(&ctx, &id).await {
@@ -107,10 +102,7 @@ pub(crate) async fn move_todo(
         Err(err) => return server_error(err),
     };
     let now = now_iso8601();
-    if let Err(err) = repo::set_status(&ctx, &id, &status, &now).await {
-        return server_error(err);
-    }
-    if let Err(err) = touch::stamp_move(&ctx, &id, &previous, &status, &now).await {
+    if let Err(err) = repo::set_status(&ctx, &id, &previous, &status, &now).await {
         return server_error(err);
     }
     let todo = match repo::fetch(&ctx, &id).await {
@@ -152,9 +144,6 @@ pub(crate) async fn delete_todo(
     State(ctx): State<Arc<PluginContext>>,
     Path(id): Path<String>,
 ) -> Response {
-    if let Err(err) = touch::clear_for_todo(&ctx, &id).await {
-        return server_error(err);
-    }
     match repo::delete(&ctx, &id).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(err) => server_error(err),
@@ -189,10 +178,10 @@ pub(super) async fn start_session(
         ..Default::default()
     };
     match ctx.chats.create_chat(args).await {
-        Ok(result) => json_response(
+        Ok(chat_id) => json_response(
             StatusCode::OK,
             json!({
-                "chatId": result.chat_id,
+                "chatId": chat_id,
                 "initialMessage": build_initial_message(&todo, &dependencies),
             }),
         ),
