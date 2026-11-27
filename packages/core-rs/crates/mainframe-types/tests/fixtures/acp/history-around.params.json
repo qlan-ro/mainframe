@@ -2,6 +2,7 @@
   "_provenance": "synthetic",
   "sessionId": "chat-1",
   "itemId": "tool:call-7",
-  "before": 20,
-  "after": 20
+  "before": 0,
+  "after": 0,
+  "includeDescendants": true
 }

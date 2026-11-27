@@ -27,13 +27,21 @@ export class SubagentHistoryClient {
   }
 
   /**
-   * The one item `itemId` names (an item or tool-use id), plus its ancestors. A snapshot: it never
-   * touches the chat's history floor. Null when the daemon cannot answer it, so the caller falls back.
+   * The item `itemId` names (an item or tool-use id), its ancestors and its descendants (a
+   * sub-agent's steps). A snapshot: it never touches the chat's history floor. Null when the daemon
+   * cannot return the steps with it, so the caller falls back.
    */
   async around(itemId: string): Promise<HistoryAroundResult | null> {
     const client = await this.connect();
-    if (client.mainframeCapabilities?.historyAround !== true || !client.historyAround) return null;
-    return client.historyAround({ sessionId: this.sessionId(), itemId, before: 0, after: 0 });
+    const caps = client.mainframeCapabilities;
+    if (caps?.historyAround !== true || caps.historyAroundDescendants !== true || !client.historyAround) return null;
+    return client.historyAround({
+      sessionId: this.sessionId(),
+      itemId,
+      before: 0,
+      after: 0,
+      includeDescendants: true,
+    });
   }
 
   async page(agentId: string, before?: string, untilItemId?: string) {

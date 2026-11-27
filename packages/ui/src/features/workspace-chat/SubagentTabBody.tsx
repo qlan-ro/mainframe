@@ -34,13 +34,12 @@ import {
   stoppableTask,
 } from './agent-status';
 import { AgentStatusLabel, ConversationHeader, StopButton } from './ConversationHeader';
-import { findSubagentCall, type SubagentCall } from './find-subagent-call';
+import type { SubagentCall } from './find-subagent-call';
 import { useHoldConversation } from './mounted-conversations';
 import { OwnFiles } from './OwnFiles';
 import { ownTasks, useChatTasks } from './use-chat-tasks';
 import { useKeepAttached } from './use-conversation-thread';
-import { useLoadParentCall } from './use-load-parent-call';
-import { useOwnSubagentCall } from './use-own-subagent-call';
+import { useSubagentCall } from './use-subagent-call';
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 interface Place {
   pending: ReadonlySet<string>;
@@ -53,10 +52,12 @@ function usePlace(
   messages: readonly ThreadMessage[],
   state: ChatThreadState,
   world: AgentWorld,
+  /** The parent's window, when the call is a copy outside it. */
+  window: readonly ThreadMessage[] | null,
 ): Place | null {
   const cache = useMemo(() => new TurnCache(), []);
   const pending = useMemo(() => pendingCalls(state), [state]);
-  const turns = useMemo(() => chatTurns(messages, state, cache), [messages, state, cache]);
+  const turns = useMemo(() => chatTurns(messages, state, cache, window), [messages, state, cache, window]);
   return useMemo(() => {
     if (call === null) return null;
     const partLive = holderLive(turns, call, pending, world);
@@ -151,51 +152,31 @@ export function SubagentTabBody({
   useHoldConversation(chatId);
   const state = useControllerState(controller);
   const messages = useNativeThreadMessages(state);
-  const nested = !!savedNestedCall;
   const { tasks: listed, live } = useChatTasks(chatId, state.backgroundTasks, active);
   const taskKey = (ownTasks(listed, toolCallId) ?? [])
     .map((task) => `${task.id}:${task.status}:${task.endedAt}`)
     .join();
-  const liveCall = useMemo(
-    () => (nested ? null : findSubagentCall(messages, toolCallId)),
-    [messages, toolCallId, nested],
-  );
-  // In the live window the stream keeps the call current; below the floor the tab holds its own copy.
-  const inLiveWindow = liveCall != null && !controller.isHistoryContext(toolCallId);
-  const own = useOwnSubagentCall({
+  const {
+    call,
+    messages: callMessages,
+    detached,
+    error,
+  } = useSubagentCall({
     controller,
     state,
+    messages,
     toolCallId,
-    enabled: !nested && !inLiveWindow,
+    messageId,
+    savedNestedCall,
     taskKey,
     active,
   });
-  const fallback = !nested && !inLiveWindow && own.kind === 'unsupported';
-  const ownCall = !nested && !inLiveWindow && own.kind === 'call' ? own : null;
-  const call = useMemo(
-    () =>
-      savedNestedCall
-        ? { part: savedNestedCall, messageId: messageId ?? toolCallId }
-        : inLiveWindow || fallback
-          ? liveCall
-          : (ownCall?.call ?? null),
-    [savedNestedCall, messageId, toolCallId, inLiveWindow, fallback, liveCall, ownCall],
-  );
-  const callMessages = ownCall?.messages ?? messages;
-  const fallbackError = useLoadParentCall(controller, state, messages, call, {
-    toolCallId,
-    messageId,
-    nested,
-    fallback,
-  });
-  const ownError = own.kind === 'error' ? own.message : own.kind === 'missing' ? 'Not in this transcript' : null;
-  const error = fallback ? fallbackError : ownError;
   const historical = call ? subagentFact(call.part) : undefined;
   const nativeAgentId = savedNestedCall ? (historical?.nativeAgentId ?? null) : historical?.nativeAgentId;
   const runs = sessionRuns(state);
   const adapterId = state.chatConfig?.adapterId;
   const world = useMemo(() => ({ runs, tasks: listed, live, adapterId }), [runs, listed, live, adapterId]);
-  const place = usePlace(call, callMessages, state, world);
+  const place = usePlace(call, callMessages, state, world, detached ? messages : null);
   const tasks = ownTasks(listed, toolCallId);
   const agent = call && place && describeAgent({ call, state, tasks, partLive: place.partLive }, live);
   const shown = agent?.status;

@@ -18,8 +18,21 @@ export function chatTurnScope(state: Pick<ChatThreadState, 'interactions' | 'run
   };
 }
 
-export function chatTurns(messages: readonly ThreadMessage[], state: ChatThreadState, cache: TurnCache): TurnModel {
-  return buildTurns(messages, chatTurnScope(state), cache);
+/**
+ * `window`: the chat's own messages, given when `messages` is a call's copy from outside them. That
+ * copy is older than the whole window, so it is in the current run only when the run began before
+ * the window did; a copy alone would otherwise count as the run's last message.
+ */
+export function chatTurns(
+  messages: readonly ThreadMessage[],
+  state: ChatThreadState,
+  cache: TurnCache,
+  window: readonly ThreadMessage[] | null = null,
+): TurnModel {
+  const scope = chatTurnScope(state);
+  const after = scope.runAfter;
+  const olderThanRun = window != null && typeof after === 'string' && window.some(({ id }) => id === after);
+  return buildTurns(messages, olderThanRun ? { ...scope, isRunning: false } : scope, cache);
 }
 
 /** The calls of parts that can't be going. */

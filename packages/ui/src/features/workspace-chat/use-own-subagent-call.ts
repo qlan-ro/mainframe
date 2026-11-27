@@ -2,8 +2,8 @@
  * A sub-agent tab's own tool call, fetched by itself (todo #460).
  *
  * A call below the parent transcript's history floor is read with
- * `_mainframe.dev/history_around` (`before: 0, after: 0`): one item plus its
- * ancestors, held in this tab's state and never merged into the parent's
+ * `_mainframe.dev/history_around` (`before: 0, after: 0, includeDescendants`): the call, its
+ * ancestors and its steps (the items under it), held in this tab's state and never merged into the parent's
  * window, so neither opening nor restoring a tab pages the parent.
  *
  * A window is a snapshot: the connection's stream drops changes below its
@@ -14,8 +14,9 @@
  *   - the daemon's task for this call changes (a background agent's progress
  *     and completion arrive on that side-band, not on the paged stream),
  *   - the tab is brought to the front.
- * Nothing polls, and nothing re-fetches while the call is in the live window,
- * where the stream keeps it current.
+ * Nothing polls. It is asked for only once the parent's first window has loaded and the call is
+ * not in it; a call in the live window, context ancestors included, is the stream's, which keeps it
+ * current. A context call has lost its steps above the floor, so those come from here.
  */
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { ThreadMessage } from '@assistant-ui/react';
@@ -35,6 +36,8 @@ export type OwnCall =
   | { kind: 'error'; message: string }
   | { kind: 'call'; call: SubagentCall; messages: readonly ThreadMessage[] };
 
+const PENDING: OwnCall = { kind: 'pending' };
+
 /** Counts the events that leave a held snapshot behind. */
 function useRefetchVersion(
   controller: AcpChatController,
@@ -52,7 +55,8 @@ function useRefetchVersion(
     const turnEnded = before.running && !running;
     const compacted = before.compacting && !state.compacting;
     const reloaded = before.generation !== generation;
-    const taskMoved = before.taskKey !== taskKey;
+    // The list arriving is not a change of the call: only a task already seen moving is.
+    const taskMoved = before.taskKey !== '' && before.taskKey !== taskKey;
     const shown = !before.active && active;
     if (turnEnded || compacted || reloaded || taskMoved || shown) bump();
   }, [running, state.compacting, generation, taskKey, active]);
@@ -63,14 +67,20 @@ export function useOwnSubagentCall(options: {
   controller: AcpChatController;
   state: ChatThreadState;
   toolCallId: string;
-  /** False while the call is read some other way (a saved nested call, or the live window). */
+  /** False while nothing is missing: a saved nested call, the parent not loaded yet, or the live window holding the call whole. */
   enabled: boolean;
   /** The daemon's tasks for this call, as one comparable string. */
   taskKey: string;
   active: boolean;
 }): OwnCall {
   const { controller, state, toolCallId, enabled, taskKey, active } = options;
-  const [held, setHeld] = useState<OwnCall>({ kind: 'pending' });
+  const [held, setHeld] = useState<OwnCall>(PENDING);
+  // Entering or leaving the window drops the copy: one kept past that is older than the live one.
+  const [wasEnabled, setWasEnabled] = useState(enabled);
+  if (wasEnabled !== enabled) {
+    setWasEnabled(enabled);
+    setHeld(PENDING);
+  }
   const version = useRefetchVersion(controller, state, taskKey, active);
 
   useEffect(() => {
@@ -103,5 +113,5 @@ export function useOwnSubagentCall(options: {
     };
   }, [controller, toolCallId, enabled, version]);
 
-  return held;
+  return enabled ? held : PENDING;
 }

@@ -52,6 +52,7 @@ fn around(
         item_id: item.into(),
         before,
         after,
+        include_descendants: None,
     };
     prepare(messages, &params, PageOptions::default())
 }
@@ -200,6 +201,7 @@ fn compressed_connections_get_batches() {
         item_id: ids[4].clone(),
         before: Some(1),
         after: Some(1),
+        include_descendants: None,
     };
     let options = PageOptions {
         compressed: true,
@@ -245,6 +247,7 @@ async fn around_and_page_serve_from_the_lent_list() {
         item_id: ids[7].clone(),
         before: Some(2),
         after: Some(2),
+        include_descendants: None,
     };
     let around = crate::history_around::around_chat(&port, &params, PageOptions::default()).await;
     assert_eq!(update_item_ids(&around.unwrap()), ids[5..=9]);

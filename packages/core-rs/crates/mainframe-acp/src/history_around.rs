@@ -3,7 +3,7 @@
 //! Works on the borrowed display list. Only the containers the window touches
 //! are encoded, so the cost follows the counts, not the transcript's length.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 
 use mainframe_types::acp::extensions::{HistoryAroundParams, HistoryAroundResult};
 use mainframe_types::display::DisplayMessage;
@@ -13,6 +13,8 @@ use crate::{EncodedItem, ResumePort, history_window, item_window, resume::with_m
 
 pub const DEFAULT_ITEMS: usize = 20;
 pub const MAX_ITEMS: usize = 200;
+/// The most descendants `includeDescendants` returns; more set `hasMoreDescendants`.
+pub const MAX_DESCENDANTS: usize = 400;
 
 fn count(value: Option<i64>) -> usize {
     value.map_or(DEFAULT_ITEMS, |v| v.clamp(0, MAX_ITEMS as i64) as usize)
@@ -32,6 +34,28 @@ fn locate(message: &DisplayMessage, items: &[EncodedItem], id: &str) -> Option<u
         .iter()
         .position(|item| history_window::matches_item(item, id))
         .or_else(|| (message.id == id && !items.is_empty()).then_some(0))
+}
+
+/// Where the target's descendants end in its container, and whether the cap cut them short.
+///
+/// A sub-agent's steps are items of the container that holds its call, each naming its parent
+/// by `parentToolCallId`; a step's own steps (a nested agent) name that step. So the family
+/// grows as the scan goes, and a descendant always follows its parent.
+fn descendants_end(items: &[EncodedItem], target: usize) -> (usize, bool) {
+    let mut family = HashSet::from([items[target].id()]);
+    let (mut last, mut found) = (target, 0);
+    for (at, item) in items.iter().enumerate().skip(target + 1) {
+        if !item_window::parent(item).is_some_and(|parent| family.contains(parent)) {
+            continue;
+        }
+        if found == MAX_DESCENDANTS {
+            return (last, true);
+        }
+        found += 1;
+        family.insert(item.id());
+        last = at;
+    }
+    (last, false)
 }
 
 /// Serve the window from the chat's list in place; `None` if the port could
@@ -138,6 +162,24 @@ fn cut(block: VecDeque<Vec<EncodedItem>>, start: usize, end: usize) -> Cut {
     out
 }
 
+/// The flat position the window stops at: `after` items past the target, or past the
+/// target's last step when the request asks for them.
+fn window_end(
+    block: &Block,
+    index: usize,
+    offset: usize,
+    after: usize,
+    params: &HistoryAroundParams,
+    total: usize,
+) -> (usize, bool) {
+    let end = (block.target + 1 + after).min(total);
+    if params.include_descendants != Some(true) {
+        return (end, false);
+    }
+    let (last, more) = descendants_end(&block.containers[index - block.lo], offset);
+    (end.max(block.target - offset + last + 1), more)
+}
+
 pub fn prepare(
     messages: &[DisplayMessage],
     params: &HistoryAroundParams,
@@ -163,7 +205,7 @@ pub fn prepare(
 
     let total: usize = block.containers.iter().map(Vec::len).sum();
     let start = block.target - wanted.0.min(block.target);
-    let end = (block.target + 1 + wanted.1).min(total);
+    let (end, more_descendants) = window_end(&block, index, offset, wanted.1, params, total);
     let cut = cut(block.containers, start, end);
     let leading = cut.leading;
     let (containers, context_ids, first_id, last_id) =
@@ -190,6 +232,7 @@ pub fn prepare(
         last_item_id: last_id,
         target_item_id: target_id,
         context_item_ids: (!context_ids.is_empty()).then_some(context_ids),
+        has_more_descendants: more_descendants.then_some(true),
         stale: None,
     }
 }

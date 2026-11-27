@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { SubagentHistoryClient } from '../subagent-history-client';
 import type { AcpClientHandle } from '../acp-chat-controller';
 
-function clientWith(capabilities: { historyAround?: boolean } | null, historyAround = vi.fn(async () => ({}))) {
+function clientWith(
+  capabilities: { historyAround?: boolean; historyAroundDescendants?: boolean } | null,
+  historyAround = vi.fn(async () => ({})),
+) {
   const handle = {
     ensureConnected: vi.fn(async () => undefined),
     mainframeCapabilities: capabilities,
@@ -18,13 +21,19 @@ function clientWith(capabilities: { historyAround?: boolean } | null, historyAro
 }
 
 describe('SubagentHistoryClient.around', () => {
-  it('asks for the one item, without neighbours, in this chat', async () => {
-    const { client, historyAround } = clientWith({ historyAround: true });
+  it('asks for the one item and its steps, without neighbours, in this chat', async () => {
+    const { client, historyAround } = clientWith({ historyAround: true, historyAroundDescendants: true });
     await client.around('call-1');
-    expect(historyAround).toHaveBeenCalledWith({ sessionId: 'chat', itemId: 'call-1', before: 0, after: 0 });
+    expect(historyAround).toHaveBeenCalledWith({
+      sessionId: 'chat',
+      itemId: 'call-1',
+      before: 0,
+      after: 0,
+      includeDescendants: true,
+    });
   });
 
-  it.each([[null], [{}], [{ historyAround: false }]])(
+  it.each([[null], [{}], [{ historyAround: false }], [{ historyAround: true }]])(
     'is null, and sends nothing, without the capability (%j)',
     async (caps) => {
       const { client, historyAround } = clientWith(caps);

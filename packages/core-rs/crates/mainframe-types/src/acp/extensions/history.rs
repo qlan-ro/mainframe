@@ -67,6 +67,10 @@ pub struct HistoryAroundParams {
     /// Items after the target; defaults to 20, clamps to 0..=200.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after: Option<i64>,
+    /// Also return the target's descendants (a sub-agent's steps, the
+    /// transitive `parentToolCallId` chain), up to a cap, whatever `after` says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_descendants: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -92,6 +96,9 @@ pub struct HistoryAroundResult {
     /// sent only so the page renders; they precede `firstItemId`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_item_ids: Option<Vec<String>>,
+    /// Set when `includeDescendants` was asked and the cap cut the descendants short.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub has_more_descendants: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stale: Option<bool>,
 }
