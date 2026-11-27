@@ -34,6 +34,20 @@ pub(super) async fn prepare_resume(
             revision_log.as_ref().map(|(_, cursor)| cursor),
         )
         .await;
+    let cached = match cached {
+        Some(cached) => Some(cached),
+        None => {
+            ctx.chat
+                .facade_hub
+                .adapter_window_resume(
+                    &ctx.chat.chat_manager,
+                    &request,
+                    options,
+                    revision_log.as_ref().map(|(_, cursor)| cursor),
+                )
+                .await
+        }
+    };
     let from_cache = cached.is_some();
     let (response, replay) = match cached {
         Some(cached) => cached,

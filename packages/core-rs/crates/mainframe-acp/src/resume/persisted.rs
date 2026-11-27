@@ -49,6 +49,15 @@ impl PreparedHistoryTail {
         })
     }
 
+    /// Mark that turns older than this window exist beyond what built it. A
+    /// window built from the newest pages alone cannot see them in its own
+    /// list, so its `has_more` would otherwise read false at the list's start.
+    #[must_use]
+    pub fn with_older_history(mut self, has_older: bool) -> Self {
+        self.history.has_more |= has_older;
+        self
+    }
+
     pub fn replay(
         self,
         id: Option<RequestId>,

@@ -140,7 +140,10 @@ impl FacadeHub {
     }
 }
 
-fn first_window(request: &JsonRpcRequest, options: ResumeOptions) -> Option<(String, Value)> {
+pub(super) fn first_window(
+    request: &JsonRpcRequest,
+    options: ResumeOptions,
+) -> Option<(String, Value)> {
     if !options.windowed_history {
         return None;
     }

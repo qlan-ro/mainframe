@@ -123,6 +123,15 @@ impl HistorySnapshotCache {
         }
     }
 
+    /// Whether a snapshot file exists for `chat_id`, valid or not. A cheap
+    /// stand-in for a hit: a stale one costs the full read it would have cost
+    /// anyway, a missing one is what paged reads are for.
+    pub(crate) async fn has_snapshot(&self, chat_id: &str) -> bool {
+        tokio::fs::metadata(self.snapshot_path(chat_id))
+            .await
+            .is_ok()
+    }
+
     pub(super) fn snapshot_path(&self, chat_id: &str) -> PathBuf {
         self.dir.join(format!("{chat_id}.json"))
     }

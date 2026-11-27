@@ -11,6 +11,18 @@ pub struct CollectedHistoryFiles {
     pub sources: Option<Vec<crate::HistoryDependency>>,
 }
 
+/// One page of an adapter's paginated history. `messages` are oldest first.
+/// `older` is the opaque cursor for the page before this one; `None` means
+/// this page reaches the start of the transcript.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistoryPage {
+    pub messages: Vec<ChatMessage>,
+    pub older: Option<String>,
+}
+
+/// What `AdapterSession::load_history_page` resolves to.
+pub type HistoryPageFuture<'a> = BoxFuture<'a, Result<Option<HistoryPage>, AdapterError>>;
+
 #[derive(Default, Debug)]
 pub struct HistoryFiles {
     pub plans: Vec<String>,
@@ -138,6 +150,15 @@ pub trait AdapterSession: Send + Sync {
     fn cancel_queued_message(&self, uuid: String) -> BoxFuture<'_, Result<bool, AdapterError>>;
     fn get_context_files(&self) -> ContextFiles;
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>>;
+    /// The newest `turns` turns of the history (`cursor: None`), or the page of
+    /// turns older than `cursor`, without reading the rest of the transcript.
+    /// `Ok(None)` means the adapter cannot page this session (no such
+    /// protocol method, or a thread it cannot page): the caller reads the
+    /// whole history with `load_history` instead. Used for a first window
+    /// only; nothing may treat a page as the complete history.
+    fn load_history_page(&self, _cursor: Option<String>, _turns: usize) -> HistoryPageFuture<'_> {
+        Box::pin(async { Ok(None) })
+    }
     fn load_subagent_history(
         &self,
         _agent_id: String,

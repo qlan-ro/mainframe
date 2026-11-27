@@ -30,6 +30,7 @@ mod handlers;
 mod raw_frame_kind;
 mod revisions;
 pub use fanout::ResumeSeed;
+mod adapter_window;
 mod history;
 mod history_refresh;
 mod history_tail;

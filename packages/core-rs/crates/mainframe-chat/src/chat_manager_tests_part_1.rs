@@ -24,6 +24,8 @@ mod fork_segments;
 mod fork_sweep;
 #[path = "chat_manager_tests_fork_title.rs"]
 mod fork_title;
+#[path = "chat_manager_tests_adapter_window.rs"]
+mod adapter_window;
 #[path = "chat_manager_tests_history_eviction.rs"]
 mod history_eviction;
 #[path = "chat_manager_tests_history_snapshot.rs"]

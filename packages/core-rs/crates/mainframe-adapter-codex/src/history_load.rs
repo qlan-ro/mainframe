@@ -72,6 +72,16 @@ pub(crate) async fn load_history_inner(
         resume_thread_id,
     );
 
+    build_history(temp, resume_thread_id, &turns).await
+}
+
+/// Nest the child threads the `turns` name and convert them to messages.
+/// Shared by the whole-thread read and each page of a paged read.
+pub(crate) async fn build_history(
+    temp: &Arc<JsonRpcClient>,
+    thread_id: &str,
+    turns: &[ThreadReadTurn],
+) -> Result<LoadedHistory, AdapterError> {
     let all_items: Vec<ThreadItem> = turns.iter().flat_map(|t| t.items.iter().cloned()).collect();
 
     let child_thread_ids = collect_child_thread_ids(&all_items);
@@ -88,8 +98,8 @@ pub(crate) async fn load_history_inner(
         dependencies,
         state: json!(agent_meta_by_thread),
         messages: convert_turns(
-            &turns,
-            resume_thread_id,
+            turns,
+            thread_id,
             &child_items_by_thread,
             &agent_meta_by_thread,
         ),
