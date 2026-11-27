@@ -180,6 +180,7 @@ describe('useUiPrefs persistence', () => {
     expect(Object.keys(parsed.state).sort()).toEqual(
       [
         'activityStripCollapsed',
+        'chipComposer',
         'dialogSizes',
         'dontWarnOnTuningChange',
         'enterWhileRunning',

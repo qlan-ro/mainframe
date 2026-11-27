@@ -18,11 +18,15 @@
  *    don't run; each has its own suite. The toolbar stub exposes the
  *    `cyclePermission` handle ⇧⇥ drives.
  *  - All assertions use hardcoded expected values.
+ *
+ * The field's own behaviour (ARIA, placeholder copy, Enter, ⇧⇥, Escape, focus)
+ * runs against both fields, textarea and chips, in
+ * `composer-field-modes.test.tsx`. What stays here is the textarea path's
+ * structure: the overlay behind a transparent textarea.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, createEvent, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useComposerSegments } from '../segments/segment-store';
 import { useUiPrefs } from '@/store/ui-prefs';
 
 const THREAD_ID = 'thread-1';
@@ -151,6 +155,9 @@ import { Composer } from '../Composer';
 // Helpers
 // ---------------------------------------------------------------------------
 
+// The stubbed `@assistant-ui/react` above can only host the textarea field.
+beforeEach(() => useUiPrefs.setState({ chipComposer: false }));
+
 function renderComposer() {
   return render(
     <TooltipProvider>
@@ -175,25 +182,6 @@ describe('Composer — healthy shell', () => {
 
     expect(screen.queryByTestId('chat-composer-worktree-missing')).not.toBeInTheDocument();
   });
-
-  it('input (chat-composer-input) is NOT disabled', () => {
-    renderComposer();
-
-    expect(screen.getByTestId('chat-composer-input')).not.toBeDisabled();
-  });
-
-  // S8: field.ariaProps must reach ComposerPrimitive.Input, not just the
-  // automations field. ComposerTriggers is mocked to a passthrough here, so
-  // this exercises the real (unmocked) trigger-field-aria-context default —
-  // proof that Composer.tsx itself spreads the hook's result onto the input.
-  it('input carries the collapsed-combobox ARIA from useTriggerFieldAria()', () => {
-    renderComposer();
-
-    const input = screen.getByTestId('chat-composer-input');
-    expect(input).toHaveAttribute('role', 'combobox');
-    expect(input).toHaveAttribute('aria-expanded', 'false');
-    expect(input).toHaveAttribute('aria-haspopup', 'listbox');
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -214,6 +202,7 @@ describe('Composer — structure', () => {
   });
 
   it('the side variant has no strip', () => {
+    useUiPrefs.setState({ chipComposer: false });
     render(
       <TooltipProvider>
         <Composer variant="side" />
@@ -222,119 +211,6 @@ describe('Composer — structure', () => {
 
     expect(screen.queryByTestId('top-strip-stub')).toBeNull();
     expect(screen.getByTestId('chat-composer-input')).toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Mid-run keys (C9, C12). Enter while a turn runs does the preferred action,
-// ⌥↵ the other; ⇧Tab cycles the permission mode. Every other combination
-// leaves append() alone so the native path handles the event.
-// ---------------------------------------------------------------------------
-
-const steerFlag = (call: unknown[]) =>
-  (call[0] as { runConfig?: { custom?: Record<string, unknown> } }).runConfig?.custom?.mainframeSteer;
-
-describe('Composer — Enter while running', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __appendSpy = vi.fn();
-    __messages = [];
-    localStorage.clear();
-    useUiPrefs.setState({ enterWhileRunning: 'queue' });
-  });
-
-  it('queues on Enter by default: append() once, default prevented, no steer flag', () => {
-    __isRunning = true;
-    renderComposer();
-
-    const input = screen.getByTestId('chat-composer-input');
-    const event = createEvent.keyDown(input, { key: 'Enter', bubbles: true });
-    fireEvent(input, event);
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(__appendSpy).toHaveBeenCalledTimes(1);
-    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBeUndefined();
-  });
-
-  it('steers on ⌥Enter by default', () => {
-    __isRunning = true;
-    renderComposer();
-
-    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', altKey: true });
-
-    expect(__appendSpy).toHaveBeenCalledTimes(1);
-    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBe(true);
-  });
-
-  it('with Steer preferred, Enter steers and ⌥Enter queues', () => {
-    useUiPrefs.setState({ enterWhileRunning: 'steer' });
-    __isRunning = true;
-    renderComposer();
-    const input = screen.getByTestId('chat-composer-input');
-
-    fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.keyDown(input, { key: 'Enter', altKey: true });
-
-    expect(__appendSpy).toHaveBeenCalledTimes(2);
-    expect(steerFlag(__appendSpy.mock.calls[0]!)).toBe(true);
-    expect(steerFlag(__appendSpy.mock.calls[1]!)).toBeUndefined();
-  });
-
-  it('does NOT call append() on Shift+Enter (a newline)', () => {
-    __isRunning = true;
-    renderComposer();
-
-    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', shiftKey: true });
-
-    expect(__appendSpy).not.toHaveBeenCalled();
-  });
-
-  it('does NOT call append() when idle: the native path submits', () => {
-    __isRunning = false;
-    renderComposer();
-
-    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter' });
-
-    expect(__appendSpy).not.toHaveBeenCalled();
-  });
-
-  it('does not send while an IME composition is in progress', () => {
-    __isRunning = true;
-    renderComposer();
-
-    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Enter', isComposing: true });
-
-    expect(__appendSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('Composer — ⇧Tab (C12)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __messages = [];
-  });
-
-  it('cycles the permission mode and keeps focus in the field, idle or running', () => {
-    renderComposer();
-    const input = screen.getByTestId('chat-composer-input');
-    const event = createEvent.keyDown(input, { key: 'Tab', shiftKey: true, bubbles: true });
-
-    fireEvent(input, event);
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(cyclePermission).toHaveBeenCalledTimes(1);
-
-    __isRunning = true;
-    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
-    expect(cyclePermission).toHaveBeenCalledTimes(2);
-  });
-
-  it('plain Tab is left alone', () => {
-    renderComposer();
-
-    fireEvent.keyDown(screen.getByTestId('chat-composer-input'), { key: 'Tab' });
-
-    expect(cyclePermission).not.toHaveBeenCalled();
   });
 });
 
@@ -369,74 +245,5 @@ describe('Composer — highlight overlay wired + input is text-transparent', () 
     renderComposer();
     const input = screen.getByTestId('chat-composer-input');
     expect(input.className).toContain('caret-foreground');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Placeholder copy — "Reply to the agent…" default, "Add a message…" when the
-// live segment has a pending quote (finding 8.3: design 03-content.jsx:747).
-// The rule now reads the segment store's liveQuote, not the native
-// composer.quote (multi-quote composer, #280) — see ComposerSegments.test.tsx
-// for the committed-segment half of the same placeholder rule.
-// ---------------------------------------------------------------------------
-
-describe('Composer — placeholder copy switches on pending-quote state', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    __isRunning = false;
-    __messages = [];
-    __appendSpy = vi.fn();
-    localStorage.clear();
-    useUiPrefs.setState({ enterWhileRunning: 'queue' });
-    useComposerSegments.setState({ byThread: {} });
-  });
-
-  it('invites a first message before the thread has started', () => {
-    renderComposer();
-    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute(
-      'placeholder',
-      'Ask anything, @ to mention, / for actions',
-    );
-  });
-
-  it('says "Reply to the agent…" once the thread has messages', () => {
-    __messages = [{ id: 'm1' }];
-    renderComposer();
-    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Reply to the agent…');
-  });
-
-  it('says what Enter will do while a turn runs: queue by default', () => {
-    __messages = [{ id: 'm1' }];
-    __isRunning = true;
-    renderComposer();
-    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute(
-      'placeholder',
-      'Queue a message for when the agent finishes…',
-    );
-  });
-
-  it('says what Enter will do while a turn runs: steer when preferred, with ⌥↵ to queue', () => {
-    useUiPrefs.setState({ enterWhileRunning: 'steer' });
-    __isRunning = true;
-    renderComposer();
-    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Steer the agent, ⌥↵ to queue…');
-  });
-
-  it('a pending quote wins over the running copy', () => {
-    __isRunning = true;
-    useComposerSegments.setState({
-      byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'q' } } },
-    });
-    renderComposer();
-    expect(screen.getByTestId('chat-composer-input')).toHaveAttribute('placeholder', 'Add a message…');
-  });
-
-  it('shows "Add a message…" when the live segment has a pending quote', () => {
-    useComposerSegments.setState({
-      byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'quoted snippet' } } },
-    });
-    renderComposer();
-    const input = screen.getByTestId('chat-composer-input');
-    expect(input).toHaveAttribute('placeholder', 'Add a message…');
   });
 });

@@ -1,16 +1,14 @@
 /**
- * ⌘L (focus-composer) and composer-Escape (AC 13).
+ * ⌘L (focus-composer).
  *
- * ⌘L is a registry action (`chat.focus-composer`), so its two cases run
- * against real DOM + the real dispatcher, the same recipe as the other
- * shortcut integration suites. Escape is composer-LOCAL handling (Task 17
- * decided it is not a registry entry), so those two cases render the real
- * `Composer` with the same mock shell `Composer.test.tsx` uses, adding only a
- * controllable trigger-field-aria mock to force the menu-open branch.
+ * ⌘L is a registry action (`chat.focus-composer`), so its cases run against
+ * real DOM + the real dispatcher, the same recipe as the other shortcut
+ * integration suites. Composer-Escape (AC 13) is composer-local handling and
+ * runs against both fields, textarea and chips, in
+ * `composer-field-modes.test.tsx`.
  */
-import { createEvent, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { fireEvent, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '@/components/ui/tooltip';
 
 let isMac = true;
 vi.mock('@/features/shortcuts/platform', () => ({ isMacPlatform: () => isMac }));
@@ -105,154 +103,5 @@ describe('⌘L — focus the visible composer', () => {
 
     expect(pressFocusComposer).not.toThrow();
     unmount();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Escape — composer-local handling (Task 17), rendered with the real Composer
-// shell. Mocks mirror Composer.test.tsx; only the trigger-aria mock is new.
-// ---------------------------------------------------------------------------
-
-let triggerExpanded = false;
-vi.mock('../triggers/trigger-field-aria-context', () => ({
-  useTriggerFieldAria: () => ({ 'aria-expanded': triggerExpanded }),
-}));
-
-vi.mock('@assistant-ui/react', () => ({
-  ComposerPrimitive: {
-    Root: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => <div {...rest}>{children}</div>,
-    AttachmentDropzone: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
-      <div {...rest}>{children}</div>
-    ),
-    // `cancelOnEscape` is an aui-only prop (real ComposerPrimitive.Input
-    // wires it to its own Escape-cancel handling) — drop it before spreading
-    // onto the DOM textarea, or React warns about an unrecognized attribute.
-    Input: ({
-      children,
-      cancelOnEscape: _cancelOnEscape,
-      ...rest
-    }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { cancelOnEscape?: boolean }) => (
-      <textarea {...rest}>{children}</textarea>
-    ),
-    Cancel: ({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-      <button {...rest}>{children}</button>
-    ),
-  },
-  useAuiState: (
-    selector: (s: { thread: { isRunning: boolean; messages: unknown[] }; threadListItem: { id: string } }) => unknown,
-  ) => selector({ thread: { isRunning: false, messages: [] }, threadListItem: { id: 'thread-1' } }),
-  useAui: () => ({
-    thread: { append: vi.fn() },
-    composer: {
-      __internal_getRuntime: () => ({ getState: () => ({ text: '', attachments: [], runConfig: {} }) }),
-      getState: () => ({ text: '', attachments: [], runConfig: {} }),
-      reset: vi.fn(),
-    },
-  }),
-}));
-
-vi.mock('../segments/ComposerSegments', () => ({ ComposerSegments: () => null }));
-vi.mock('../edit/composer-edit-context', () => ({ useComposerEdit: () => ({ editing: null, cancelEdit: vi.fn() }) }));
-vi.mock('../config-toolbar/ComposerToolbar', () => ({ ComposerToolbar: () => null }));
-vi.mock('../attachments/ComposerAttachmentStrip', () => ({ ComposerAttachments: () => null }));
-vi.mock('../strips/TopStrip', () => ({ TopStrip: () => null }));
-vi.mock('../queue/QueuedRows', () => ({ QueuedRows: () => null }));
-vi.mock('../config-toolbar/ContextRing', () => ({ ContextRing: () => null }));
-vi.mock('../send/SendControls', () => ({ SendControls: () => null }));
-vi.mock('../attachments/ComposerAddMenu', () => ({ ComposerAddMenu: () => null }));
-vi.mock('../triggers/ComposerTriggers', () => ({
-  ComposerTriggers: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock('../highlight/ComposerHighlight', () => ({ ComposerHighlight: () => null }));
-
-import { Composer } from '../Composer';
-
-function renderComposerInTranscript() {
-  return render(
-    <TooltipProvider>
-      <div data-mf-chat-thread tabIndex={-1}>
-        <Composer />
-      </div>
-    </TooltipProvider>,
-  );
-}
-
-/**
- * The trigger hook preventDefaults Escape on the SAME native event whenever a
- * token is armed (`use-trigger-field.ts`'s Escape case), before any render
- * can flip context — so the composer reads `e.defaultPrevented`, not a
- * render-timing-dependent "armed" flag, to decide whether to park focus. This
- * mock's `Input` never runs that real handler, so the tests simulate its
- * effect by preventing the event before dispatch.
- */
-function pressEscape(input: HTMLElement, { prevented = false }: { prevented?: boolean } = {}) {
-  const event = createEvent.keyDown(input, { key: 'Escape', code: 'Escape', cancelable: true, bubbles: true });
-  if (prevented) event.preventDefault();
-  return fireEvent(input, event);
-}
-
-describe('Escape in the composer (AC 13)', () => {
-  beforeEach(() => {
-    triggerExpanded = false;
-  });
-
-  it('moves focus off the input and onto [data-mf-chat-thread] with no trigger menu open', () => {
-    renderComposerInTranscript();
-    const input = screen.getByTestId('chat-composer-input');
-    input.focus();
-
-    const event = pressEscape(input);
-
-    expect(document.activeElement).not.toBe(input);
-    expect(document.activeElement).toHaveAttribute('data-mf-chat-thread');
-    expect(event).toBe(true); // not prevented — overlays' document-level Escape listeners still fire
-  });
-
-  it('does not stop propagation, so a document-level Escape listener still sees the keystroke', () => {
-    renderComposerInTranscript();
-    const input = screen.getByTestId('chat-composer-input');
-    input.focus();
-
-    const seenEvents: KeyboardEvent[] = [];
-    const documentListener = vi.fn((event: KeyboardEvent) => {
-      seenEvents.push(event);
-    });
-    document.addEventListener('keydown', documentListener);
-
-    pressEscape(input);
-
-    document.removeEventListener('keydown', documentListener);
-    expect(documentListener).toHaveBeenCalledTimes(1);
-    expect(seenEvents[0]?.defaultPrevented).toBe(false);
-  });
-
-  it('leaves focus in the composer while the trigger menu is open', () => {
-    triggerExpanded = true;
-    renderComposerInTranscript();
-    const input = screen.getByTestId('chat-composer-input');
-    input.focus();
-
-    pressEscape(input, { prevented: true });
-
-    expect(document.activeElement).toBe(input);
-  });
-
-  it('leaves focus in the composer for an armed-but-unmatched token, so a following Enter is not swallowed', () => {
-    triggerExpanded = false;
-    renderComposerInTranscript();
-    const input = screen.getByTestId('chat-composer-input');
-    input.focus();
-
-    // The trigger hook still preventDefaults Escape for an unmatched token
-    // (it stays armed enough to disarm itself) — same signal as a matched menu.
-    pressEscape(input, { prevented: true });
-    expect(document.activeElement).toBe(input);
-
-    // The mocked ComposerPrimitive.Input never submits on its own, but this
-    // proves Escape's focus-park branch did not fire (it would have moved
-    // focus off `input` above) and that the composer's own handler leaves a
-    // following Enter alone.
-    const enterEvent = fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', cancelable: true, bubbles: true });
-    expect(enterEvent).toBe(true);
   });
 });

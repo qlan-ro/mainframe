@@ -110,3 +110,11 @@ if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
     /* jsdom stub */
   };
 }
+
+// `pnpm test:chips` reruns the composer suites with the chip field as the
+// default (Settings › Chat › Mentions and commands as chips), seeded the way a
+// user who turned it on would have it stored. Suites that set the preference
+// themselves still win.
+if (process.env.MF_TEST_CHIP_COMPOSER === '1') {
+  localStorage.setItem('mf:ui-prefs', JSON.stringify({ state: { chipComposer: true }, version: 9 }));
+}
