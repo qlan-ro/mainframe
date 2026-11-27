@@ -89,9 +89,8 @@ beforeEach(() => {
     },
   );
   resetBootRestore();
-  vi.spyOn(chatControllerRegistry, 'get').mockImplementation((() => ({
-    getState: () => ({ loadState: { type: 'ready' } }),
-  })) as never);
+  const controller = { getState: () => ({ loadState: { type: 'ready' } }), subscribeState: () => () => undefined };
+  vi.spyOn(chatControllerRegistry, 'get').mockImplementation((() => controller) as never);
 });
 afterEach(() => {
   resetBootRestore();
