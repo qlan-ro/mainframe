@@ -34,6 +34,13 @@ pub(super) struct ParseMode {
     pub(super) batch_bytes: usize,
     /// Batches smaller than this are parsed inline.
     pub(super) min_parallel_bytes: usize,
+    /// Where workers come from; shared by all loads in production.
+    pub(super) budget: &'static Budget,
+    /// File length when known; a file below `min_parallel_bytes` takes no workers.
+    pub(super) size_hint: Option<u64>,
+    /// Records the most pieces any batch was split into.
+    #[cfg(test)]
+    pub(super) probe: Option<&'static std::sync::atomic::AtomicUsize>,
 }
 
 impl ParseMode {
@@ -43,6 +50,10 @@ impl ParseMode {
             threads: 1,
             batch_bytes: CHUNK_SIZE,
             min_parallel_bytes: MIN_PARALLEL_BYTES,
+            budget: global(),
+            size_hint: None,
+            #[cfg(test)]
+            probe: None,
         }
     }
 
@@ -52,6 +63,10 @@ impl ParseMode {
             threads,
             batch_bytes: threads * CHUNK_SIZE / 2,
             min_parallel_bytes: MIN_PARALLEL_BYTES,
+            budget: global(),
+            size_hint: None,
+            #[cfg(test)]
+            probe: None,
         }
     }
 
@@ -83,27 +98,26 @@ struct Piece {
 }
 
 /// Visits every line with its parsed JSON, in file order. A line that is not
-/// valid UTF-8 ends the read, as in [`read_chunks`].
+/// valid UTF-8 ends the read, as in [`read_chunks`]. Workers come from
+/// `mode.budget`; with fewer than two, or for a small file, the serial reader
+/// runs and holds none.
 pub(super) fn read_parsed<R: BufRead + Send>(
-    reader: R,
-    mode: ParseMode,
-    visit: impl FnMut(&str, Option<Value>),
-) -> std::io::Result<()> {
-    read_parsed_in(global(), reader, mode, visit)
-}
-
-pub(super) fn read_parsed_in<R: BufRead + Send>(
-    budget: &Budget,
     reader: R,
     mut mode: ParseMode,
     mut visit: impl FnMut(&str, Option<Value>),
 ) -> std::io::Result<()> {
-    let permit = budget.take(mode.threads);
-    mode.threads = permit.workers;
-    if mode.threads <= 1 {
-        return read_chunks(reader, |line| {
-            visit(line, serde_json::from_slice(line.as_bytes()).ok());
-        });
+    let small = mode
+        .size_hint
+        .is_some_and(|len| len < mode.min_parallel_bytes as u64);
+    let permit = (!small && mode.threads > 1).then(|| mode.budget.take(mode.threads));
+    match &permit {
+        Some(permit) if permit.workers() >= 2 => mode.threads = permit.workers(),
+        _ => {
+            drop(permit);
+            return read_chunks(reader, |line| {
+                visit(line, serde_json::from_slice(line.as_bytes()).ok());
+            });
+        }
     }
     std::thread::scope(|scope| {
         let (send, receive) = sync_channel::<Batch>(0);
@@ -191,6 +205,10 @@ fn parse_region(
     } else {
         split_aligned(&region, mode.threads)
     };
+    #[cfg(test)]
+    if let Some(probe) = mode.probe {
+        probe.fetch_max(ranges.len(), std::sync::atomic::Ordering::Relaxed);
+    }
     let last = ranges.len() - 1;
     let pieces: Vec<Piece> = std::thread::scope(|scope| {
         let bytes = &region;

@@ -2,6 +2,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[derive(Debug)]
 pub(super) struct Budget {
     free: AtomicUsize,
     #[cfg(test)]
@@ -12,7 +13,7 @@ pub(super) struct Budget {
 /// error and panic.
 pub(super) struct Permit<'a> {
     budget: &'a Budget,
-    pub(super) workers: usize,
+    workers: usize,
 }
 
 impl Budget {
@@ -57,6 +58,12 @@ impl Budget {
     #[cfg(test)]
     pub(super) fn peak(&self, capacity: usize) -> usize {
         capacity - self.lowest.load(Ordering::Relaxed)
+    }
+}
+
+impl Permit<'_> {
+    pub(super) fn workers(&self) -> usize {
+        self.workers
     }
 }
 

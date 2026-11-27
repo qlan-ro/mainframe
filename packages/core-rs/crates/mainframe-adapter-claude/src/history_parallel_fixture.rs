@@ -171,3 +171,8 @@ pub(super) fn synthetic(gap: usize) -> Vec<u8> {
     ));
     text.into_bytes()
 }
+
+/// A budget private to one test, so parity cases never compete for workers.
+pub(super) fn leaked_budget(workers: usize) -> &'static super::budget::Budget {
+    Box::leak(Box::new(super::budget::Budget::new(workers)))
+}

@@ -1,6 +1,6 @@
 use super::history_worker::load_with_reader;
 use super::parallel::ParseMode;
-use super::parallel_fixture::{SESSION, synthetic};
+use super::parallel_fixture::{SESSION, leaked_budget, synthetic};
 use super::*;
 use std::io::{self, BufReader, Cursor, Read};
 
@@ -31,6 +31,9 @@ fn tiny(threads: usize, batch_bytes: usize) -> ParseMode {
         threads,
         batch_bytes,
         min_parallel_bytes: 0,
+        budget: leaked_budget(threads),
+        size_hint: None,
+        probe: None,
     }
 }
 
@@ -53,7 +56,11 @@ async fn parallel_matches_serial_across_batch_shapes() {
                 );
             }
         }
-        assert_eq!(load(bytes, ParseMode::detect()).await, expected);
+        let detected = ParseMode {
+            budget: leaked_budget(8),
+            ..ParseMode::detect()
+        };
+        assert_eq!(load(bytes, detected).await, expected);
     }
 }
 
@@ -208,8 +215,7 @@ fn read_failure_is_reported_by_both_modes() {
                 fail_at: Some(fail_at),
             };
             let mut seen = Vec::new();
-            let result = super::parallel::read_parsed_in(
-                &super::budget::Budget::new(8),
+            let result = super::parallel::read_parsed(
                 BufReader::with_capacity(97, drip),
                 mode,
                 |line, _| seen.push(line.to_owned()),

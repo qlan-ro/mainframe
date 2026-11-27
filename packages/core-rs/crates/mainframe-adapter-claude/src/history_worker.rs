@@ -52,6 +52,10 @@ pub(super) async fn load_with_reader<R: std::io::BufRead + Send>(
     run_history_worker(move || {
         let mut facts = history_agent_facts::AgentFacts::default();
         for path in parents {
+            let mode = parallel::ParseMode {
+                size_hint: std::fs::metadata(&path).ok().map(|meta| meta.len()),
+                ..mode
+            };
             let result = open(&path).and_then(|reader| {
                 parallel::read_parsed(reader, mode, |line, entry| {
                     let Some(entry) = entry else {
