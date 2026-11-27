@@ -1,29 +1,67 @@
 import { useCallback, useRef, useSyncExternalStore } from 'react';
 import { useAuiState, type ThreadMessage } from '@assistant-ui/react';
 import type { AcpChatController } from '../controller/acp-chat-controller';
+import type { ChatThreadState } from '../controller/chat-thread-state';
 import { TranscriptProjector } from '../controller/transcript-projector';
 import { noSubscription, useAwayFromTail, useChatController } from './use-away-from-tail';
 
+/** What `projectMessages` reads of the thread state besides the messages themselves. */
+function projectionKey(state: ChatThreadState): unknown[] {
+  return [
+    state.messages,
+    state.runState,
+    state.authoritativeItemStreaming,
+    state.pendingUserMessages,
+    state.interactions.queued,
+    state.queuedAttachmentPreviews,
+  ];
+}
+
 interface Projection {
-  messages: unknown;
+  key: unknown[];
   projected: readonly ThreadMessage[];
 }
-const projectors = new WeakMap<AcpChatController, { projector: TranscriptProjector; last?: Projection }>();
+interface Entry {
+  projector: TranscriptProjector;
+  /** Readers away from the tail; the projection is dropped with the last of them. */
+  readers: number;
+  last?: Projection;
+}
+const projectors = new WeakMap<AcpChatController, Entry>();
 
-/**
- * The controller's live transcript as thread messages, projected once per controller and per new
- * `messages`, however many consumers read it (a streamed frame is projected once, not per reader).
- */
-function liveProjection(controller: AcpChatController): readonly ThreadMessage[] {
+function entryOf(controller: AcpChatController): Entry {
   let entry = projectors.get(controller);
   if (!entry) {
-    entry = { projector: new TranscriptProjector() };
+    entry = { projector: new TranscriptProjector(), readers: 0 };
     projectors.set(controller, entry);
   }
+  return entry;
+}
+
+/** Subscribes to the controller as a reader of its live projection, which lives while one does. */
+function subscribeReader(controller: AcpChatController, listener: () => void): () => void {
+  const entry = entryOf(controller);
+  entry.readers += 1;
+  const off = controller.subscribeState(listener);
+  return () => {
+    off();
+    entry.readers -= 1;
+    if (entry.readers === 0) entry.last = undefined;
+  };
+}
+
+/**
+ * The controller's live transcript as thread messages, projected once per controller and per change
+ * of what the projection reads, however many consumers read it (a streamed frame is projected once,
+ * not per reader).
+ */
+function liveProjection(controller: AcpChatController): readonly ThreadMessage[] {
+  const entry = entryOf(controller);
   const state = controller.getState();
-  if (entry.last?.messages === state.messages) return entry.last.projected;
+  const key = projectionKey(state);
+  if (entry.last && entry.last.key.every((part, index) => Object.is(part, key[index]))) return entry.last.projected;
   const projected = entry.projector.projectMessages({ ...state, windowMessages: null }, state.messages);
-  entry.last = { messages: state.messages, projected };
+  entry.last = { key, projected };
   return projected;
 }
 
@@ -40,9 +78,8 @@ function useSelected<S, T>(subscribe: (listener: () => void) => () => void, snap
     // Same snapshot and same selector: same answer, so a store check costs no re-render.
     if (held && Object.is(held.snap, snap) && held.select === select) return held.value;
     const value = select(snap);
-    // A new snapshot that selects the same value keeps the held one.
-    cache.current = { snap, select, value: held && Object.is(held.value, value) ? held.value : value };
-    return cache.current.value;
+    cache.current = { snap, select, value };
+    return value;
   }, [snapshot, select]);
   return useSyncExternalStore(subscribe, read);
 }
@@ -57,15 +94,16 @@ function useSelected<S, T>(subscribe: (listener: () => void) => () => void, snap
  * (projected once per frame for all consumers) through a cached selector read.
  */
 export function useLiveMessages<T>(select: (messages: readonly ThreadMessage[]) => T): T {
-  const atTail = useAuiState((s) => select(s.thread.messages));
+  // Away from the tail the thread's messages are the jump window: not read, so its changes cost nothing here.
   const away = useAwayFromTail();
+  const atTail = useAuiState((s) => (away ? undefined : select(s.thread.messages)));
   const controller = useChatController();
   const live = away && controller ? controller : undefined;
   const subscribe = useCallback(
-    (listener: () => void) => (live ? live.subscribeState(listener) : noSubscription()),
+    (listener: () => void) => (live ? subscribeReader(live, listener) : noSubscription()),
     [live],
   );
   const snapshot = useCallback(() => (live ? liveProjection(live) : undefined), [live]);
   const awayValue = useSelected(subscribe, snapshot, (messages) => (messages ? select(messages) : undefined));
-  return live ? (awayValue as T) : atTail;
+  return live ? (awayValue as T) : (atTail as T);
 }

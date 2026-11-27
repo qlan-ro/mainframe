@@ -14,9 +14,9 @@ export function planeWindowHost(
 ): HistoryWindowHost {
   return {
     newestPageStart: (turns) => store.newestPageStart(turns),
-    trimTo: (start, refreshAfter) => {
+    trimTo: (start) => {
       store.trimTo(start);
-      if (refreshAfter) refresh.live();
+      refresh.live();
     },
     showWindow: (result, more = []) => {
       store.openAround(result.updates ?? []);

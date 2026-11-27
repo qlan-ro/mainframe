@@ -26,14 +26,13 @@ const message = (id: string): ThreadMessageLike => ({ id, role: 'assistant', con
 beforeEach(() => {
   f.shown = [{ id: 'window-1' }];
   f.window = false;
-  const messages = [message('live-1'), message('live-2')];
-  const windowMessages = [message('window-1')];
+  const base = {
+    ...createChatThreadState('chat'),
+    messages: [message('live-1'), message('live-2')],
+  };
+  const windowed = { ...base, windowMessages: [message('window-1')] };
   f.controller = {
-    getState: () => ({
-      ...createChatThreadState('chat'),
-      messages,
-      windowMessages: f.window ? windowMessages : null,
-    }),
+    getState: () => (f.window ? windowed : base),
     subscribeState: () => () => undefined,
   };
 });

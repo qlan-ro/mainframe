@@ -24,8 +24,8 @@ export interface HistoryLoadState extends HistoryState {
 export interface HistoryWindowHost {
   /** The item the newest `turns` turns start at in the live window, or null when it holds no more. */
   newestPageStart(turns: number): string | null;
-  /** Drops everything above `start` from the live window. */
-  trimTo(start: string, refresh: boolean): void;
+  /** Drops everything above `start` from the live window and shows the cut: a live update is invisible while away, but the screen must follow it once the reader is back. */
+  trimTo(start: string): void;
   /** Shows a window around a target, or the same window cut again, with what continues it. */
   showWindow(result: HistoryAroundResult, more?: AroundStep[]): void;
   extendWindow(result: HistoryAroundResult, side: 'before' | 'after'): void;
@@ -67,7 +67,7 @@ export class AcpHistory {
       end: (generation) => {
         if (generation === this.generation && this.state.loading) this.update({ ...this.state, loading: false });
       },
-      trimLive: () => this.trimLive(false),
+      trimLive: () => this.trimLive(),
       show: (result, more) => {
         host.showWindow(result, more);
         this.host.changed(this.view());
@@ -214,7 +214,7 @@ export class AcpHistory {
    */
   trim(): Promise<boolean> {
     if (this.around.state || this.inFlight || !this.host.active()) return Promise.resolve(false);
-    return this.track(this.trimLive(true)).catch(() => false);
+    return this.track(this.trimLive()).catch(() => false);
   }
 
   private canTrim(): boolean {
@@ -229,12 +229,11 @@ export class AcpHistory {
    * cannot raise its floor keeps the window whole: cutting here alone would leave every later page
    * refused.
    */
-  private async trimLive(refresh: boolean): Promise<boolean> {
+  private async trimLive(): Promise<boolean> {
     if (!this.canTrim()) return false;
     const start = this.host.newestPageStart(useUiPrefs.getState().historyTurns);
     if (!start) return false;
     const client = this.host.client();
-    const generation = this.generation;
     const connection = client.connectionGeneration;
     const reply = await client.historyTrim!({ sessionId: this.host.chatId(), floorItemId: start });
     // The daemon's floor cannot be put back. A reload or a send that came meanwhile (the generation)
@@ -242,8 +241,7 @@ export class AcpHistory {
     // starts from its own floor) or the window no longer holds that item.
     if (reply.stale || client !== this.host.client() || connection !== client.connectionGeneration) return false;
     if (!this.host.hasItem(start)) return false;
-    // The reader may have come back to the tail meanwhile, and what they see must follow the cut.
-    this.host.trimTo(start, refresh || generation !== this.generation);
+    this.host.trimTo(start);
     this.state = { hasMore: true, floorItemId: start, loading: false };
     this.host.changed(this.view());
     return true;
@@ -257,7 +255,7 @@ export class AcpHistory {
   private adoptFloor(page: HistoryPageResult): void {
     const id = page.floorItemId;
     if (!id || id === this.state.floorItemId || !this.host.hasItem(id, this.state.floorItemId)) return;
-    this.host.trimTo(id, true);
+    this.host.trimTo(id);
     this.state = { ...this.state, hasMore: page.hasMore, floorItemId: id };
   }
 

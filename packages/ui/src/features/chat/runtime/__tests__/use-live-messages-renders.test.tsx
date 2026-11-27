@@ -24,6 +24,7 @@ const store = vi.hoisted(() => ({ controller: undefined as unknown }));
 vi.mock('@/features/sessions/runtime/chat-controller-registry', () => ({
   chatControllerRegistry: { get: () => store.controller },
 }));
+import { useLiveMessages } from '../use-live-messages';
 import { useGateQueue } from '../../gates/use-gate-queue';
 import { useTaskResult } from '../../orchestration/use-task-result';
 
@@ -44,7 +45,7 @@ function createStore() {
 }
 
 let chat: ReturnType<typeof createStore>;
-const counts = { task: 0, gate: 0, probe: 0 };
+const counts = { task: 0, gate: 0, probe: 0, reader: 0 };
 
 const text = (id: string, body: string): ThreadMessageLike => ({
   id,
@@ -78,6 +79,12 @@ function Gate() {
   useGateQueue();
   return null;
 }
+/** A reader whose answer changes with the live transcript: how many messages it holds. */
+function Reader() {
+  counts.reader++;
+  const length = useLiveMessages((messages) => messages.length);
+  return <span data-testid="reader">{length}</span>;
+}
 /** Proves the thread's own messages did change: it re-renders with them. */
 function Probe() {
   counts.probe++;
@@ -105,7 +112,7 @@ function stream(frames: number) {
 beforeEach(() => {
   chat = createStore();
   store.controller = chat;
-  Object.assign(counts, { task: 0, gate: 0, probe: 0 });
+  Object.assign(counts, { task: 0, gate: 0, probe: 0, reader: 0 });
   chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'start')] });
 });
 afterEach(() => vi.restoreAllMocks());
@@ -144,5 +151,32 @@ describe('consumers of the live transcript while it streams', () => {
     expect(view.getByTestId('last').textContent).toBe('streamed 4');
     expect(counts.task).toBe(settled.task);
     expect(counts.gate).toBe(settled.gate);
+  });
+
+  it('away from the tail, a reader whose answer changes re-renders once and shows the live value, then the thread’s again', () => {
+    const view = render(
+      <Runtime>
+        <Reader />
+        <Probe />
+      </Runtime>,
+    );
+    expect(view.getByTestId('reader').textContent).toBe('1');
+    act(() => chat.dispatch({ type: 'window.updated', messages: [text('w1', 'a jump window')] }));
+    const settled = counts.reader;
+    // A frame that adds a live message: the thread still shows the window (one message), the chat has two.
+    act(() => chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'start'), text('m2', 'next')] }));
+    expect(view.getByTestId('last').textContent).toBe('a jump window');
+    expect(view.getByTestId('reader').textContent).toBe('2');
+    expect(counts.reader - settled).toBe(1);
+    // Frames that change nothing it reads leave it alone.
+    act(() => chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'start'), text('m2', 'next more')] }));
+    expect(counts.reader - settled).toBe(1);
+    // Back at the tail it reads the thread's own messages, which are the live ones again.
+    act(() => chat.dispatch({ type: 'window.updated', messages: null }));
+    expect(view.getByTestId('reader').textContent).toBe('2');
+    act(() =>
+      chat.dispatch({ type: 'transcript.updated', messages: [text('m1', 'a'), text('m2', 'b'), text('m3', 'c')] }),
+    );
+    expect(view.getByTestId('reader').textContent).toBe('3');
   });
 });
