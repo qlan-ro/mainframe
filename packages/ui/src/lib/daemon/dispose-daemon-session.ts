@@ -6,6 +6,7 @@ import { useLayoutStore } from '../../store/layout';
 import { tabIdsInRun } from '../../store/run-pane';
 import { resetAdapters } from '../../store/adapters';
 import { invalidateSeedFetches } from '../../store/adapters-seed';
+import { resetBootPrewarm } from '../../features/sessions/runtime/boot-chat-prewarm';
 import { resetAcpFacadeClients } from './acp-clients';
 
 /**
@@ -20,6 +21,12 @@ export function disposeDaemonSession(): void {
     daemonWs.disconnect();
   } catch (err) {
     console.warn('[disposeDaemonSession] daemonWs.disconnect failed', err);
+  }
+
+  try {
+    resetBootPrewarm();
+  } catch (err) {
+    console.warn('[disposeDaemonSession] resetBootPrewarm failed', err);
   }
 
   try {

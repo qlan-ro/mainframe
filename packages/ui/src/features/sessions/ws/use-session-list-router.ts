@@ -38,17 +38,16 @@ import { useSessionFilters } from '../../../store/session-filters';
 import { useLayoutStore } from '../../../store/layout';
 import { isDraftSessionId } from '../../../store/layout-persist';
 import { useLastSessionStore } from '../../../store/last-session';
-import { isCreateInFlight } from '../runtime/new-thread-coordinator';
-import { isCarriedDraft, useDraftCarry } from '../new-thread/draft-carry';
+import { useDraftCarry } from '../new-thread/draft-carry';
 import { useIsNewThreadSwitchPending } from '../new-thread/new-thread-switch-pending';
 import type { SessionItem } from '../view-model/chat-to-thread-custom';
 import { threadItemsToSessionItems } from '../view-model/chat-to-thread-custom';
-import { pickInitialSession } from '../view-model/initial-session';
 import { pickArchiveFallback } from '../view-model/session-fallback';
 import { reconcileDraftHandoff } from './reconcile-draft-handoff';
 import { createSessionListRouter } from './session-list-router';
 import { useGhostChatPrune } from './use-ghost-chat-prune';
 import { useHeldQueuePrune } from './use-held-queue-prune';
+import { useBootAutoSelect } from './use-boot-auto-select';
 
 /** Persist the newly-active session (boot restore + per-project + workspace layout). */
 function rememberActiveSession(active: SessionItem | undefined): void {
@@ -267,33 +266,7 @@ export function useSessionListRouter(): void {
     clearFilterOnCrossProject(active);
   }, [mainThreadId, items, threadItems, threads, newThreadSwitchPending]);
 
-  // Boot auto-select: open a session once the list first loads, so the app doesn't
-  // land on the empty new-thread picker. Prefers the last session open before the
-  // app closed (persisted by daemon chat id), falling back to the most-recent one
-  // when it's gone or archived. One-shot — consumed on the first non-empty list —
-  // and only while on the boot draft (mainThreadId null/`__LOCALID_*`), so it
-  // never overrides a thread the user opened or a new chat they started sending.
-  //
-  // A create in flight for the draft means the user already chose it by sending.
-  // On a fresh install the first non-empty list is the reload triggered by that
-  // chat's own `chat.created`, which lands before the create workflow settles;
-  // switching then reads as abandoning the draft and destroys the new chat.
-  const didAutoSelectRef = useRef(false);
-  useEffect(() => {
-    if (didAutoSelectRef.current || items.length === 0) return;
-    didAutoSelectRef.current = true;
-
-    const onBootDraft = mainThreadId == null || mainThreadId.startsWith('__LOCALID_');
-    // The one-shot is consumed above regardless — a New switch pending (todo
-    // #375) means the user already chose it, same as isCreateInFlight.
-    if (!onBootDraft || newThreadSwitchPending || isCarriedDraft(mainThreadId)) return;
-    if (mainThreadId != null && isCreateInFlight(mainThreadId)) return;
-
-    const target = pickInitialSession(items, useLastSessionStore.getState().lastSessionId);
-    if (target != null && target !== mainThreadId) {
-      threads.switchToThread(target);
-    }
-  }, [items, mainThreadId, threads, newThreadSwitchPending]);
+  useBootAutoSelect(items, mainThreadId, threads, newThreadSwitchPending);
 
   // Ghost-chat prune (todo #346) — see use-ghost-chat-prune.ts.
   useGhostChatPrune(items, threads);
