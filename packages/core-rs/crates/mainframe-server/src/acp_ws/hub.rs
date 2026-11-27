@@ -31,6 +31,7 @@ mod raw_frame_kind;
 mod revisions;
 pub use fanout::ResumeSeed;
 mod history;
+mod history_refresh;
 mod history_tail;
 use fanout::drain_into;
 use revisions::RevisionRegistry;
@@ -47,6 +48,7 @@ pub struct FacadeHub {
     /// Per-chat revision logs — see `revisions.rs`.
     revisions: RevisionRegistry,
     history_tails: Option<Arc<history_tail::TailStore>>,
+    history_refresh: Arc<history_refresh::HistoryRefresher>,
 }
 
 impl Default for FacadeHub {
@@ -63,6 +65,7 @@ impl FacadeHub {
             throttle_interval_ms,
             revisions: RevisionRegistry::default(),
             history_tails: None,
+            history_refresh: Arc::default(),
         }
     }
 

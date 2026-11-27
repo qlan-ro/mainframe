@@ -29,15 +29,29 @@ it('resolves image references against the active daemon and uses its bearer auth
   });
 });
 
-it.each(['https://other.example/image', '//other.example/image', '/api/chats/../settings', '/api/other'])(
-  'rejects untrusted image reference %s before making a request',
-  async (uri) => {
-    const fetcher = vi.fn();
-    vi.stubGlobal('fetch', fetcher);
-    await expect(getToolImage(uri)).rejects.toThrow('Invalid tool image reference');
-    expect(fetcher).not.toHaveBeenCalled();
-  },
-);
+it("accepts a reference into a sub-agent's transcript", async () => {
+  const image = { mediaType: 'image/png', data: 'AAAA' };
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true, data: image }) });
+  vi.stubGlobal('fetch', fetcher);
+  const path = '/api/chats/chat/tool-result/tool/images/0?v=0123456789abcdef&agent=worker-1';
+  expect(await getToolImage(path)).toEqual(image);
+  expect(fetcher).toHaveBeenCalledWith(`http://127.0.0.1:31415${path}`, expect.anything());
+});
+
+it.each([
+  'https://other.example/image',
+  '//other.example/image',
+  '/api/chats/../settings',
+  '/api/other',
+  '/api/chats/chat/tool-result/tool/images/0?v=0123456789abcdef&agent=../x',
+])('rejects untrusted image reference %s before making a request', async (uri) => {
+  const fetcher = vi.fn();
+  vi.stubGlobal('fetch', fetcher);
+  await expect(getToolImage(uri)).rejects.toThrow('Invalid tool image reference');
+  expect(fetcher).not.toHaveBeenCalled();
+});
 
 it('shares pending requests and reuses fetched pixels after a row remounts', async () => {
   const image = { mediaType: 'image/png', data: 'AAAA' };

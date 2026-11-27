@@ -14,12 +14,15 @@ use serde::Deserialize;
 use mainframe_types::adapter::EffortLevel;
 use mainframe_types::chat::Chat;
 use mainframe_types::chat_patch::ChatPatch;
-use mainframe_types::transcript::TranscriptLocation;
 
 use crate::ctx::AppCtx;
 use crate::respond::{ApiError, fail, ok};
 use crate::routes::body::parse_body;
 use crate::routes::chat_discard::refuse_if_temporary;
+
+#[path = "chat_tool_result.rs"]
+mod chat_tool_result;
+use chat_tool_result::tool_result;
 
 const TAG_ALLOWED: fn(char) -> bool = |c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-';
 
@@ -358,85 +361,6 @@ async fn unarchive(State(ctx): State<Arc<AppCtx>>, Path(id): Path<String>) -> Re
         Some(chat) => ok(chat),
         None => crate::respond::ApiError::chat_not_found().into_response(),
     }
-}
-
-async fn tool_result(
-    State(ctx): State<Arc<AppCtx>>,
-    Path((id, tool_use_id)): Path<(String, String)>,
-) -> Result<Response, ApiError> {
-    if id.is_empty() || !mainframe_types::ids::is_safe_identifier(&tool_use_id) {
-        return Err(ApiError::BadRequest("Invalid parameters".into()));
-    }
-    let lookup_id = id.clone();
-    let chat = ctx.require_chat(&lookup_id).await?;
-
-    let file_path = match resolve_tool_result_path(&ctx, &chat).await {
-        Ok(Some(path)) => path,
-        Err(error) => return Err(error),
-        Ok(None) => return Err(ApiError::NotFound("No session file for chat".into())),
-    };
-    let content = match ctx.core.adapter_registry.get(&chat.adapter_id) {
-        Some(adapter) => adapter.read_tool_result(file_path, tool_use_id).await,
-        None => None,
-    };
-    match content {
-        Some(content) => Ok(ok(serde_json::json!({ "content": content }))),
-        None => Err(ApiError::NotFound("Tool result not available".into())),
-    }
-}
-
-async fn resolve_tool_result_path(
-    ctx: &AppCtx,
-    chat: &Chat,
-) -> Result<Option<String>, crate::respond::ApiError> {
-    if let Some(path) = &chat.session_file_path {
-        return Ok(Some(path.clone()));
-    }
-    let Some(session_id) = &chat.vendor_session_id else {
-        return Ok(None);
-    };
-    let project_id = chat.project_id.clone();
-    let project_path = ctx
-        .core
-        .db
-        .call(move |db| db.projects.get(&project_id))
-        .await
-        .map_err(|err| crate::respond::ApiError::internal("get project", &err))?
-        .map(|project| project.path);
-    let Some(cwd) = chat.worktree_path.clone().or(project_path) else {
-        return Ok(None);
-    };
-    let Some(adapter) = ctx.core.adapter_registry.get(&chat.adapter_id) else {
-        return Ok(None);
-    };
-    let location = match adapter
-        .locate_transcript(session_id.clone(), cwd, None)
-        .await
-    {
-        Ok(location) => location,
-        Err(err) => {
-            tracing::warn!(chat_id = %chat.id, error = %err, "tool result transcript lookup failed");
-            None
-        }
-    };
-    let Some(TranscriptLocation::Present(path)) = location else {
-        return Ok(None);
-    };
-    let (cid, fp) = (chat.id.clone(), path.clone());
-    ctx.core
-        .db
-        .call(move |db| {
-            db.chats.update(
-                &cid,
-                &ChatPatch {
-                    session_file_path: Some(fp),
-                    ..Default::default()
-                },
-            )
-        })
-        .await
-        .map_err(|err| crate::respond::ApiError::internal("persist session file path", &err))?;
-    Ok(Some(path))
 }
 
 pub fn router() -> Router<Arc<AppCtx>> {

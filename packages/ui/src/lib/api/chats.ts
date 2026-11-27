@@ -113,11 +113,20 @@ export async function cancelQueuedMessage(port: number, chatId: string, messageI
   return data?.cancelled !== false;
 }
 
-/** Full (untruncated) output for a tool call, fetched on demand for long results. */
-export async function getToolResultContent(port: number, chatId: string, toolUseId: string): Promise<string> {
+/**
+ * Full (untruncated) output for a tool call, fetched on demand for long results.
+ * `agentId` names the saved sub-agent whose transcript holds the call.
+ */
+export async function getToolResultContent(
+  port: number,
+  chatId: string,
+  toolUseId: string,
+  agentId?: string,
+): Promise<string> {
+  const query = agentId ? `?agent=${encodeURIComponent(agentId)}` : '';
   const { content } = await request<{ content: string }>(
     'GET',
-    `${apiBase(port)}/api/chats/${chatId}/tool-result/${toolUseId}`,
+    `${apiBase(port)}/api/chats/${chatId}/tool-result/${toolUseId}${query}`,
   );
   return content;
 }

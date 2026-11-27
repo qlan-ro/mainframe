@@ -4,6 +4,7 @@ import { chatControllerRegistry } from '@/features/sessions/runtime/chat-control
 import { useKnownDaemonPort } from '@/features/sessions/runtime/daemon-port-context';
 import { AgentSteps, type AgentStepsProps } from './AgentSteps';
 import { historyKey, loadSubagentPage, useSubagentHistoryStore } from './subagent-history-store';
+import { SubagentTranscriptScope, useTranscriptScope } from './transcript-scope';
 
 export function HistoricalAgentSteps({
   chatId,
@@ -14,6 +15,8 @@ export function HistoricalAgentSteps({
   const { toolCallId } = props;
   const key = historyKey(chatId, toolCallId);
   const entry = useSubagentHistoryStore((state) => state.entries.get(key));
+  // Where this call itself lives: the chat, or the sub-agent whose page holds the row.
+  const { subagentId: callSource } = useTranscriptScope();
   const boundary = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
@@ -78,7 +81,19 @@ export function HistoricalAgentSteps({
           </Button>
         )}
       </div>
-      <AgentSteps {...props} messages={entry?.messages ?? props.messages} />
+      {/* Only rows read from the child's page live in its transcript. The steps an
+          older parent kept inline, and the call's own result, live where the call does. */}
+      <SubagentTranscriptScope subagentId={entry ? (nativeAgentId ?? toolCallId) : callSource}>
+        <AgentSteps
+          {...props}
+          messages={entry?.messages ?? props.messages}
+          resultBody={
+            props.resultBody && (
+              <SubagentTranscriptScope subagentId={callSource}>{props.resultBody}</SubagentTranscriptScope>
+            )
+          }
+        />
+      </SubagentTranscriptScope>
     </>
   );
 }

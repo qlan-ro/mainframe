@@ -597,7 +597,7 @@ A `card` surface with 10 px radius, the float shadow and 4 px padding. Items hav
 - **Links:** one style, Blue Ink with an underline; a raw URL or a file path is in mono, with no glyph.
 - **Changed lines:** ink on the tint; colour only in the +/− column. The workspace terminal fills its pane with the workspace surface, uses secondary ink for text and cursor, and keeps 10 px vertical and 14 px horizontal padding. Open terminals follow theme changes in place.
 - **Dividers:** hairlines with a centred 12 px `meta` label ("Context compacted").
-- **Code blocks:** 8 px radius on the `code` tint.
+- **Code blocks:** 8 px radius on the `code` tint. Markdown code blocks are shadcn's Code Block (`components/ui/code-block.tsx`): a 30 px header with the language in `meta` and a labelled Copy, over the tinted, numbered body in one hairline frame. Tool output moves onto the same component.
 
 ### Scrollbars
 Overlay thumbs only, never a track or a gutter, whatever the engine or the macOS scroll bar setting. Native scrollbars are hidden. A 6 px thumb (ink at 26 %, 3 px radius, inset 2 px, at least 24 px long) fades in while a region scrolls or is hovered, widens to 8 px (ink at 42 %) under the pointer, can be dragged, and fades out about a second after. Content keeps its full width, so the transcript's text edges stay aligned with the composer. `prefers-reduced-motion` removes the fade.

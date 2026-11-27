@@ -4,11 +4,11 @@
  * render time whether to chip it (#278).
  *
  * One responsibility: `text` nodes. `inlineCode` and `code` are deliberately
- * untouched — both already hand their raw string to a component seam (`Code`'s
- * children, `CodeHeader`/`SyntaxHighlighter`'s `code` prop), where
+ * untouched — both already hand their raw string to a component seam (the
+ * inline `code` and the fence's `pre` in `markdown-code.tsx`), where
  * `parseInstructionLine` answers the same question. Annotating them would also
- * be pointless: `unstable_memoizeMarkdownComponents` strips `node` from every
- * entry, so no seam can read mdast properties.
+ * be pointless: the component map strips `node` from every entry, so no seam
+ * can read mdast properties.
  *
  * The marker carries its text in `children`, NOT in `value`. `mdast-util-to-hast`'s
  * `defaultUnknownHandler` renders `state.all(node)` for any node carrying
@@ -16,7 +16,7 @@
  * and the token disappears from the transcript.
  *
  * Gating is render-time by construction: the plugin is a module-level constant
- * (assistant-ui requires a stable `remarkPlugins` reference) and therefore
+ * (Streamdown's block memo needs a stable `remarkPlugins` reference) and therefore
  * cannot consult the per-chat skills catalog.
  */
 import type { Data, Parent, Root, Text } from 'mdast';
