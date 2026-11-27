@@ -18,7 +18,11 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api", "unstable"] }
+# The default `compression` feature is omitted on purpose: it brotli-compresses the
+# embedded frontend and decodes each asset as it is served, which costs about 13 ms of
+# DOMContentLoaded on a cold start. The assets are read locally, so the ~11 MB of
+# app size it saves (about 0.3 MB in the dmg) buys nothing at runtime.
+tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus", "macos-private-api", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-updater = "2"
