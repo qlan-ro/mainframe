@@ -179,7 +179,9 @@ describe('chips follow text typed on an earlier line', () => {
 
 describe('restoring and pasting long text stays linear', () => {
   const LINES = 3000;
-  const BOUND_MS = 500;
+  // The quadratic version took 4–30 s for these inputs; linear takes about 50–100 ms locally.
+  // 2 s keeps that gap on slow CI runners, which measured 547–566 ms against the old 500 ms bound.
+  const BOUND_MS = 2000;
 
   function timed(run: () => void): number {
     const started = performance.now();
