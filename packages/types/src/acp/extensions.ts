@@ -131,6 +131,8 @@ export const MainframeCapabilitiesSchema = z
     historySearch: z.boolean().optional(),
     /** Whether `_mainframe.dev/history_around` is available. */
     historyAround: z.boolean().optional(),
+    /** Whether `history_around` honours `includeDescendants`. */
+    historyAroundDescendants: z.boolean().optional(),
     lazyToolImages: z.boolean().optional(),
   })
   .loose();

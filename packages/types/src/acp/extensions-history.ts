@@ -52,6 +52,8 @@ export const HistoryAroundParamsSchema = z
     itemId: z.string(),
     before: z.number().int().optional(),
     after: z.number().int().optional(),
+    /** Also return the target's descendants (a sub-agent's steps), up to a cap. */
+    includeDescendants: z.boolean().optional(),
   })
   .loose();
 export type HistoryAroundParams = z.infer<typeof HistoryAroundParamsSchema>;
@@ -66,6 +68,8 @@ export const HistoryAroundResultSchema = z
     lastItemId: z.string().optional(),
     targetItemId: z.string().optional(),
     contextItemIds: z.array(z.string()).optional(),
+    /** True when `includeDescendants` was asked and the cap cut the descendants short. */
+    hasMoreDescendants: z.boolean().optional(),
     stale: z.boolean().optional(),
   })
   .loose();

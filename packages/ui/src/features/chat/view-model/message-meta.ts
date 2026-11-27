@@ -20,6 +20,8 @@ import type { ReviewComment } from './parse-review-comment';
 
 export interface MainframeMessageMeta {
   readonly partSources?: PartSources;
+  /** A sub-agent's steps: a name for each part by position, unique and stable across copies of the message. */
+  readonly partKeys?: readonly string[];
   // assistant turn
   readonly cost?: number;
   /** Set on an assistant `error` turn → AssistantMessage renders a styled error

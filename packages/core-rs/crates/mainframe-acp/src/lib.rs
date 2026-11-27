@@ -69,6 +69,8 @@ pub use stream::SessionStream;
 pub use throttle::{Throttle, ThrottledFrame};
 
 #[cfg(test)]
+mod history_around_steps_tests;
+#[cfg(test)]
 mod history_around_tests;
 #[cfg(test)]
 mod reference_measurement_tests;

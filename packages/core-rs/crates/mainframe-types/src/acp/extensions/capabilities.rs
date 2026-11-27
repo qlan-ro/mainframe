@@ -49,6 +49,9 @@ pub struct MainframeCapabilities {
     /// Whether `_mainframe.dev/history_around` is available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_around: Option<bool>,
+    /// Whether `history_around` honours `includeDescendants`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_around_descendants: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lazy_tool_images: Option<bool>,
 }
@@ -123,6 +126,7 @@ mod tests {
             windowed_history: None,
             history_search: None,
             history_around: None,
+            history_around_descendants: None,
             lazy_tool_images: None,
         };
         assert_eq!(serde_json::to_value(caps).unwrap(), json!({}));

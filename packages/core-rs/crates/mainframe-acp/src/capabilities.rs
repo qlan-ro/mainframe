@@ -49,6 +49,7 @@ pub fn mainframe_capabilities(heartbeat_interval_ms: u64) -> MainframeCapabiliti
         windowed_history: Some(true),
         history_search: Some(true),
         history_around: Some(true),
+        history_around_descendants: Some(true),
         lazy_tool_images: Some(true),
     }
 }

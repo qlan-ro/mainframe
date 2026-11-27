@@ -20,6 +20,7 @@
       "windowedHistory": true,
       "historySearch": true,
       "historyAround": true,
+      "historyAroundDescendants": true,
       "lazyToolImages": true
     }
   }
