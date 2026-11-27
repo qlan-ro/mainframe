@@ -1,7 +1,8 @@
 /**
  * The transcript's follow mechanism: while the reader is at the bottom, growth
  * keeps them there; scrolling up releases it; the End key, the scroll-to-bottom
- * button and the user's own send (`controller/user-sent.ts`) re-pin.
+ * button and the user's own send (`controller/user-sent.ts`) re-pin. Opening a
+ * session lands at the tail before the first frame paints (`followResize`).
  * assistant-ui's viewport scroll controllers are switched off in
  * `ChatThreadViewport.tsx`, so this is the only writer that follows new output.
  */
@@ -11,10 +12,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefCall
 import {
   beginLock,
   createPinState,
+  followResize,
   pinToBottom,
   publishPinned,
   resetPin,
-  scheduleFollow,
   trackPosition,
   trackScroll,
   trackUserScroll,
@@ -59,7 +60,7 @@ function usePinObservers(
           state.current.anchor = restoreReadingAnchor(viewport, state.current.anchor);
           trackPosition(viewport, state.current);
         }
-        scheduleFollow(viewportElement, state.current);
+        followResize(viewportElement, state.current);
       });
       state.current.observer.observe(element);
       if (viewportElement.current) state.current.observer.observe(viewportElement.current);
@@ -125,6 +126,7 @@ export function useThreadBottomPin(threadId: string | null) {
       current.removeScroll?.();
       current.observer?.disconnect();
       if (current.frame !== null) cancelAnimationFrame(current.frame);
+      if (current.openingFrame !== null) cancelAnimationFrame(current.openingFrame);
     };
   }, []);
   return { ...refs, ...lock, isPinned, subscribePinned, footerRef, viewportElement, viewport, pinToBottom: repin };

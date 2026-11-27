@@ -228,7 +228,7 @@ describe('hold/release (independent review item 2: the general growing-text guar
     tick(500);
     await flush();
 
-    const texts = Array.from(document.querySelectorAll('[data-status]')).map((el) => el.textContent ?? '');
+    const texts = Array.from(document.querySelectorAll('[data-text-part]')).map((el) => el.textContent ?? '');
     expect(texts[0]).toBe('Hello wonderful world'); // held
     expect(texts[1]).toBe('Elsewhere growing longer too'); // unrelated — kept rendering live
   });

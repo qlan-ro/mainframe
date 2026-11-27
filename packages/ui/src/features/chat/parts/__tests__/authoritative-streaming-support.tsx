@@ -131,7 +131,7 @@ export function withAcknowledgment(state: ChatThreadState) {
     messages: [...state.messages, { id: 'ack', role: 'user', content: [{ type: 'text', text: 'next prompt' }] }],
   });
 }
-export const textNode = (id: string) => document.querySelector(`[data-testid="message-${id}"] [data-status]`)!;
+export const textNode = (id: string) => document.querySelector(`[data-testid="message-${id}"] [data-text-part]`)!;
 export const shown = (id: string) => textNode(id).textContent ?? '';
 export const tick = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 export const flush = () => act(async () => void (await new Promise((resolve) => setImmediate(resolve))));

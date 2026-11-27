@@ -84,12 +84,24 @@ const EXEMPT: Record<string, Exemption> = {
   'components/ui/popover.tsx': { count: 1, shownBy: PANEL },
   'components/ui/hover-card.tsx': { count: 1, shownBy: PANEL },
   'components/ui/attachment.tsx': { count: 1, shownBy: 'Attachment’s `focus-within` line' },
+  'components/ui/code-block.tsx': { count: 1, shownBy: 'the frame’s line while its scrolling body is focused' },
   'components/ui/command.tsx': {
     count: 2,
     shownBy: 'the palette: focus never leaves its input, and the selected row is highlighted',
   },
   'components/ui/input-group.tsx': { count: 2, shownBy: 'InputGroup’s line while its control is focused' },
-  'features/chat/composer/Composer.tsx': { count: 1, shownBy: 'the composer card’s `focus-within` line' },
+  'features/chat/composer/composer-field.tsx': {
+    count: 1,
+    shownBy: 'the composer card’s `focus-within` line',
+    frame: 'features/chat/composer/Composer.tsx',
+  },
+  // The chip fields (setting on): the live field in the composer card, quote
+  // segments in the same card, and the edit card's field.
+  'features/chat/composer/lexical/chip-editor-class.ts': {
+    count: 1,
+    shownBy: 'the composer card’s or the edit card’s line while its contenteditable is focused',
+    frame: 'features/chat/composer/Composer.tsx',
+  },
   'features/chat/composer/segments/ComposerSegments.tsx': {
     count: 1,
     shownBy: 'the composer card’s `focus-within` line',
@@ -217,8 +229,10 @@ describe('focus indicator audit', () => {
       .sort();
     expect(files).toEqual([
       'components/ui/command.tsx',
-      'features/chat/composer/Composer.tsx',
+      'features/chat/composer/composer-field.tsx',
       'features/chat/composer/edit/ComposerEditMode.tsx',
+      // In the composer card or the edit card, which draw the line.
+      'features/chat/composer/lexical/ChipTextEditor.tsx',
       // Inside an InputGroup, which draws the line.
       'features/git/BranchListView.tsx',
       'features/session-panel/TasksSection.tsx',

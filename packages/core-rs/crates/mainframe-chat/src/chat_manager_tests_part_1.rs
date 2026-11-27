@@ -28,6 +28,8 @@ mod fork_title;
 mod history_eviction;
 #[path = "chat_manager_tests_history_snapshot.rs"]
 mod history_snapshot;
+#[path = "chat_manager_tests_history_memory.rs"]
+mod history_memory;
 #[path = "chat_manager_tests_offload.rs"]
 mod offload;
 #[path = "chat_manager_tests_orchestration.rs"]

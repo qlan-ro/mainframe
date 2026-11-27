@@ -1,7 +1,10 @@
 use super::*;
 use std::path::PathBuf;
 
-#[derive(Default, Debug)]
+/// Plan and skill paths a full history read collected on the way, with the
+/// parent-transcript stamps they were read at. Kept in the history snapshot so
+/// a cache hit does not re-read the transcript to find them again.
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CollectedHistoryFiles {
     pub plans: Vec<String>,
     pub skill_names: Vec<String>,
@@ -157,6 +160,15 @@ pub trait AdapterSession: Send + Sync {
     fn take_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
         None
     }
+    /// The files the last `load_history` collected, left in place for
+    /// `take_history_files`; the history snapshot stores a copy.
+    fn peek_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
+        None
+    }
+    /// Hands back files a history snapshot stored, so a cache hit's scan can
+    /// use them instead of reading the transcript. The scan still checks
+    /// their stamps and reads again when they are stale.
+    fn restore_history_files(&self, _files: crate::CollectedHistoryFiles) {}
     fn scan_history_files(
         &self,
         _collected: Option<crate::CollectedHistoryFiles>,

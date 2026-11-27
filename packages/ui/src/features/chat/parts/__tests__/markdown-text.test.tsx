@@ -16,7 +16,6 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import type { SyntaxHighlighterProps } from '@assistant-ui/react-markdown';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { HostProvider } from '@/lib/host';
@@ -24,8 +23,6 @@ import { FakeHostBridge } from '@/lib/host/fake-adapter';
 
 // Import the component under test (no bridge mock needed — HostProvider provides the host).
 import { markdownComponents, MARKDOWN_ROOT_CLASS } from '../markdown-text';
-import { CodeHeader } from '../CodeHeader';
-import { SyntaxHighlighter } from '../syntax-highlight';
 import { MessagePathContextMenu } from '@/features/chat/messages/MessagePathContextMenu';
 
 // ---------------------------------------------------------------------------
@@ -44,9 +41,7 @@ function wrap(ui: React.ReactElement) {
   );
 }
 
-// markdownComponents.a is a memo-wrapped component (from
-// unstable_memoizeMarkdownComponents). Assign to a named variable so JSX can
-// reference it as a component.
+// Assign markdownComponents.a to a named variable so JSX can reference it.
 const A = markdownComponents.a as React.ComponentType<React.AnchorHTMLAttributes<HTMLAnchorElement>>;
 
 // ---------------------------------------------------------------------------
@@ -80,52 +75,6 @@ describe('markdownComponents.a (LinkWithPreview)', () => {
     expect(fake.shell.openExternal).toHaveBeenCalledWith('https://example.com');
     expect(clickEvent.defaultPrevented).toBe(true);
     useUiPrefs.setState({ openLinksIn: 'workspace' });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Fenced code block — CodeHeader + SyntaxHighlighter must compose ONE bordered,
-// rounded container (they are Fragment siblings; the container is CSS-composed).
-// ---------------------------------------------------------------------------
-
-describe('fenced code block container', () => {
-  it('CodeHeader forms the rounded, bordered top of the container', () => {
-    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
-    const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain('rounded-t-lg');
-    expect(root.className).toContain('border-border');
-  });
-
-  it('SyntaxHighlighter <pre> forms the rounded, bordered bottom of the container', () => {
-    // `components` is required by the slot type but ignored by our shiki impl.
-    const components = {} as unknown as SyntaxHighlighterProps['components'];
-    const { container } = render(<SyntaxHighlighter code="const x = 1;" language="ts" components={components} />);
-    const pre = container.querySelector('pre');
-    expect(pre).not.toBeNull();
-    expect(pre!.className).toContain('rounded-b-lg');
-    expect(pre!.className).toContain('border-border');
-    // header's bottom border is the divider — the pre must not double it
-    expect(pre!.className).toContain('border-t-0');
-  });
-
-  it('CodeHeader names the language as written', () => {
-    const { container } = render(<CodeHeader language="ts" code="const x = 1;" />);
-    expect(container.querySelector('span')).toHaveTextContent('ts');
-  });
-
-  it('SyntaxHighlighter renders a line-number gutter cell per line', () => {
-    const components = {} as unknown as SyntaxHighlighterProps['components'];
-    const { container } = render(
-      <SyntaxHighlighter code={'line one\nline two'} language="ts" components={components} />,
-    );
-    const numbers = container.querySelectorAll('[data-slot="code-line-number"]');
-    expect([...numbers].map((cell) => cell.textContent)).toEqual(['1', '2']);
-  });
-
-  it('CodeHeader copy button shows a visible "Copy" text label', () => {
-    const { getByTestId } = render(<CodeHeader language="ts" code="const x = 1;" />);
-    const button = getByTestId('chat-code-copy');
-    expect(button.textContent).toContain('Copy');
   });
 });
 
