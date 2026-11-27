@@ -25,4 +25,17 @@ describe('ReadMore', () => {
     fireEvent.click(btn);
     expect(btn).toHaveTextContent('Show less');
   });
+
+  it('caps the collapsed height too, so a block child such as a code block is clipped in Chromium', () => {
+    render(
+      <ReadMore measureText={long} testId="t-toggle" contentProps={{ 'data-testid': 't-content' }}>
+        {long}
+      </ReadMore>,
+    );
+    const content = screen.getByTestId('t-content');
+    // jsdom reserialises the expression, so match its parts rather than the exact text.
+    expect(content.style.maxHeight).toMatch(/^calc\(.*lh.*rem/);
+    fireEvent.click(screen.getByTestId('t-toggle'));
+    expect(content.style.maxHeight).toBe('');
+  });
 });

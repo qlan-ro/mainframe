@@ -49,8 +49,30 @@ const BODY = 'mf-tr-mono bg-mf-tr-code px-3 py-2.5 group-has-data-[slot=code-blo
 const LINE =
   '-mx-3 px-3 in-data-numbered:gap-x-5 before:min-w-[22px] before:font-mono before:text-xs before:text-muted-foreground/50';
 
+/**
+ * Past either limit a block is plain text: one text node in the Code Block, with
+ * no per-line numbering and no highlighting. Typical pasted code and logs sit
+ * well below them (500 lines is a few dozen KB at most; a numbered, highlighted
+ * block that size is a few thousand elements and a few tens of ms of shiki), while
+ * a 20k-line log would be 20k grid rows plus a synchronous tokenization on the
+ * main thread. The byte limit catches a minified one-liner the line limit misses.
+ */
+export const PLAIN_CODE_MAX_LINES = 500;
+export const PLAIN_CODE_MAX_CHARS = 50_000;
+
+export function isLargeCode(code: string): boolean {
+  if (code.length > PLAIN_CODE_MAX_CHARS) return true;
+  let lines = 1;
+  for (let i = code.indexOf('\n'); i !== -1; i = code.indexOf('\n', i + 1)) {
+    if (++lines > PLAIN_CODE_MAX_LINES) return true;
+  }
+  return false;
+}
+
 export function MarkdownCodeBlock({ code, language }: { code: string; language?: string }) {
-  const lines = useShikiTokens(code, language);
+  const large = isLargeCode(code);
+  // No language for a large block: the hook then never loads or runs shiki.
+  const lines = useShikiTokens(code, large ? undefined : language);
   // An empty line stays '' so Code Block gives it the newline a copied selection keeps.
   const body = lines
     ? lines.map((tokens) => (tokens.some((t) => t.content) ? <TokenSpans tokens={tokens} /> : ''))
@@ -63,13 +85,19 @@ export function MarkdownCodeBlock({ code, language }: { code: string; language?:
           <CodeBlockCopyButton value={code} label size="xs" className={COPY} data-testid="chat-code-copy" />
         </CodeBlockActions>
       </CodeBlockHeader>
-      <CodeBlockContent lineNumbers className={BODY}>
-        {body.map((line, i) => (
-          <CodeBlockLine key={i} className={LINE}>
-            {line}
-          </CodeBlockLine>
-        ))}
-      </CodeBlockContent>
+      {large ? (
+        <CodeBlockContent className={BODY} data-plain>
+          {code}
+        </CodeBlockContent>
+      ) : (
+        <CodeBlockContent lineNumbers className={BODY}>
+          {body.map((line, i) => (
+            <CodeBlockLine key={i} className={LINE}>
+              {line}
+            </CodeBlockLine>
+          ))}
+        </CodeBlockContent>
+      )}
     </CodeBlock>
   );
 }

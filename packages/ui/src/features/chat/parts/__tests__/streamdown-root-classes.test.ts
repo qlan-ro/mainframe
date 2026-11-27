@@ -1,8 +1,11 @@
 /**
- * Streamdown puts its own utilities on the markdown root. Tailwind does not
- * scan node_modules, so they generate no CSS, and the transcript's spacing comes
- * from the component map alone. Writing one of them anywhere in `src` would make
- * Tailwind generate it and re-space every reply.
+ * Streamdown puts three utilities of its own on the markdown root (`space-y-4`
+ * and the first/last-child margin resets). Tailwind scans `src` (`@source "../"`
+ * in `styles/app.css`) but not node_modules, and we do not import Streamdown's
+ * `styles.css`, so those utilities generate no CSS and the transcript's spacing
+ * comes from the component map alone. Writing one of them anywhere in `src`
+ * would make Tailwind generate it and re-space every reply; this test fails
+ * if one appears.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';

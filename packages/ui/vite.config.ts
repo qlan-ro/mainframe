@@ -5,15 +5,24 @@ import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
 // https://vitejs.dev/config/
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
   base: './',
   // React Compiler (infer mode) memoizes every component and hook it can prove
   // safe; opt one out with a `'use no memo'` directive plus a one-line reason.
   plugins: [tailwindcss(), react(), babel({ presets: [reactCompilerPreset()] })],
   resolve: {
-    alias: {
-      '@': resolve(__dirname, './src'),
-    },
+    alias: [
+      { find: '@', replacement: resolve(__dirname, './src') },
+      // Streamdown imports these for its default rehype plugins, which we replace
+      // with none (raw HTML renders as text). Not applied to tests, so they see
+      // the real modules.
+      ...(mode === 'production'
+        ? [/^rehype-raw$/, /^rehype-sanitize$/, /^rehype-harden$/].map((find) => ({
+            find,
+            replacement: resolve(__dirname, './build-stubs/streamdown-unused.js'),
+          }))
+        : []),
+    ],
   },
   // Prevent vite from obscuring rust errors
   clearScreen: false,

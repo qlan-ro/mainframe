@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { MarkdownCodeBlock } from '../markdown-code';
+import { MarkdownCodeBlock, PLAIN_CODE_MAX_CHARS, PLAIN_CODE_MAX_LINES } from '../markdown-code';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -22,6 +22,41 @@ describe('MarkdownCodeBlock (shadcn Code Block)', () => {
     expect(content).toHaveAttribute('data-numbered', 'true');
     const lines = [...content.querySelectorAll('[data-slot="code-block-line"]')].map((l) => l.textContent);
     expect(lines).toEqual(['line one', '\n', 'line three']);
+  });
+
+  it('keeps a block at the line limit numbered and per-line', () => {
+    const code = Array.from({ length: PLAIN_CODE_MAX_LINES }, (_, i) => `row ${i}`).join('\n');
+    render(<MarkdownCodeBlock code={code} language="ts" />);
+    const content = screen.getByTestId('chat-code-block').querySelector('[data-slot="code-block-content"]')!;
+    expect(content).not.toHaveAttribute('data-plain');
+    expect(content.querySelectorAll('[data-slot="code-block-line"]')).toHaveLength(PLAIN_CODE_MAX_LINES);
+  });
+
+  it('renders a block over the line limit as plain text, with no per-line elements', () => {
+    const code = Array.from({ length: PLAIN_CODE_MAX_LINES + 1 }, (_, i) => `row ${i}`).join('\n');
+    render(<MarkdownCodeBlock code={code} language="ts" />);
+    const content = screen.getByTestId('chat-code-block').querySelector('[data-slot="code-block-content"]')!;
+    expect(content).toHaveAttribute('data-plain');
+    expect(content).not.toHaveAttribute('data-numbered');
+    expect(content.querySelectorAll('[data-slot="code-block-line"]')).toHaveLength(0);
+    expect(content.textContent).toBe(code);
+  });
+
+  it('renders a block over the size limit as plain text even on one line', () => {
+    const code = 'x'.repeat(PLAIN_CODE_MAX_CHARS + 1);
+    render(<MarkdownCodeBlock code={code} language="ts" />);
+    const content = screen.getByTestId('chat-code-block').querySelector('[data-slot="code-block-content"]')!;
+    expect(content).toHaveAttribute('data-plain');
+    expect(content.textContent).toBe(code);
+  });
+
+  it('does not tokenize a large block', async () => {
+    const shiki = await import('@/lib/shiki-highlighter');
+    const spy = vi.spyOn(shiki, 'getShikiHighlighter');
+    const code = Array.from({ length: PLAIN_CODE_MAX_LINES + 1 }, () => 'const a = 1;').join('\n');
+    render(<MarkdownCodeBlock code={code} language="ts" />);
+    await act(async () => {});
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it('shows a visible "Copy" label and copies the code', async () => {

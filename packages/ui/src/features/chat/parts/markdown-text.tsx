@@ -109,6 +109,7 @@ export const MARKDOWN_ROOT_CLASS = 'aui-md';
 const REPLY_PLUGINS: PluggableList = [remarkGfm, remarkAppLinks, remarkSmartActions];
 /** No raw HTML, so nothing to sanitise: HTML in a reply shows as text. */
 const NO_REHYPE_PLUGINS: PluggableList = [];
+const NO_LINK_SAFETY = { enabled: false };
 
 interface MarkdownBodyProps {
   text: string;
@@ -126,10 +127,13 @@ export function MarkdownBody({ text, running = false, remarkPlugins = REPLY_PLUG
       rehypePlugins={NO_REHYPE_PLUGINS}
       urlTransform={urlTransform}
       parseIncompleteMarkdown={running}
+      // Streamdown's root is memoized and its comparator ignores `parseIncompleteMarkdown`
+      // but compares `data-*`: this is what re-renders a settled reply without the repair.
+      data-running={running}
       // Only when needed: Streamdown's own splitter also repairs the stream's tail incrementally.
       parseMarkdownIntoBlocksFn={hasFootnoteSyntax(text) ? splitFootnoteBlocks : undefined}
       controls={false}
-      linkSafety={{ enabled: false }}
+      linkSafety={NO_LINK_SAFETY}
     >
       {text}
     </Streamdown>

@@ -53,8 +53,18 @@ export function ReadMore({
   const needsToggle = measureText.length > threshold;
   const collapsed = needsToggle && !expanded;
 
+  // `line-clamp` counts lines of text only. WebKit also clips a block child such as a code
+  // block; Chromium does not and shows it at full height. `max-height` is the ceiling that
+  // makes both clip: the clamped lines plus 1rem per line for the gaps between blocks, which
+  // text never reaches (so WebKit's own clamp, with its ellipsis, still decides there).
   const clampStyle: CSSProperties | undefined = collapsed
-    ? { display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: clampLines, overflow: 'hidden' }
+    ? {
+        display: '-webkit-box',
+        WebkitBoxOrient: 'vertical',
+        WebkitLineClamp: clampLines,
+        overflow: 'hidden',
+        maxHeight: `calc(${clampLines} * (1lh + 1rem))`,
+      }
     : undefined;
 
   return (

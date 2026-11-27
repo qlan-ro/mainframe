@@ -51,6 +51,18 @@ describe('an unfinished tail while streaming', () => {
     expect(container.querySelector('a[href]')).toBeNull();
   });
 
+  it('a reply that settles with the same text drops the repair', () => {
+    // `_private` is unclosed while running, so it is repaired to <em>. Streamdown's root is
+    // memoized on its props and ignores `parseIncompleteMarkdown`, so settling must change
+    // something it does compare, or the repaired tree stays.
+    const text = 'Call my_func and then _private';
+    const { container, rerender } = render(<MarkdownBody running text={text} />);
+    expect(container.querySelector('em')).toHaveTextContent('private');
+    rerender(<MarkdownBody text={text} />);
+    expect(container.querySelector('em')).toBeNull();
+    expect(container.textContent).toBe(text);
+  });
+
   it('once settled, the same text is left as written', () => {
     const { container } = render(<MarkdownBody text="This is **impor" />);
     expect(container.querySelector('strong')).toBeNull();
