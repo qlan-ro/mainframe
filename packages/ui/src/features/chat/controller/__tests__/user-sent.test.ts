@@ -25,9 +25,19 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 import { resumeQueuedMessages } from '../../../../lib/api/chats';
+import { uploadAttachments } from '../../../../lib/api/attachments';
 import { useHeldQueue } from '../../composer/queue/held-queue-store';
 import { emitUserSent, onUserSent } from '../user-sent';
-import { CHAT_ID, PORT, flushMicrotasks, makeController, makeMsg, userMessageUpdate } from './acp-test-kit';
+import {
+  CHAT_ID,
+  PORT,
+  flushMicrotasks,
+  makeChat,
+  makeCompleteAttachment,
+  makeController,
+  makeMsg,
+  userMessageUpdate,
+} from './acp-test-kit';
 
 const heard = vi.fn();
 let stop: () => void = () => {};
@@ -86,6 +96,60 @@ describe('AcpChatController — the user’s own sends', () => {
     const { ctrl } = makeController();
     await ctrl.resumeQueue();
     expect(resumeQueuedMessages).toHaveBeenCalledExactlyOnceWith(PORT, CHAT_ID);
+    expect(heard).toHaveBeenCalledOnce();
+  });
+});
+
+describe('AcpChatController — nothing went out, nothing is announced', () => {
+  it('a send into a chat whose working directory is gone', async () => {
+    const rig = makeController();
+    rig.ctrl.subscribeLive();
+    rig.ws.pushEvent({
+      type: 'chat.updated',
+      chat: makeChat({ directoryMissing: true, missingDirectoryPath: '/gone' }),
+    });
+    await rig.ctrl.sendMessage(makeMsg('hello'));
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('a send with nothing in it', async () => {
+    const { ctrl } = makeController();
+    await ctrl.sendMessage(makeMsg('   '));
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('Send now when another press already claimed the rows', async () => {
+    const { ctrl } = makeController();
+    await ctrl.sendHeld('missing-row');
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('Send now when the daemon refuses the prompt', async () => {
+    const { ctrl, acpClient } = makeController();
+    useHeldQueue.getState().hold(CHAT_ID, queuedRef);
+    vi.spyOn(acpClient, 'prompt').mockRejectedValueOnce(new Error('refused'));
+    await ctrl.sendHeld('q1').catch(() => {});
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it('Resume when the request fails', async () => {
+    const { ctrl } = makeController();
+    vi.mocked(resumeQueuedMessages).mockRejectedValueOnce(new Error('offline'));
+    await ctrl.resumeQueue().catch(() => {});
+    expect(heard).not.toHaveBeenCalled();
+  });
+});
+
+describe('AcpChatController — Retry on a "Failed to send" bubble', () => {
+  it('re-pins like any user send', async () => {
+    const { ctrl } = makeController();
+    vi.mocked(uploadAttachments).mockRejectedValueOnce(new Error('boom'));
+    await ctrl.sendMessage(makeMsg('retry me', [makeCompleteAttachment('f.png')])).catch(() => {});
+    const failed = Object.values(ctrl.getState().pendingUserMessages)[0]!;
+    expect(failed.status).toBe('failed');
+    heard.mockClear();
+
+    await ctrl.retryMessage(failed.clientId);
     expect(heard).toHaveBeenCalledOnce();
   });
 });
