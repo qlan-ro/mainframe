@@ -6,6 +6,7 @@
 //! the 300-line ceiling.
 
 use serde::Deserialize;
+use std::ops::ControlFlow;
 
 #[derive(Debug, Default, Deserialize)]
 struct ForkLine {
@@ -78,6 +79,49 @@ fn find_new_task_handoff(lines: &[&str], agent_path: &str) -> Option<usize> {
             && payload.recipient.as_deref() == Some(agent_path);
         is_handoff.then_some(idx + 1)
     })
+}
+
+/// Incremental twin of [`forked_child_start_line`] for a streamed rollout:
+/// feed lines in order and stop once [`ForkStartScan::push`] returns `Break`.
+/// Like the slice version, only the first `session_meta` decides whether the
+/// rollout is a fork. (A handoff line that precedes that meta is not seen.)
+#[derive(Default)]
+pub(crate) struct ForkStartScan {
+    agent_path: Option<String>,
+    line: usize,
+    pub(crate) start: Option<usize>,
+}
+
+impl ForkStartScan {
+    pub(crate) fn push(&mut self, line: &str) -> ControlFlow<()> {
+        let index = self.line;
+        self.line += 1;
+        let Ok(rec) = serde_json::from_str::<ForkLine>(line) else {
+            return ControlFlow::Continue(());
+        };
+        let Some(agent_path) = self.agent_path.as_deref() else {
+            if rec.kind.as_deref() != Some("session_meta") {
+                return ControlFlow::Continue(());
+            }
+            let Some(payload) = rec.payload else {
+                return ControlFlow::Continue(());
+            };
+            match forked_agent_path(&payload) {
+                Some(path) => self.agent_path = Some(path),
+                None => return ControlFlow::Break(()),
+            }
+            return ControlFlow::Continue(());
+        };
+        if rec.kind.as_deref() == Some("response_item")
+            && let Some(payload) = rec.payload
+            && payload.kind.as_deref() == Some("agent_message")
+            && payload.recipient.as_deref() == Some(agent_path)
+        {
+            self.start = Some(index + 1);
+            return ControlFlow::Break(());
+        }
+        ControlFlow::Continue(())
+    }
 }
 
 #[cfg(test)]
