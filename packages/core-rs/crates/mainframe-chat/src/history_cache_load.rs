@@ -71,7 +71,7 @@ impl HistorySnapshotCache {
         context: Option<&str>,
     ) -> Option<ParsedHistory> {
         let before = Self::fingerprint(session, context).await?;
-        let messages = match session.load_history().await {
+        let messages = match session.load_history_background().await {
             Ok(messages) => messages,
             Err(err) => {
                 tracing::warn!(error = %err, chat_id, "history refresh read failed");

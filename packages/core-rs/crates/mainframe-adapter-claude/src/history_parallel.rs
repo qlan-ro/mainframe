@@ -23,6 +23,9 @@ use super::reader::{CHUNK_SIZE, read_chunks};
 
 /// Largest worker count; parsing stops scaling long before core counts do.
 const MAX_THREADS: usize = 8;
+/// Workers a background load (a turn-end refresh) may hold; a chat the user
+/// opens meanwhile gets the rest of the budget.
+const BACKGROUND_THREADS: usize = 2;
 /// Batches below this size are parsed inline: thread start-up would dominate.
 const MIN_PARALLEL_BYTES: usize = 256 * 1024;
 
@@ -72,6 +75,24 @@ impl ParseMode {
 
     pub(super) fn detect() -> Self {
         Self::parallel(std::thread::available_parallelism().map_or(1, usize::from))
+    }
+
+    /// Like [`detect`](Self::detect), capped for work nobody is waiting on.
+    pub(super) fn detect_background() -> Self {
+        Self::detect().background()
+    }
+
+    /// This mode limited to [`BACKGROUND_THREADS`] workers, so work nobody is
+    /// waiting on (a turn-end refresh) cannot starve a foreground load.
+    pub(super) fn background(self) -> Self {
+        if self.threads <= BACKGROUND_THREADS {
+            return self;
+        }
+        Self {
+            threads: BACKGROUND_THREADS,
+            batch_bytes: BACKGROUND_THREADS * CHUNK_SIZE / 2,
+            ..self
+        }
     }
 }
 

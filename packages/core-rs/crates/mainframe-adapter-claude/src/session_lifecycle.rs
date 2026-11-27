@@ -121,6 +121,13 @@ impl ClaudeSession {
         *self.history_files.lock_recover() = Some(files);
         Ok(messages)
     }
+    /// [`load_history`](Self::load_history) with a capped parse budget, for a
+    /// refresh nobody is waiting on.
+    pub async fn load_history_background(&self) -> Result<Vec<ChatMessage>, AdapterError> {
+        let (messages, files) = self.read_history_with(true, true).await?;
+        *self.history_files.lock_recover() = Some(files);
+        Ok(messages)
+    }
     pub(super) async fn read_history(
         &self,
         messages: bool,
@@ -131,10 +138,28 @@ impl ClaudeSession {
         ),
         AdapterError,
     > {
+        self.read_history_with(messages, false).await
+    }
+    async fn read_history_with(
+        &self,
+        messages: bool,
+        background: bool,
+    ) -> Result<
+        (
+            Vec<ChatMessage>,
+            mainframe_adapter_api::CollectedHistoryFiles,
+        ),
+        AdapterError,
+    > {
         let Some((id, base, discovered)) = self.discover_history().await else {
             return Ok(Default::default());
         };
-        crate::history::load_discovered_history(&id, &discovered, &base, messages).await
+        if background {
+            crate::history::load_discovered_history_background(&id, &discovered, &base, messages)
+                .await
+        } else {
+            crate::history::load_discovered_history(&id, &discovered, &base, messages).await
+        }
     }
     pub(super) async fn discover_history(
         &self,

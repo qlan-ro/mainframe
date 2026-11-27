@@ -12,7 +12,52 @@ pub(crate) async fn load_discovered_history(
     ),
     mainframe_adapter_api::AdapterError,
 > {
-    let mode = parallel::ParseMode::detect();
+    load_discovered_history_in(
+        session_id,
+        discovered,
+        base,
+        messages,
+        parallel::ParseMode::detect(),
+    )
+    .await
+}
+
+/// [`load_discovered_history`] with a worker cap, for loads nobody waits on.
+pub(crate) async fn load_discovered_history_background(
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+    base: &str,
+    messages: bool,
+) -> Result<
+    (
+        Vec<ChatMessage>,
+        mainframe_adapter_api::CollectedHistoryFiles,
+    ),
+    mainframe_adapter_api::AdapterError,
+> {
+    load_discovered_history_in(
+        session_id,
+        discovered,
+        base,
+        messages,
+        parallel::ParseMode::detect_background(),
+    )
+    .await
+}
+
+async fn load_discovered_history_in(
+    session_id: &str,
+    discovered: &DiscoveredFiles,
+    base: &str,
+    messages: bool,
+    mode: parallel::ParseMode,
+) -> Result<
+    (
+        Vec<ChatMessage>,
+        mainframe_adapter_api::CollectedHistoryFiles,
+    ),
+    mainframe_adapter_api::AdapterError,
+> {
     load_with_reader(
         session_id,
         discovered,
