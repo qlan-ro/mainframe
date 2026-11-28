@@ -10,6 +10,14 @@
 //! `#![forbid(unsafe_code)]`, so the resolved value cannot be written back into
 //! the process env. Instead it is captured once at boot as a [`ResolvedPath`]
 //! and threaded explicitly into every spawn site as an `env("PATH", …)` override.
+//!
+//! The desktop app already captures the login-shell env (and caches it), so a
+//! sidecar it spawns gets that env as its own process env plus the
+//! [`SHELL_ENV_RESOLVED_ARG`] launch argument. The daemon then takes `PATH` from
+//! its own env and skips the probe, which otherwise delays the HTTP bind by the
+//! whole interactive start-up of the user's shell. A daemon started any other
+//! way (standalone, CLI, remote) has no such argument and probes as before. An
+//! argument, unlike an env var, is never inherited by the daemon's children.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,6 +29,18 @@ const SHELL_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Interactive start-up files may print anything, so the value is fenced.
 const SHELL_PROBE_OPEN: &str = "<mf-path>";
 const SHELL_PROBE_CLOSE: &str = "</mf-path>";
+
+/// Passed by the desktop app to the sidecar it spawns when the process env it
+/// hands over is the user's resolved login-shell env. The handover is the
+/// child's own env (local to the process tree, never sent anywhere); only the
+/// PATH entry count is logged.
+pub const SHELL_ENV_RESOLVED_ARG: &str = "--shell-env-resolved";
+
+/// Whether the launch arguments (without the program name) carry
+/// [`SHELL_ENV_RESOLVED_ARG`].
+pub fn shell_env_resolved_arg<'a>(args: impl IntoIterator<Item = &'a str>) -> bool {
+    args.into_iter().any(|arg| arg == SHELL_ENV_RESOLVED_ARG)
+}
 
 /// The login-shell-resolved `PATH`, captured once at boot and threaded into
 /// child-process spawns. Cheap to clone (`Arc<str>` inside).
@@ -51,12 +71,28 @@ impl ResolvedPath {
     /// run), where a ~1.5s interactive-shell probe would dominate every boot. The
     /// [`fallback`](Self::fallback) already prepends the toolchain bin dirs to that
     /// inherited `PATH`, so child spawns still resolve.
-    pub async fn resolve() -> Self {
+    ///
+    /// `shell_env_resolved` is true when the desktop app passed
+    /// [`SHELL_ENV_RESOLVED_ARG`]: the process `PATH` is then used as is.
+    pub async fn resolve(shell_env_resolved: bool) -> Self {
         if std::env::var_os("E2E_MODE").is_some() {
             return Self::fallback();
         }
+        let handover = handed_over_path(shell_env_resolved, std::env::var("PATH").ok());
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        match probe_login_shell(&shell, SHELL_PROBE_TIMEOUT).await {
+        Self::resolve_with(handover, &shell, SHELL_PROBE_TIMEOUT).await
+    }
+
+    /// Use the handed-over `PATH` when present; otherwise probe `shell`.
+    async fn resolve_with(handover: Option<String>, shell: &str, timeout: Duration) -> Self {
+        if let Some(path) = handover {
+            tracing::info!(
+                entries = path.split(':').count(),
+                "using the login-shell PATH handed over by the desktop app, skipping the probe"
+            );
+            return Self(Arc::from(path));
+        }
+        match probe_login_shell(shell, timeout).await {
             Some(path) => Self(Arc::from(path)),
             None => Self::fallback(),
         }
@@ -112,6 +148,12 @@ impl std::ops::Deref for ResolvedPath {
     fn deref(&self) -> &str {
         &self.0
     }
+}
+
+/// The process `PATH` when the desktop app marked it as already resolved and it
+/// is not blank.
+fn handed_over_path(shell_env_resolved: bool, path: Option<String>) -> Option<String> {
+    path.filter(|path| shell_env_resolved && !path.trim().is_empty())
 }
 
 async fn probe_login_shell(shell: &str, timeout: Duration) -> Option<String> {
@@ -193,6 +235,108 @@ mod tests {
             probe_login_shell(shell.to_str().unwrap(), Duration::from_millis(200)).await,
             None
         );
+    }
+
+    /// A shell that records that it ran, then reports `/probed/bin`.
+    fn marking_shell(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+        let shell = dir.join("marking-shell");
+        let marker = dir.join("probed");
+        write_shell_script(
+            &shell,
+            &format!(
+                "touch '{}'\nPATH=/probed/bin:/usr/bin\neval \"$2\"\n",
+                marker.display()
+            ),
+        )
+        .unwrap();
+        (shell, marker)
+    }
+
+    #[tokio::test]
+    async fn a_handed_over_path_skips_the_probe() {
+        let dir = tempfile::tempdir().unwrap();
+        let (shell, marker) = marking_shell(dir.path());
+
+        let resolved = ResolvedPath::resolve_with(
+            Some("/handed/bin:/usr/bin".to_string()),
+            shell.to_str().unwrap(),
+            Duration::from_secs(5),
+        )
+        .await;
+
+        assert_eq!(resolved.as_str(), "/handed/bin:/usr/bin");
+        assert!(
+            !marker.exists(),
+            "the login shell was probed despite the handover"
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_handover_the_probe_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (shell, marker) = marking_shell(dir.path());
+
+        let resolved =
+            ResolvedPath::resolve_with(None, shell.to_str().unwrap(), Duration::from_secs(5)).await;
+
+        assert_eq!(resolved.as_str(), "/probed/bin:/usr/bin");
+        assert!(marker.exists(), "the login shell was not probed");
+    }
+
+    #[test]
+    fn the_handover_argument_name_is_pinned() {
+        // The desktop shell repeats this literal in its sidecar spawn (a separate
+        // Cargo workspace); renaming one side silently re-enables the probe.
+        assert_eq!(SHELL_ENV_RESOLVED_ARG, "--shell-env-resolved");
+    }
+
+    #[test]
+    fn the_handover_is_recognised_only_as_an_exact_argument() {
+        assert!(shell_env_resolved_arg([
+            "--sidecar-parent-pid=42",
+            "--shell-env-resolved"
+        ]));
+        assert!(shell_env_resolved_arg(["--shell-env-resolved"]));
+        assert!(!shell_env_resolved_arg(["--sidecar-parent-pid=42"]));
+        assert!(!shell_env_resolved_arg(["--shell-env-resolved=1"]));
+        assert!(!shell_env_resolved_arg(["status"]));
+        assert!(!shell_env_resolved_arg(std::iter::empty::<&str>()));
+    }
+
+    #[test]
+    fn the_handover_needs_the_argument_and_a_path() {
+        let path = Some("/opt/homebrew/bin:/usr/bin".to_string());
+        assert_eq!(
+            handed_over_path(true, path.clone()).as_deref(),
+            Some("/opt/homebrew/bin:/usr/bin")
+        );
+        assert_eq!(handed_over_path(false, path), None);
+        assert_eq!(handed_over_path(true, None), None);
+        assert_eq!(handed_over_path(true, Some("  ".to_string())), None);
+    }
+
+    #[test]
+    fn cli_tools_are_found_on_a_handed_over_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let (git_dir, tools_dir) = (dir.path().join("usr-bin"), dir.path().join("local-bin"));
+        for (bin_dir, name) in [
+            (&git_dir, "git"),
+            (&tools_dir, "claude"),
+            (&tools_dir, "codex"),
+        ] {
+            std::fs::create_dir_all(bin_dir).unwrap();
+            let bin = bin_dir.join(name);
+            std::fs::write(&bin, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let path = format!("{}:{}", tools_dir.display(), git_dir.display());
+        let resolved = ResolvedPath::from_value(handed_over_path(true, Some(path)).unwrap());
+
+        assert_eq!(resolved.find("git"), Some(git_dir.join("git")));
+        assert_eq!(resolved.find("claude"), Some(tools_dir.join("claude")));
+        assert_eq!(resolved.find("codex"), Some(tools_dir.join("codex")));
+        assert_eq!(resolved.find("not-installed"), None);
     }
 
     #[test]

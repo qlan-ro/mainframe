@@ -265,6 +265,21 @@ code {
   grid-column: 1 / 3;
 }
 
+/* The boot cover's spinner (ContentCard.tsx): on the cover from its first frame,
+   transparent until the restore has lasted its delay. A CSS delay, not a timer, so a
+   main thread busy mounting the shell cannot hold it back. A step, not a fade, so it
+   holds under prefers-reduced-motion too. */
+@keyframes mf-boot-spinner-in {
+  to {
+    opacity: 1;
+  }
+}
+[data-boot-spinner] {
+  display: inline-flex;
+  opacity: 0;
+  animation: mf-boot-spinner-in 0s linear var(--mf-boot-spinner-delay, 400ms) forwards;
+}
+
 /* A jump marks the transcript row it lands on for about 2s: the tint is still
    under prefers-reduced-motion, and fades out otherwise. */
 @keyframes mf-activity-flash {

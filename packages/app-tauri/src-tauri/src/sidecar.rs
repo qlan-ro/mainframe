@@ -20,6 +20,13 @@ const DAEMON_STOP_POLL: Duration = Duration::from_millis(50);
 /// zero-byte file would fail at runtime).
 const MIN_SIDECAR_BIN_BYTES: u64 = 1024;
 
+/// Tells the daemon its env is the resolved login-shell env, so it skips its own
+/// `$SHELL -lic` PATH probe. A launch argument, not an env var, so the daemon's
+/// children (git hooks, agent CLIs, launch processes) never inherit it. Mirrors
+/// `mainframe_runtime::spawn_env::SHELL_ENV_RESOLVED_ARG` (a separate Cargo
+/// workspace, so the literal is repeated here; both sides pin it in a test).
+const SHELL_ENV_RESOLVED_ARG: &str = "--shell-env-resolved";
+
 #[derive(Debug, PartialEq, Eq)]
 enum EnvOverride {
     Set(&'static str, String),
@@ -130,11 +137,16 @@ pub struct DaemonProgram {
 pub struct SidecarConfig {
     /// The implementation-specific program to spawn.
     pub program: DaemonProgram,
-    /// Login-shell env captured by `shell_env::resolve_shell_env_with_timeout`.
+    /// What the login shell adds to the app's env, chosen by
+    /// `env_boot::EnvBoot::daemon_env` (cached, freshly captured, or the
+    /// fallback). Overlaid on the inherited process env.
     /// Becomes the daemon's own env, so the daemon AND its adapter children
     /// (claude/codex) inherit the resolved PATH — closing the packaged-app
     /// "bare PATH → CLI ENOENT" gap for both impls.
     pub shell_env: HashMap<String, String>,
+    /// `shell_env` is a real login-shell capture (cached or fresh), not the
+    /// fallback: the daemon may use its PATH instead of probing the shell.
+    pub shell_env_resolved: bool,
     /// Daemon HTTP/WS port.
     pub daemon_port: u16,
     /// Optional data dir override.
@@ -171,11 +183,13 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
 
     #[cfg(unix)]
     configure_parent_watch(&mut cmd);
+    configure_shell_env_handover(&mut cmd, config.shell_env_resolved);
 
     tracing::info!(
         program = %config.program.daemon_bin.display(),
         port = config.daemon_port,
-        path = %config.shell_env.get("PATH").map(|s| s.as_str()).unwrap_or("<not set>"),
+        path_entries = config.shell_env.get("PATH").map_or(0, |p| p.split(':').count()),
+        shell_env_resolved = config.shell_env_resolved,
         "spawning daemon sidecar"
     );
 
@@ -192,6 +206,12 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
 fn configure_parent_watch(cmd: &mut Command) {
     cmd.env_remove("MAINFRAME_SIDECAR_PARENT_PID");
     cmd.arg(format!("--sidecar-parent-pid={}", std::process::id()));
+}
+
+fn configure_shell_env_handover(cmd: &mut Command, shell_env_resolved: bool) {
+    if shell_env_resolved {
+        cmd.arg(SHELL_ENV_RESOLVED_ARG);
+    }
 }
 
 fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {

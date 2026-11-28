@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * #1006's boot cover lifts once the main transcript has sat at its tail for three polls. It reads
+ * #1006's boot cover lifts on the first frame the main transcript shows its rows at its tail. It reads
  * `data-surface="chat"`, `data-mf-chat-thread` and `data-mf-chat-id` and the viewport's scroll position,
  * so the plain list's viewport has to carry the markers and reach the tail by itself.
  */
@@ -17,7 +17,8 @@ import {
   resetBootRestore,
 } from '@/features/sessions/runtime/boot-restore';
 
-vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => null }));
+// A drawn row, as the real one carries: the hold waits for one before it lifts.
+vi.mock('../../messages/turn/TurnTranscript', () => ({ TurnTranscript: () => <div data-message-id="m1" /> }));
 vi.mock('../EarlierMessages', () => ({ EarlierMessages: () => null }));
 vi.mock('../ContextNotPreservedNotice', () => ({ ContextNotPreservedNotice: () => null }));
 vi.mock('../ChatThreadIndicators', () => ({ ChatThreadLoadingSpinner: () => null, LoadErrorBanner: () => null }));
@@ -105,10 +106,9 @@ describe('boot restore over the plain list', () => {
   it('lifts the cover once the owned viewport sits at the tail', () => {
     beginBootRestore();
     render(<Harness />);
-    decideBootRestore('chat-1');
-    expect(isBootRestoring()).toBe(true);
-    act(() => void vi.advanceTimersByTime(16 * 4));
+    // The owner pins before paint, so by the decision the drawn rows already sit at the tail.
     expect(layout.top).toBe(1200);
+    decideBootRestore('chat-1');
     expect(isBootRestoring()).toBe(false);
   });
 
