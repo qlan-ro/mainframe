@@ -5,6 +5,10 @@ use mainframe_types::chat::{ChatMessage, ChatMessageType};
 use mainframe_types::display::DisplayContent;
 use serde_json::json;
 
+fn to_tool_call_result(block: &MessageContent) -> Option<ToolCallResult> {
+    to_tool_call_result_with_decoders(block, None, None, &crate::decoders::MainframeDecoders)
+}
+
 fn content_from(v: Value) -> MessageContent {
     serde_json::from_value(v).unwrap()
 }
@@ -126,14 +130,14 @@ fn surfaces_in_content_tool_result_on_child_tool_call() {
     assert_eq!(call["result"]["content"], "child-output");
 }
 
-// ── toToolCallResult truncation ────────────────────────────────────────────
+// ── tool result truncation ────────────────────────────────────────────
 #[test]
 fn flags_and_shrinks_oversized_content() {
     let big = "A".repeat(TRUNCATE_THRESHOLD_BYTES + 5000);
     let block = content_from(json!({
         "type": "tool_result", "toolUseId": "id1", "content": big, "isError": false,
     }));
-    let r = to_tool_call_result(&block, None, None).unwrap();
+    let r = to_tool_call_result(&block).unwrap();
     assert_eq!(r.truncated, Some(true));
     assert_eq!(r.full_bytes, Some((TRUNCATE_THRESHOLD_BYTES + 5000) as i64));
     assert!(r.content.len() < TRUNCATE_THRESHOLD_BYTES + 5000);
@@ -145,7 +149,7 @@ fn leaves_small_content_and_structured_fields_intact() {
         "type": "tool_result", "toolUseId": "id2", "content": "ok", "isError": false,
         "structuredPatch": [{ "oldStart": 1, "oldLines": 1, "newStart": 1, "newLines": 1, "lines": ["-a", "+b"] }],
     }));
-    let r = to_tool_call_result(&block, None, None).unwrap();
+    let r = to_tool_call_result(&block).unwrap();
     assert_eq!(r.truncated, None);
     assert_eq!(r.content, "ok");
     assert_eq!(r.structured_patch.as_ref().map(Vec::len), Some(1));

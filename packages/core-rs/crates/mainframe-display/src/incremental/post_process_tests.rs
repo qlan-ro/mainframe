@@ -59,12 +59,11 @@ fn progress_items(group: &Group) -> Vec<TaskProgressItem> {
 
 #[test]
 fn backfill_tail_continues_a_scope_seeded_from_the_frozen_prefix() {
-    let mut scope = crate::task_subject_backfill::scope_after(&[task_group(
-        "seed",
-        vec![create_item("1", "Seeded task")],
-    )
-    .display
-    .unwrap()]);
+    let mut seed = [task_group("seed", vec![create_item("1", "Seeded task")])
+        .display
+        .unwrap()];
+    let mut scope = SubjectScope::new();
+    crate::task_subject_backfill::backfill_in_place(&mut seed, &mut scope);
     let mut groups = vec![task_group("tail", vec![update_item("1")])];
     let mut scope_before = Vec::new();
     backfill_tail(&mut groups, 0, &mut scope, &mut scope_before);

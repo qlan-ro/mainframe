@@ -1,4 +1,4 @@
-use super::parse_ask_user_question::{KnownQuestion, KnownQuestionOption};
+use super::parse_ask_user_question::KnownQuestion;
 use crate::truncate_tool_content::truncate_tool_content;
 use mainframe_types::chat::{MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
@@ -9,8 +9,8 @@ use std::collections::HashMap;
 /// `/<mainframe-command[\s>]/` — an internal user message marker.
 const INTERNAL_USER_TAG: &str = "<mainframe-command";
 
-/// Returns `Some(id)` when `id` is a non-empty string, `None` otherwise (the TS
-/// `withParentId` truthy check: `undefined` and `""` both collapse to nothing).
+/// A parent tool-use id counts only when non-empty: `None` and `Some("")`
+/// both become `None`.
 pub(crate) fn with_parent_id(id: &Option<String>) -> Option<String> {
     id.as_ref().filter(|s| !s.is_empty()).cloned()
 }
@@ -58,16 +58,6 @@ pub(crate) fn categorize_tool_call(
     }
 }
 
-pub(super) fn category_str(c: ToolCategory) -> &'static str {
-    match c {
-        ToolCategory::Default => "default",
-        ToolCategory::Explore => "explore",
-        ToolCategory::Hidden => "hidden",
-        ToolCategory::Progress => "progress",
-        ToolCategory::Subagent => "subagent",
-    }
-}
-
 pub(crate) fn extract_known_questions(
     tool_input: Option<&HashMap<String, Value>>,
 ) -> Option<Vec<KnownQuestion>> {
@@ -78,21 +68,9 @@ pub(crate) fn extract_known_questions(
             .filter_map(|item| {
                 let question = item.get("question")?.as_str()?.to_string();
                 let multi_select = item.get("multiSelect").and_then(Value::as_bool);
-                let options = item.get("options").and_then(Value::as_array).map(|opts| {
-                    opts.iter()
-                        .map(|o| KnownQuestionOption {
-                            label: o
-                                .get("label")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default()
-                                .to_string(),
-                        })
-                        .collect()
-                });
                 Some(KnownQuestion {
                     question,
                     multi_select,
-                    options,
                 })
             })
             .collect(),
@@ -100,21 +78,7 @@ pub(crate) fn extract_known_questions(
 }
 
 /// Build a `ToolCallResult` from a tool_result content block. Returns `None` if
-/// `block` is not a tool_result node (the TS type narrows to a tool_result).
-#[cfg(test)]
-pub(crate) fn to_tool_call_result(
-    block: &MessageContent,
-    tool_name: Option<&str>,
-    tool_input: Option<&HashMap<String, Value>>,
-) -> Option<ToolCallResult> {
-    to_tool_call_result_with_decoders(
-        block,
-        tool_name,
-        tool_input,
-        &crate::decoders::MainframeDecoders,
-    )
-}
-
+/// `block` is not a tool_result node.
 pub(crate) fn to_tool_call_result_with_decoders(
     block: &MessageContent,
     tool_name: Option<&str>,
@@ -137,9 +101,8 @@ pub(crate) fn to_tool_call_result_with_decoders(
     Some(ToolCallResult {
         content: t.content,
         is_error: *is_error,
-        // `block.structuredPatch && {…}` — present when Some (an empty array is truthy).
         structured_patch: structured_patch.clone(),
-        // `block.originalFile && {…}` — an empty string is falsy → omitted.
+        // An empty file body is omitted.
         original_file: original_file.clone().filter(|s| !s.is_empty()),
         modified_file: modified_file.clone().filter(|s| !s.is_empty()),
         truncated: if t.truncated { Some(true) } else { None },
@@ -154,7 +117,6 @@ pub(crate) fn to_tool_call_result_with_decoders(
     })
 }
 
-/// Convert a grouped assistant message to `DisplayContent[]`.
 pub use super::display_assistant::convert_assistant_content;
 pub use super::display_tool_groups::apply_tool_grouping;
 pub(crate) use super::display_user::convert_user_content;

@@ -13,6 +13,7 @@ use mainframe_types::chat::ChatMessage;
 use mainframe_types::transcript_presentation::{
     PRESENTATION_CONTEXT_KEY, TURN_GROUP_KEY, TranscriptPresentation,
 };
+use serde::Deserialize as _;
 
 use crate::message_grouping::is_assistant_or_tool_use;
 
@@ -25,10 +26,8 @@ fn turn_key(msg: &ChatMessage) -> Option<String> {
             .filter(|key| !key.is_empty())
             .map(str::to_string);
     }
-    let presentation = serde_json::from_value::<TranscriptPresentation>(
-        meta.get(PRESENTATION_CONTEXT_KEY)?.clone(),
-    )
-    .ok()?;
+    let presentation =
+        TranscriptPresentation::deserialize(meta.get(PRESENTATION_CONTEXT_KEY)?).ok()?;
     // A child context belongs to the parent tool call.
     (presentation.is_valid()
         && matches!(presentation.provider.as_str(), "claude" | "codex")

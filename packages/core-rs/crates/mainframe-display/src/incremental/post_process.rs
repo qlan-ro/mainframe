@@ -40,7 +40,10 @@ pub(crate) fn apply_timing_tail(groups: &mut [Group], raw: &[ChatMessage], from:
         };
         let end = group.raw_range.end.min(raw.len());
         let start = group.raw_range.start.min(end);
-        crate::apply_tool_call_timing(&raw[start..end], std::slice::from_mut(display));
+        crate::tool_call_timing::apply_tool_call_timing(
+            &raw[start..end],
+            std::slice::from_mut(display),
+        );
     }
 }
 

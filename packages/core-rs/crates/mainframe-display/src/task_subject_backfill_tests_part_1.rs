@@ -2,6 +2,13 @@ use super::*;
 use mainframe_types::display::{ToolCallResult, ToolCategory};
 use serde_json::json;
 
+/// Backfill a copy of `messages` from a fresh namespace.
+fn backfill(messages: &[DisplayMessage]) -> Vec<DisplayMessage> {
+    let mut out = messages.to_vec();
+    backfill_in_place(&mut out, &mut SubjectScope::new());
+    out
+}
+
 fn create_item(id: &str, subject: &str) -> TaskProgressItem {
     TaskProgressItem {
         timing: None,
@@ -91,7 +98,7 @@ fn injects_taskcreate_subject_into_a_later_taskupdate() {
             ],
         ),
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("Task 3: silent reconcile"))
@@ -120,7 +127,7 @@ fn leaves_taskupdate_with_subject_and_records_rename() {
         ),
         assistant_msg("m3", vec![update_item("1", "completed", vec![])]),
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("New name"))
@@ -137,7 +144,7 @@ fn leaves_unknown_taskids_unchanged() {
         "m1",
         vec![update_item("42", "completed", vec![])],
     )];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(progress_items(&out[0])[0].input.get("subject"), None);
     assert_eq!(
         progress_items(&out[0])[0].input.get("taskId"),
@@ -161,7 +168,7 @@ fn falls_back_to_sequential_ids_for_pending_create() {
         assistant_msg("m1", vec![pending]),
         assistant_msg("m2", vec![update_item("1", "in_progress", vec![])]),
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("Streaming task"))
@@ -184,7 +191,7 @@ fn continues_sequential_fallback_after_result_ids() {
         assistant_msg("m1", vec![create_item("5", "Fifth task"), pending]),
         assistant_msg("m2", vec![update_item("6", "completed", vec![])]),
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("Sixth task"))
@@ -221,7 +228,7 @@ fn scopes_subagent_task_progress_separately() {
             metadata: None,
         },
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     let group = out[1]
         .content
         .iter()
@@ -245,15 +252,4 @@ fn scopes_subagent_task_progress_separately() {
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("Main task"))
     );
-}
-
-#[test]
-fn does_not_mutate_input_messages() {
-    let messages = vec![
-        assistant_msg("m1", vec![create_item("1", "A task")]),
-        assistant_msg("m2", vec![update_item("1", "completed", vec![])]),
-    ];
-    let snapshot = messages.clone();
-    let _ = backfill_task_subjects(&messages);
-    assert_eq!(messages, snapshot);
 }

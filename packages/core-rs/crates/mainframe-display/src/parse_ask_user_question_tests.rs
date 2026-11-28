@@ -16,7 +16,6 @@ fn kq(question: &str, multi_select: Option<bool>) -> KnownQuestion {
     KnownQuestion {
         question: question.to_string(),
         multi_select,
-        options: None,
     }
 }
 
@@ -111,18 +110,7 @@ fn anchored_keeps_free_text_verbatim() {
 #[test]
 fn anchored_splits_multi_select_only_for_multiselect() {
     let s = format!("{PREFIX}\"Pick\"=\"Red,Blue\"{SUFFIX}");
-    let q = KnownQuestion {
-        question: "Pick".to_string(),
-        multi_select: Some(true),
-        options: Some(vec![
-            KnownQuestionOption {
-                label: "Red".to_string(),
-            },
-            KnownQuestionOption {
-                label: "Blue".to_string(),
-            },
-        ]),
-    };
+    let q = kq("Pick", Some(true));
     assert_eq!(
         parse_ask_user_question_result(&s, Some(&[q])),
         vec![ans("Pick", &["Red", "Blue"])]

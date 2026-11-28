@@ -7,16 +7,13 @@ const SUFFIXES: [&str; 2] = [
     ". You can now continue with the user's answers in mind.",
     ". You can now continue with these answers in mind.",
 ];
+
 #[derive(Debug, Clone)]
-pub struct KnownQuestionOption {
-    pub label: String,
+pub(crate) struct KnownQuestion {
+    pub(crate) question: String,
+    pub(crate) multi_select: Option<bool>,
 }
-#[derive(Debug, Clone)]
-pub struct KnownQuestion {
-    pub question: String,
-    pub multi_select: Option<bool>,
-    pub options: Option<Vec<KnownQuestionOption>>,
-}
+
 fn strip_body(content: &str) -> Option<String> {
     let prefix = PREFIXES.iter().find(|p| content.starts_with(**p))?;
     let mut body = &content[prefix.len()..];
@@ -90,14 +87,9 @@ fn match_notes(s: &str) -> Option<String> {
 
 /// `segment.search(/ selected preview:| user notes: /)` — first index of either.
 fn search_cut(segment: &str) -> Option<usize> {
-    let a = segment.find(" selected preview:");
-    let b = segment.find(" user notes: ");
-    match (a, b) {
-        (Some(x), Some(y)) => Some(x.min(y)),
-        (Some(x), None) => Some(x),
-        (None, Some(y)) => Some(y),
-        (None, None) => None,
-    }
+    let preview = segment.find(" selected preview:");
+    let notes = segment.find(" user notes: ");
+    preview.into_iter().chain(notes).min()
 }
 
 struct PreviewNotes {
@@ -118,17 +110,17 @@ fn extract_preview_notes(segment: &str) -> PreviewNotes {
     if let Some(stripped) = answer.strip_suffix('"') {
         answer = stripped.to_string();
     }
-    let preview = preview_match
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-    let notes = notes_match
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
     PreviewNotes {
         answer,
-        preview,
-        notes,
+        preview: non_empty_trimmed(preview_match),
+        notes: non_empty_trimmed(notes_match),
     }
+}
+
+fn non_empty_trimmed(value: Option<String>) -> Option<String> {
+    value
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 /// Anchored parse: locate each known question by its exact text, then take the
@@ -162,19 +154,12 @@ fn parse_anchored(body: &str, questions: &[KnownQuestion]) -> Option<Vec<AskUser
 
         let segment = &body[ans_start..seg_end];
         let pn = extract_preview_notes(segment);
-        let mut entry = AskUserQuestionAnswer {
+        out.push(AskUserQuestionAnswer {
             question: q.question.clone(),
             answer: split_answer(&pn.answer, q.multi_select),
-            preview: None,
-            notes: None,
-        };
-        if pn.preview.is_some() {
-            entry.preview = pn.preview;
-        }
-        if pn.notes.is_some() {
-            entry.notes = pn.notes;
-        }
-        out.push(entry);
+            preview: pn.preview,
+            notes: pn.notes,
+        });
         cursor = seg_end;
     }
     if !out.is_empty() { Some(out) } else { None }
@@ -253,25 +238,12 @@ fn parse_legacy(body: &str) -> Vec<AskUserQuestionAnswer> {
             answer = vec![cur.a.clone()];
         }
 
-        let mut entry = AskUserQuestionAnswer {
+        out.push(AskUserQuestionAnswer {
             question: cur.q.clone(),
             answer,
-            preview: None,
-            notes: None,
-        };
-        let preview = preview_match
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        let notes = notes_match
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty());
-        if preview.is_some() {
-            entry.preview = preview;
-        }
-        if notes.is_some() {
-            entry.notes = notes;
-        }
-        out.push(entry);
+            preview: non_empty_trimmed(preview_match),
+            notes: non_empty_trimmed(notes_match),
+        });
     }
     out
 }

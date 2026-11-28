@@ -32,7 +32,7 @@
   "mainframe-db/tests/chat_segments.rs": 318,
   "mainframe-db/tests/chats.rs": 579,
   "mainframe-db/tests/migrations.rs": 366,
-  "mainframe-display/src/tool_grouping.rs": 490,
+  "mainframe-display/src/tool_grouping.rs": 435,
   "mainframe-display/tests/apply_tool_grouping_characterization.rs": 402,
   "mainframe-orchestration/src/tools/delegate_task_tests.rs": 344,
   "mainframe-plugins/src/context.rs": 340,

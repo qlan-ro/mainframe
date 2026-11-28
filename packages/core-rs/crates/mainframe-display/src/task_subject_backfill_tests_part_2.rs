@@ -27,7 +27,7 @@ fn coerces_numeric_taskid() {
         assistant_msg("m1", vec![create_item("3", "Numeric taskId task")]),
         assistant_msg("m2", vec![numeric_update]),
     ];
-    let out = backfill_task_subjects(&messages);
+    let out = backfill(&messages);
     assert_eq!(
         progress_items(&out[1])[0].input.get("subject"),
         Some(&json!("Numeric taskId task"))
@@ -49,6 +49,39 @@ fn passes_non_assistant_messages_through() {
         )],
         metadata: None,
     };
-    let out = backfill_task_subjects(std::slice::from_ref(&user));
+    let out = backfill(std::slice::from_ref(&user));
     assert_eq!(out[0], user);
+}
+
+#[test]
+fn a_task_id_at_the_integer_limit_does_not_overflow_the_next_id() {
+    let max = i64::MAX.to_string();
+    let messages = vec![
+        assistant_msg("m1", vec![create_item(&max, "Last task")]),
+        assistant_msg("m2", vec![update_item(&max, "completed", vec![])]),
+    ];
+    let out = backfill(&messages);
+    assert_eq!(
+        progress_items(&out[1])[0].input.get("subject"),
+        Some(&json!("Last task"))
+    );
+}
+
+#[test]
+fn a_rename_after_a_checkpoint_leaves_the_checkpoint_unchanged() {
+    let mut scope = SubjectScope::new();
+    backfill_in_place(
+        &mut [assistant_msg("m1", vec![create_item("1", "First name")])],
+        &mut scope,
+    );
+    let checkpoint = scope.clone();
+    let rename = update_item("1", "in_progress", vec![("subject", json!("Second name"))]);
+    backfill_in_place(&mut [assistant_msg("m2", vec![rename])], &mut scope);
+
+    let mut resumed = [assistant_msg("m3", vec![update_item("1", "completed", vec![])])];
+    backfill_in_place(&mut resumed, &mut checkpoint.clone());
+    assert_eq!(
+        progress_items(&resumed[0])[0].input.get("subject"),
+        Some(&json!("First name"))
+    );
 }

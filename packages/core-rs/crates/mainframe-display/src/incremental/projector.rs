@@ -1,7 +1,7 @@
 //! `IncrementalProjector`: the production [`DisplayProjector`]. See the
-//! module doc (`messages/incremental/mod.rs`) for the overall design; this
-//! file only wires the pieces in `group`, `fold`, `refold`, `patches`,
-//! `rewind`, `ordinals`, and `post_process` together.
+//! module doc (`incremental/mod.rs`) for the overall design; this file only
+//! wires the pieces in `group`, `fold`, `refold`, `patches`, `rewind`,
+//! `ordinals`, and `post_process` together.
 
 use std::collections::HashMap;
 

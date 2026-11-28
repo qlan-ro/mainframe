@@ -40,51 +40,34 @@ fn args1() -> HashMap<String, Value> {
 
 /// A tool-call part fixture: `id` defaults to `call-<tool_name>` and `args`
 /// is always `{ "some": "arg" }`.
-fn tc(
-    tool_name: &str,
-    id: Option<&str>,
-    result: Option<Value>,
-    is_error: Option<bool>,
-) -> PartEntry {
+fn tc(tool_name: &str, id: Option<&str>) -> PartEntry {
     PartEntry::ToolCall {
         tool_call_id: id
             .map(str::to_string)
             .unwrap_or(format!("call-{tool_name}")),
         tool_name: tool_name.to_string(),
         args: args1(),
-        result,
-        is_error,
         category: None,
         parent_tool_use_id: None,
     }
 }
 
 /// A tool-call part fixture tagged with a parent tool-use id.
-fn tc_tagged(tool_name: &str, id: &str, parent: &str, result: Option<Value>) -> PartEntry {
+fn tc_tagged(tool_name: &str, id: &str, parent: &str) -> PartEntry {
     PartEntry::ToolCall {
         tool_call_id: id.to_string(),
         tool_name: tool_name.to_string(),
         args: args1(),
-        result,
-        is_error: None,
         category: None,
         parent_tool_use_id: Some(parent.to_string()),
     }
 }
 
-fn tool_call_custom(
-    id: &str,
-    tool_name: &str,
-    args: HashMap<String, Value>,
-    result: Option<Value>,
-    is_error: Option<bool>,
-) -> PartEntry {
+fn tool_call_custom(id: &str, tool_name: &str, args: HashMap<String, Value>) -> PartEntry {
     PartEntry::ToolCall {
         tool_call_id: id.to_string(),
         tool_name: tool_name.to_string(),
         args,
-        result,
-        is_error,
         category: None,
         parent_tool_use_id: None,
     }
@@ -176,14 +159,14 @@ fn passes_through_a_single_non_tool_text_entry() {
 
 #[test]
 fn passes_through_a_single_normal_tool_call() {
-    let part = tc("Bash", Some("b1"), Some(str_val("done")), None);
+    let part = tc("Bash", Some("b1"));
     let result = group_tool_call_parts(std::slice::from_ref(&part), &claude_cats());
     assert_eq!(result, vec![part]);
 }
 
 #[test]
 fn passes_through_a_single_explore_tool_without_grouping() {
-    let part = tc("Read", Some("r1"), Some(str_val("file content")), None);
+    let part = tc("Read", Some("r1"));
     let result = group_tool_call_parts(std::slice::from_ref(&part), &claude_cats());
     assert_eq!(result.len(), 1);
     assert_eq!(result[0], part);
@@ -192,16 +175,15 @@ fn passes_through_a_single_explore_tool_without_grouping() {
 #[test]
 fn groups_2_plus_consecutive_explore_tools_into_a_tool_group() {
     let parts = vec![
-        tc("Read", Some("r1"), None, None),
-        tc("Grep", Some("g1"), None, None),
-        tc("Glob", Some("gl1"), None, None),
+        tc("Read", Some("r1")),
+        tc("Grep", Some("g1")),
+        tc("Glob", Some("gl1")),
     ];
     let result = group_tool_call_parts(&parts, &claude_cats());
     assert_eq!(result.len(), 1);
     match &result[0] {
         PartEntry::ToolGroup(e) => {
             assert_eq!(e.tool_call_id, "r1");
-            assert_eq!(e.result, "grouped");
             assert_eq!(
                 e.items
                     .iter()
@@ -216,7 +198,7 @@ fn groups_2_plus_consecutive_explore_tools_into_a_tool_group() {
 
 #[test]
 fn does_not_group_a_single_explore_tool() {
-    let parts = vec![tc("Read", Some("r1"), None, None)];
+    let parts = vec![tc("Read", Some("r1"))];
     let result = group_tool_call_parts(&parts, &claude_cats());
     assert_eq!(result.len(), 1);
     assert_eq!(tool_name_of(&result[0]), "Read");
@@ -225,8 +207,8 @@ fn does_not_group_a_single_explore_tool() {
 #[test]
 fn removes_hidden_tools_from_output() {
     let parts = vec![
-        tc("TodoWrite", Some("h1"), None, None),
-        tc("Bash", Some("b1"), None, None),
+        tc("TodoWrite", Some("h1")),
+        tc("Bash", Some("b1")),
     ];
     let result = group_tool_call_parts(&parts, &claude_cats());
     assert_eq!(result.len(), 1);
@@ -247,7 +229,7 @@ fn removes_all_hidden_tool_types() {
     ];
     let parts: Vec<PartEntry> = hidden_names
         .iter()
-        .map(|n| tc(n, None, None, None))
+        .map(|n| tc(n, None))
         .collect();
     let result = group_tool_call_parts(&parts, &claude_cats());
     assert_eq!(result, vec![]);
@@ -256,15 +238,14 @@ fn removes_all_hidden_tool_types() {
 #[test]
 fn accumulates_task_progress_tools_into_a_single_task_progress_entry() {
     let parts = vec![
-        tc("TaskCreate", Some("tc1"), None, None),
-        tc("TaskUpdate", Some("tu1"), None, None),
+        tc("TaskCreate", Some("tc1")),
+        tc("TaskUpdate", Some("tu1")),
     ];
     let result = group_tool_call_parts(&parts, &claude_cats());
     assert_eq!(result.len(), 1);
     match &result[0] {
         PartEntry::TaskProgress(e) => {
             assert_eq!(e.tool_call_id, "tc1");
-            assert_eq!(e.result, "accumulated");
             assert_eq!(
                 e.items
                     .iter()

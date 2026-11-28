@@ -40,15 +40,6 @@ fn parse_command_message_uses_args_over_body() {
 }
 
 #[test]
-fn format_turn_duration_buckets() {
-    assert_eq!(format_turn_duration(f64::NAN), "");
-    assert_eq!(format_turn_duration(-5.0), "");
-    assert_eq!(format_turn_duration(250.4), "250ms");
-    assert_eq!(format_turn_duration(2500.0), "2.5s");
-    assert_eq!(format_turn_duration(42_000.0), "42s");
-}
-
-#[test]
 fn decode_xml_attr_unescapes() {
     assert_eq!(
         decode_xml_attr("a &amp; &lt;b&gt; &quot;c&quot;"),

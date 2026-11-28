@@ -1,6 +1,7 @@
 use mainframe_types::chat::{ChatMessage, MessageContent, MessageContentNode};
 use mainframe_types::content::LeafContent;
 use mainframe_types::transcript_presentation::*;
+use serde::Deserialize as _;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -15,7 +16,7 @@ pub(super) fn initialize(message: &mut ChatMessage) {
     let Some(value) = meta.get(PRESENTATION_CONTEXT_KEY) else {
         return;
     };
-    let Ok(presentation) = serde_json::from_value::<TranscriptPresentation>(value.clone()) else {
+    let Ok(presentation) = TranscriptPresentation::deserialize(value) else {
         return;
     };
     if !presentation.is_valid() {
@@ -57,12 +58,11 @@ pub(super) fn store(meta: &mut HashMap<String, Value>, sources: Vec<DisplayPrese
 }
 
 pub(super) fn append(previous: &mut ChatMessage, next: &ChatMessage) {
-    let turn_group = mainframe_types::transcript_presentation::TURN_GROUP_KEY;
-    if let Some(group) = next.metadata.as_ref().and_then(|m| m.get(turn_group)) {
+    if let Some(group) = next.metadata.as_ref().and_then(|m| m.get(TURN_GROUP_KEY)) {
         previous
             .metadata
             .get_or_insert_default()
-            .entry(turn_group.into())
+            .entry(TURN_GROUP_KEY.into())
             .or_insert_with(|| group.clone());
     }
     merge_subagent_facts(previous, next);

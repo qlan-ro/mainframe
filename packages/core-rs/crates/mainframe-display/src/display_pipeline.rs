@@ -7,7 +7,7 @@ use mainframe_types::display::{
 
 use super::display_helpers::{apply_tool_grouping, convert_user_content, is_internal_user_message};
 use super::message_grouping::{GroupedMessage, group_messages};
-use super::task_subject_backfill::backfill_task_subjects;
+use super::task_subject_backfill::{SubjectScope, backfill_in_place};
 
 /// Pipeline steps:
 /// 1. Filter internal user messages (mainframe commands, skill markers)
@@ -52,27 +52,23 @@ pub fn prepare_messages_with_decoders(
     let mut seen_ids: HashSet<String> = HashSet::new();
 
     for g_msg in &grouped {
-        let display = match convert_grouped_to_display(g_msg, categories, decoders) {
-            Some(d) => d,
-            None => continue,
-        };
-        if seen_ids.contains(&display.id) {
+        let Some(display) = convert_grouped_to_display(g_msg, categories, decoders) else {
             continue;
+        };
+        if seen_ids.insert(display.id.clone()) {
+            result.push(display);
         }
-        seen_ids.insert(display.id.clone());
-        result.push(display);
     }
 
     // Cross-message pass: name TaskUpdate items whose TaskCreate lives in an
     // earlier grouped message (the CLI's update events carry no subject).
-    let mut result = backfill_task_subjects(&result);
-    crate::apply_tool_call_timing(messages, &mut result);
+    backfill_in_place(&mut result, &mut SubjectScope::new());
+    crate::tool_call_timing::apply_tool_call_timing(messages, &mut result);
     result
 }
 
-/// `pub(crate)`: the incremental projector calls this per group directly, so
-/// a patched or freshly refolded group produces the same `DisplayMessage`
-/// content as the full pipeline that calls it here.
+/// The incremental projector calls this per group too, so a patched or
+/// refolded group converts exactly as the full pipeline converts it.
 pub(crate) fn convert_grouped_to_display(
     msg: &GroupedMessage,
     categories: Option<&ToolCategories>,
@@ -80,9 +76,6 @@ pub(crate) fn convert_grouped_to_display(
 ) -> Option<DisplayMessage> {
     let selected = decoders.for_message(&msg.base);
     let decoders = selected.as_deref().unwrap_or(decoders);
-    let id = msg.base.id.clone();
-    let chat_id = msg.base.chat_id.clone();
-    let timestamp = msg.base.timestamp.clone();
 
     match msg.base.r#type {
         ChatMessageType::Assistant | ChatMessageType::ToolUse => {
@@ -104,16 +97,12 @@ pub(crate) fn convert_grouped_to_display(
             let mut metadata = msg.base.metadata.clone().unwrap_or_default();
             metadata.extend(extra_meta);
             Some(DisplayMessage {
-                id,
-                chat_id,
+                id: msg.base.id.clone(),
+                chat_id: msg.base.chat_id.clone(),
                 r#type: DisplayMessageType::User,
                 content: display_content,
-                timestamp,
-                metadata: if metadata.is_empty() {
-                    None
-                } else {
-                    Some(metadata)
-                },
+                timestamp: msg.base.timestamp.clone(),
+                metadata: (!metadata.is_empty()).then_some(metadata),
             })
         }
 
