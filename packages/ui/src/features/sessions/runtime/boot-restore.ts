@@ -125,7 +125,10 @@ function listState(el: HTMLElement): 'empty' | 'pending' | 'underfilled' | 'show
  * the tail. The check runs in an animation frame, before that frame paints, so
  * the cover lifts in the very frame the pinned transcript is first drawn: no
  * earlier frame can show it half-scrolled or still hidden, and no later one is
- * spent covering a finished picture. An empty chat (its list reports no
+ * spent covering a finished picture. The default (virtualized) list must also
+ * keep its height across two frames: it can reveal with an estimated row
+ * height and correct it a frame later, moving the rows (146 px on a Codex
+ * chat in WebKit). An empty chat (its list reports no
  * messages) is shown once its transcript has been mounted `SETTLE_MS`; a list
  * with messages but no row drawn yet keeps the hold. A turn still streaming
  * does not matter: the tail is only checked, never waited to go quiet.
@@ -145,7 +148,9 @@ export function decideBootRestore(chatId: string | null): void {
   stopWatching();
   let loadedAt = 0;
   let mountedAt = 0;
-  const settled = (): boolean => {
+  let lastHeight = -1;
+  /** `inFrame`: called from an animation frame, where a height counts towards the two-frame check. */
+  const settled = (inFrame: boolean): boolean => {
     if (!chatLoaded(chatId)) return false;
     const now = performance.now();
     loadedAt ||= now;
@@ -156,15 +161,23 @@ export function decideBootRestore(chatId: string | null): void {
     mountedAt ||= now;
     const state = listState(mine);
     if (state === 'empty') return now - mountedAt >= SETTLE_MS;
-    return state === 'shown' && atTail(mine);
+    if (state !== 'shown' || !atTail(mine)) {
+      lastHeight = -1;
+      return false;
+    }
+    if (mine.querySelector('[data-virtualized="true"]') == null) return true;
+    if (!inFrame) return false;
+    const steady = mine.scrollHeight === lastHeight;
+    lastHeight = mine.scrollHeight;
+    return steady;
   };
   const frame = () => {
     watch = undefined;
     if (!isBootRestoring()) return;
-    if (settled()) return release();
+    if (settled(true)) return release();
     watch = requestAnimationFrame(frame);
   };
-  if (settled()) return release();
+  if (settled(false)) return release();
   watch = requestAnimationFrame(frame);
 }
 

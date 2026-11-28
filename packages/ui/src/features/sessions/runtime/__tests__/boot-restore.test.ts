@@ -231,6 +231,27 @@ describe('boot restore hold', () => {
       expect(isBootRestoring()).toBe(false);
     });
 
+    it('lifts over the default list only once its height has held for two frames', () => {
+      const { el, box } = mountTranscript('chat-1');
+      addList(el, { loaded: 40, drawn: 12 }).setAttribute('data-virtualized', 'true');
+      box.scrollHeight = 7178;
+      box.scrollTop = 7078;
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      expect(isBootRestoring()).toBe(true);
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(true);
+
+      // Virtuoso replaces an estimated row height with the measured one, a frame after its reveal.
+      box.scrollHeight = 7032;
+      box.scrollTop = 6932;
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(true);
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
     it('keeps holding while the newest rows do not fill the viewport and more are still to mount', () => {
       const { el, box } = mountTranscript('chat-1');
       const list = addList(el, { loaded: 40, drawn: 6 });
