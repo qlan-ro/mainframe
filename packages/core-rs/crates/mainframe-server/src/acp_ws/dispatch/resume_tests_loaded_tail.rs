@@ -1,0 +1,292 @@
+//! What a windowed first resume leaves for the next start: a reply from
+//! adapter pages, or one that read the history before any validation existed,
+//! stores no tail itself, so `complete_history` stores one once the history
+//! is complete (`deliver_resume` → `persist_loaded_tail`).
+use std::path::PathBuf;
+
+use super::*;
+use crate::Db;
+use crate::acp_ws::hub::FacadeHub;
+use crate::acp_ws::ports::ManagerPorts;
+use crate::chat_test_support::{StubAdapter, StubHistory};
+use mainframe_types::chat::ChatMessage;
+
+fn message(n: usize) -> ChatMessage {
+    serde_json::from_value(json!({"id":format!("m{n}"),"chatId":"c","type":"user",
+        "timestamp":"2026-11-28T00:00:00Z","content":[{"type":"text","text":format!("message {n}")}]}))
+    .unwrap()
+}
+
+struct Fixture {
+    ctx: Arc<AppCtx>,
+    chat_id: String,
+    history: Arc<StubHistory>,
+    data: PathBuf,
+    _directory: tempfile::TempDir,
+}
+
+/// How the adapter answers for the chat's pages.
+#[derive(Clone, Copy)]
+enum Paging {
+    Pages,
+    /// `will_page_history` says no.
+    Declines,
+    /// `will_page_history` says yes, then the read declines.
+    DeclinesLate,
+}
+
+/// An idle, uncached chat of 60 messages in three pages, pinned to a file so
+/// its history validates, on a hub that stores tails.
+async fn fixture(paging: Paging) -> Fixture {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("thread.jsonl");
+    tokio::fs::write(&source, "{}\n").await.unwrap();
+    let data = directory.path().join("data");
+    let db = Db::spawn(|| mainframe_db::DatabaseManager::open(std::path::Path::new(":memory:")))
+        .unwrap();
+    let hub = Arc::new(FacadeHub::default().with_history_tails(data.join("tails")));
+    let ctx = Arc::new(
+        AppCtx::test_builder(db, data.clone())
+            .facade_hub(hub)
+            .build()
+            .unwrap(),
+    );
+    let pages = (0..3)
+        .map(|page| ((2 - page) * 20..(3 - page) * 20).map(message).collect())
+        .collect();
+    let history = Arc::new(StubHistory {
+        declines: matches!(paging, Paging::Declines),
+        declines_late: matches!(paging, Paging::DeclinesLate),
+        source: Some(source),
+        ..StubHistory::new(pages)
+    });
+    ctx.core
+        .adapter_registry
+        .register(StubAdapter::with_history("codex", Arc::clone(&history)));
+    let path = directory.path().to_string_lossy().into_owned();
+    let chat_id = ctx
+        .core
+        .db
+        .call(move |db| {
+            let project = db.projects.create(&path, None)?;
+            let chat = db.chats.create(&mainframe_types::chat::NewChat {
+                project_id: project.id,
+                adapter_id: "codex".into(),
+                ..Default::default()
+            })?;
+            db.chats.update(
+                &chat.id,
+                &mainframe_types::chat_patch::ChatPatch {
+                    vendor_session_id: Some("thread".into()),
+                    ..Default::default()
+                },
+            )?;
+            Ok(chat.id)
+        })
+        .await
+        .unwrap();
+    Fixture {
+        ctx,
+        chat_id,
+        history,
+        data,
+        _directory: directory,
+    }
+}
+
+/// Opens the chat as the desktop does: a windowed first resume of 10 turns.
+async fn open(fixture: &Fixture) -> Vec<Value> {
+    let (_id, connection, mut rx) = fixture.ctx.chat.facade_hub.register("codex".into());
+    connection.mark_windowed_history_opted_in();
+    let mut request = resume_request(1, &fixture.chat_id);
+    request.params.as_mut().unwrap()["_meta"] =
+        json!({ "_mainframe.dev": { "window": { "turns": 10 } } });
+    let ports = Arc::new(ManagerPorts::new(Some(Arc::clone(
+        &fixture.ctx.chat.chat_manager,
+    ))));
+    start_resume(request, &fixture.ctx, &connection, ports);
+    drain(&mut rx).await
+}
+
+async fn tail_stored(fixture: &Fixture) -> bool {
+    let manifest = fixture
+        .data
+        .join("tails")
+        .join(format!("{}.meta.json", fixture.chat_id));
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !manifest.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .is_ok()
+}
+
+/// No tail appears within a short wait. Called once the load behind the reply
+/// has finished, which is when a tail would be written.
+async fn no_tail_stored(fixture: &Fixture) -> bool {
+    let manifest = fixture
+        .data
+        .join("tails")
+        .join(format!("{}.meta.json", fixture.chat_id));
+    tokio::time::timeout(std::time::Duration::from_millis(300), async {
+        while !manifest.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .is_err()
+}
+
+fn replied(frames: &[Value]) -> bool {
+    frames
+        .iter()
+        .any(|f| f["id"] == json!(1) && f.get("result").is_some())
+}
+
+#[tokio::test]
+async fn a_first_window_from_pages_leaves_a_tail_and_reads_the_history_once() {
+    let fixture = fixture(Paging::Pages).await;
+
+    let frames = open(&fixture).await;
+
+    assert!(replied(&frames));
+    assert!(tail_stored(&fixture).await, "the next start finds a tail");
+    assert_eq!(
+        fixture.history.loads(),
+        1,
+        "one full load, behind the reply"
+    );
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn a_resume_that_read_the_history_itself_still_leaves_a_tail() {
+    // Declined and opened with no warm-up first: the resume reads the whole
+    // history before any validation exists, so it cannot store the tail itself.
+    let fixture = fixture(Paging::Declines).await;
+
+    let frames = open(&fixture).await;
+
+    assert!(replied(&frames));
+    assert!(tail_stored(&fixture).await);
+    assert_eq!(
+        fixture.history.loads(),
+        1,
+        "the load behind the reply reuses the resume's read"
+    );
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn a_read_that_declines_after_saying_it_would_page_reads_the_history_once() {
+    // The warm-up left the chat to the window, then the read declined (an
+    // ambiguous cut, a CLI without the method): the resume reads the history,
+    // and the full load behind it reuses that read.
+    let fixture = fixture(Paging::DeclinesLate).await;
+    assert!(
+        fixture
+            .ctx
+            .chat
+            .chat_manager
+            .adapter_window_candidate(&fixture.chat_id)
+            .await
+    );
+
+    let frames = open(&fixture).await;
+
+    assert!(replied(&frames));
+    assert!(tail_stored(&fixture).await);
+    assert_eq!(fixture.history.loads(), 1);
+    assert!(
+        fixture
+            .ctx
+            .chat
+            .chat_manager
+            .is_chat_loaded(&fixture.chat_id)
+    );
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn a_declined_chat_after_the_full_warm_up_reads_its_history_once() {
+    let fixture = fixture(Paging::Declines).await;
+    let manager = &fixture.ctx.chat.chat_manager;
+    assert!(!manager.adapter_window_candidate(&fixture.chat_id).await);
+    manager.resume_transcript(&fixture.chat_id).await;
+
+    let frames = open(&fixture).await;
+
+    assert!(replied(&frames));
+    assert!(tail_stored(&fixture).await);
+    assert_eq!(
+        fixture.history.loads(),
+        1,
+        "the resume and the load behind it reuse the warm-up's read"
+    );
+    manager.dispose();
+}
+
+#[tokio::test]
+async fn a_resume_without_windowed_history_still_completes_the_lifecycle_load() {
+    // A warm-up that returned early leaves the lifecycle load (active chat,
+    // worktree baseline, scans) to the resume, windowed or not.
+    let fixture = fixture(Paging::Pages).await;
+    let manager = &fixture.ctx.chat.chat_manager;
+    let (_id, connection, mut rx) = fixture.ctx.chat.facade_hub.register("codex".into());
+    let ports = Arc::new(ManagerPorts::new(Some(Arc::clone(manager))));
+
+    start_resume(
+        resume_request(1, &fixture.chat_id),
+        &fixture.ctx,
+        &connection,
+        ports,
+    );
+    assert!(replied(&drain(&mut rx).await));
+
+    let loaded = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !manager.is_chat_loaded(&fixture.chat_id) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+    assert!(loaded.is_ok(), "the chat was loaded behind the reply");
+    assert!(
+        no_tail_stored(&fixture).await,
+        "a tail is only ever a windowed first reply"
+    );
+    manager.dispose();
+}
+
+/// `prepare_resume` for an uncached first resume of 10 turns.
+async fn prepared(fixture: &Fixture, windowed_history: bool) -> prepare::PreparedResume {
+    let ports = ManagerPorts::new(Some(Arc::clone(&fixture.ctx.chat.chat_manager)));
+    let mut request = resume_request(1, &fixture.chat_id);
+    request.params.as_mut().unwrap()["_meta"] =
+        json!({ "_mainframe.dev": { "window": { "turns": 10 } } });
+    let options = mainframe_acp::ResumeOptions {
+        windowed_history,
+        ..Default::default()
+    };
+    prepare::prepare_resume(
+        request,
+        Some(&fixture.chat_id),
+        &fixture.ctx,
+        &ports,
+        None,
+        options,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_resume_without_windowed_history_asks_for_no_tail() {
+    // The same uncached read on a windowed resume asks for one.
+    let plain = fixture(Paging::Declines).await;
+    let windowed = fixture(Paging::Declines).await;
+
+    assert!(prepared(&plain, false).await.tail_request.is_none());
+    assert!(prepared(&windowed, true).await.tail_request.is_some());
+    plain.ctx.chat.chat_manager.dispose();
+    windowed.ctx.chat.chat_manager.dispose();
+}

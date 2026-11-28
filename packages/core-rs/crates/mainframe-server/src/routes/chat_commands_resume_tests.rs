@@ -48,3 +48,6 @@ async fn both_modes_reject_a_missing_chat_before_starting_background_work() {
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }
+
+#[path = "chat_commands_resume_warm_up_tests.rs"]
+mod viewing_warm_up;

@@ -25,6 +25,7 @@ mod app_ctx;
 mod live;
 mod paged;
 pub(crate) use live::LiveStub;
+pub(crate) use paged::StubHistory;
 
 pub(crate) use app_ctx::build_test_context;
 
@@ -49,7 +50,7 @@ pub(crate) struct StubAdapter {
     /// What every session's `load_subagent_history` returns; `None` fails it.
     pub(crate) subagent_rows: Option<Arc<Vec<ChatMessage>>>,
     /// Pages `load_history_page` serves; see `paged.rs`.
-    pub(crate) pager: Option<Arc<mainframe_adapter_api::test_support::FakePages>>,
+    pub(crate) pager: Option<Arc<StubHistory>>,
 }
 
 impl StubAdapter {
@@ -157,7 +158,7 @@ struct StubSession {
     live: Option<Arc<LiveStub>>,
     spawned: AtomicBool,
     subagent_rows: Option<Arc<Vec<ChatMessage>>>,
-    pager: Option<Arc<mainframe_adapter_api::test_support::FakePages>>,
+    pager: Option<Arc<StubHistory>>,
 }
 
 fn ok<'a>() -> BoxFuture<'a, Result<(), AdapterError>> {
@@ -254,10 +255,16 @@ impl AdapterSession for StubSession {
         ContextFiles::default()
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async { Ok(paged::whole(self.pager.as_deref())) })
     }
     fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
         paged::window(self.pager.as_deref(), req)
+    }
+    fn will_page_history(&self) -> BoxFuture<'_, bool> {
+        paged::will_page(self.pager.as_deref())
+    }
+    fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
+        paged::sources(self.pager.as_deref())
     }
     fn load_subagent_history(
         &self,

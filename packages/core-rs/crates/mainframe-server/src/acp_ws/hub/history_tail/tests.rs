@@ -288,3 +288,6 @@ mod refresh;
 
 #[path = "turn_window_tests.rs"]
 mod turn_window;
+
+#[path = "loaded_tail_tests.rs"]
+mod loaded_tail;

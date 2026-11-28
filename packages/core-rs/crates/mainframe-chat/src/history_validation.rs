@@ -13,6 +13,10 @@ pub struct HistoryValidation {
     pub(crate) fingerprint: HistoryFingerprint,
     pub(crate) dependencies: Vec<HistoryDependency>,
     pub(crate) adapter_state: serde_json::Value,
+    /// The plan and skill files the load collected, so a restore that reuses
+    /// this history in memory hands the scan the same files. Never stored.
+    #[serde(skip)]
+    pub(crate) files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
 }
 
 impl HistoryValidation {
@@ -27,6 +31,7 @@ impl HistoryValidation {
             adapter_state,
             generation: None,
             permission_free: false,
+            files: None,
         }
     }
 }

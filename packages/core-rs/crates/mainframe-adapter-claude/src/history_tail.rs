@@ -72,13 +72,29 @@ pub(crate) async fn load_window(
     load_window_within(session_id, discovered, req, Limits::PRODUCTION).await
 }
 
+/// Whether a window read could start at all: one complete main transcript, at
+/// least [`MIN_FILE`] long. Stats only; the read can still decline later.
+pub(crate) async fn eligible(discovered: &DiscoveredFiles) -> bool {
+    eligible_within(discovered, MIN_FILE).await
+}
+
+/// [`eligible`] with the floor a read runs under, so the read's own first
+/// check and `will_page_history` cannot drift apart.
+async fn eligible_within(discovered: &DiscoveredFiles, min_file: u64) -> bool {
+    discovered.complete
+        && discovered.parent_files().count() == 1
+        && tokio::fs::metadata(&discovered.primary_path)
+            .await
+            .is_ok_and(|meta| meta.len() >= min_file)
+}
+
 async fn load_window_within(
     session_id: &str,
     discovered: &DiscoveredFiles,
     req: WindowRequest<'_>,
     limits: Limits,
 ) -> Result<Option<HistoryPage>, AdapterError> {
-    if !discovered.complete || discovered.parent_files().count() != 1 {
+    if !eligible_within(discovered, limits.min_file).await {
         return Ok(None);
     }
     let mut turns = req.turns.clamp(1, MAX_TURNS);
@@ -239,6 +255,9 @@ fn settle(
 #[cfg(test)]
 #[path = "history_tail_budget_tests.rs"]
 mod budget_tests;
+#[cfg(test)]
+#[path = "history_tail_eligible_tests.rs"]
+mod eligible_tests;
 #[cfg(test)]
 #[path = "history_tail_fallback_tests.rs"]
 mod fallback_tests;

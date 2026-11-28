@@ -10,6 +10,7 @@ mod fake_paths;
 mod fake_projection;
 mod fake_push;
 mod fake_rows;
+mod fake_scan;
 mod fake_store;
 mod fake_workspace;
 pub(crate) use fake_adapters::FakeAdapterPort;

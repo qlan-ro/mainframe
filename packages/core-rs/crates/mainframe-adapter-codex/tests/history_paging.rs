@@ -67,6 +67,7 @@ async fn the_first_window_comes_from_turns_list_alone() {
     let capture = dir.path().join("capture.jsonl");
     let fake = write_fake_app_server(dir.path(), &capture, PAGED_SERVER);
     let session = session(Some("thread-1"), None, &fake);
+    assert!(session.will_page_history().await);
 
     let page = window(&session, |_| true).await.expect("the CLI pages");
 
@@ -126,8 +127,16 @@ async fn a_cli_without_the_method_falls_back_and_is_not_asked_again() {
       ;;"#,
     );
     let session = session(Some("thread-1"), None, &fake);
+    assert!(
+        session.will_page_history().await,
+        "nothing is known about the CLI yet"
+    );
 
     assert!(window(&session, |_| true).await.is_none());
+    assert!(
+        !session.will_page_history().await,
+        "the warm-up keeps the full restore once the CLI is known to lack the method"
+    );
     assert!(window(&session, |_| true).await.is_none());
     let history = session.load_history().await.unwrap();
 
@@ -155,6 +164,7 @@ async fn an_unsent_fork_is_not_paged() {
         &fake,
     );
 
+    assert!(!session.will_page_history().await);
     assert!(window(&session, |_| true).await.is_none());
     assert!(captured_requests(&capture).is_empty());
 }

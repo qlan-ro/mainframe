@@ -105,7 +105,10 @@ impl ChatLifecycleManager {
             Some((messages, active_from)) => {
                 let (messages, changed) =
                     self.restore_loaded_history(chat_id, messages, active_from);
-                if let Some(window) = window.as_deref().filter(|_| changed) {
+                // A window read from pages carries no permission gate. When the
+                // full history restores one, the client must replay to see it.
+                let gated = self.shared.permissions.lock_recover().has_pending(chat_id);
+                if let Some(window) = window.as_deref().filter(|_| changed && !gated) {
                     window_held = self.window_held(chat_id, window, &messages);
                 }
                 (canonical.then_some(messages), changed)

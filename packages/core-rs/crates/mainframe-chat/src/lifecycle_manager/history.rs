@@ -1,11 +1,16 @@
 use mainframe_adapter_api::AdapterSession;
 use mainframe_types::chat::ChatMessage;
+use mainframe_types::sync::LockExt as _;
 
 pub(super) async fn load_session_history(
     chat_id: &str,
     session: &dyn AdapterSession,
     shared: &crate::chat_manager::ChatShared,
 ) -> Option<(Vec<ChatMessage>, usize)> {
+    if let Some(history) = current_history_in_memory(chat_id, session, shared).await {
+        tracing::debug!(chat_id, "reused the validated history in memory");
+        return Some((history, 0));
+    }
     let started = std::time::Instant::now();
     let history = shared.load_cached_history(chat_id, session).await.ok();
     tracing::info!(
@@ -14,6 +19,40 @@ pub(super) async fn load_session_history(
         "chat history loaded"
     );
     history.map(|history| (history, 0))
+}
+
+/// The history a read of this chat already left in memory, when nothing has
+/// changed it since (same generation) and its sources still validate: a resume
+/// that read the history itself is followed by the full load, which then needs
+/// no second read. Hands the session the files that read collected.
+async fn current_history_in_memory(
+    chat_id: &str,
+    session: &dyn AdapterSession,
+    shared: &crate::chat_manager::ChatShared,
+) -> Option<Vec<ChatMessage>> {
+    let validation = shared.history_cache.validation(chat_id)?;
+    let cached = {
+        let messages = shared.messages.lock_recover();
+        if validation.generation.is_none() || validation.generation != messages.generation(chat_id)
+        {
+            return None;
+        }
+        messages.get(chat_id)?.clone()
+    };
+    let context = shared.history_context(chat_id);
+    if !crate::history_cache::HistorySnapshotCache::validate(
+        session,
+        context.as_deref(),
+        &validation,
+    )
+    .await
+    {
+        return None;
+    }
+    if let Some(files) = validation.files {
+        session.restore_history_files(files);
+    }
+    Some(cached)
 }
 
 pub(super) fn restore_history(
