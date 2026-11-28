@@ -165,18 +165,25 @@ describe('a tail shorter than the viewport', () => {
   const sized = (rowHeight: number, clientHeight = 500) => {
     const state = { mounted: 0 };
     const viewport = document.createElement('div');
+    let scrollTop = 0;
     Object.defineProperties(viewport, {
       clientHeight: { get: () => clientHeight },
       scrollHeight: { get: () => Math.max(clientHeight, state.mounted * rowHeight) },
+      scrollTop: { get: () => scrollTop },
     });
-    const followNow = vi.fn();
+    // The owner's `followNow`: the position goes to the bottom of what is mounted when it is asked.
+    const followNow = vi.fn(() => {
+      scrollTop = viewport.scrollHeight - clientHeight;
+    });
     const controller = owner(vi.fn(), { viewportElement: { current: viewport }, followNow });
-    const use = (rows: { id: string }[]) => {
-      const shown = useTailFirstRows(rows, controller);
+    const use = (rows: { id: string }[], orderOf?: (id: string) => number | undefined) => {
+      const shown = useTailFirstRows(rows, controller, orderOf);
       state.mounted = shown.length;
       return shown;
     };
-    return { use, followNow };
+    /** The tail is in view: the position is at the bottom of the mounted rows. */
+    const atTail = () => scrollTop === viewport.scrollHeight - clientHeight;
+    return { use, followNow, atTail };
   };
 
   it('mounts further slices before the first paint until the content overflows the viewport', () => {
@@ -190,10 +197,21 @@ describe('a tail shorter than the viewport', () => {
   it('keeps the tail in view when the pass that mounts the last rows is the one that overflows', () => {
     // Six rows are 240 px; the next pass mounts all fifteen (600 px, past the 500 px viewport) and ends the mount.
     // The owner's resize observer only exists after the first paint, so that pass must ask it to follow.
-    const { use, followNow } = sized(40);
+    const { use, atTail } = sized(40);
     const { result } = renderHook(() => use(make(15)));
     expect(result.current).toHaveLength(15);
-    expect(followNow).toHaveBeenCalledTimes(2);
+    expect(atTail()).toBe(true);
+  });
+
+  it('goes on from the nearest row left when the first mounted one is folded away mid-mount', () => {
+    const all = make(60);
+    const orderOf = (id: string) => Number(id.slice(1));
+    const { use } = sized(200);
+    const { result, rerender } = renderHook(({ rows }) => use(rows, orderOf), { initialProps: { rows: all } });
+    expect(result.current.map((row) => row.id)).toEqual(['m54', 'm55', 'm56', 'm57', 'm58', 'm59']);
+    // A turn folds and its empty messages m40 to m56 leave the list, the first mounted row among them.
+    rerender({ rows: all.filter((row) => orderOf(row.id) < 40 || orderOf(row.id) > 56) });
+    expect(result.current.map((row) => row.id)).toEqual(['m57', 'm58', 'm59']);
   });
 
   it('stops at the whole window when it never overflows', () => {

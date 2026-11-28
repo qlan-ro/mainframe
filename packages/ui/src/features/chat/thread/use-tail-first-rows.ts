@@ -24,6 +24,16 @@ interface Row {
 }
 
 /**
+ * Where to go on from when the first mounted row `gone` is no longer in `rows`: the first row at or after its place
+ * in the full list (`orderOf`), or else a fresh tail of `FIRST_ROWS`.
+ */
+function resumeAt(rows: readonly Row[], gone: string, orderOf?: (id: string) => number | undefined): number {
+  const place = orderOf?.(gone);
+  const next = place === undefined ? -1 : rows.findIndex((row) => (orderOf!(row.id) ?? -1) >= place);
+  return next >= 0 ? next : Math.max(0, rows.length - FIRST_ROWS);
+}
+
+/**
  * Tail-first mount. The first window mounts its newest `FIRST_ROWS` rows, then the rest lands
  * above them `STEP_ROWS` at a time, one slice per task. A reader at the tail stays there (the owner
  * follows); a reader who has already moved up near the top is re-anchored per slice
@@ -37,14 +47,24 @@ interface Row {
  * So while the content does not overflow the viewport and rows are still waiting, the next slice
  * mounts in a layout effect (committed before paint), until it overflows or the window runs out.
  */
-export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScrollController | null): T[] {
+export function useTailFirstRows<T extends Row>(
+  rows: T[],
+  scroll: TranscriptScrollController | null,
+  orderOf?: (id: string) => number | undefined,
+): T[] {
   const [state, setState] = useState<{ startId: string | null; done: boolean }>({ startId: null, done: false });
   if (!state.done && state.startId === null && rows.length > 0) {
     const start = Math.max(0, rows.length - FIRST_ROWS);
     setState({ startId: rows[start]!.id, done: start === 0 });
   }
   const findOpen = useFindInChatStore((s) => s.isOpen) && scroll?.findOwner === true;
-  const found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
+  let found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
+  if (found < 0 && !state.done && state.startId !== null && rows.length > 0) {
+    // The first mounted row left the list (its turn folded it away, the window changed): go on from the nearest row
+    // still there at or after it, never from the top, which would mount the whole window in one commit (#517).
+    found = resumeAt(rows, state.startId, orderOf);
+    setState({ startId: rows[found]!.id, done: found === 0 });
+  }
   const startIndex = state.done || found < 0 ? 0 : found;
   const layoutPasses = useRef(0);
   const latest = useRef({ rows, scroll });

@@ -1,4 +1,5 @@
 /** The scroll owner's record (`use-scroll-owner.ts`) and the small pieces that read or write it. */
+import { AT_BOTTOM_PX } from './bottom-pin';
 
 const BLOCKS = 'p, pre, table, li, h2, h3, img, [data-message-id], [data-history-item-id]';
 /** How long the reader's downward input may take to bring the position to the bottom (a flick's momentum sends wheel events throughout). */
@@ -59,9 +60,19 @@ export function seen(current: OwnerState, el: HTMLElement) {
   current.seenClient = el.clientHeight;
 }
 
-/** The content or the viewport changed size since the owner last acted: the browser laid out on its own. */
-export const laidOutSince = (current: OwnerState, el: HTMLElement) =>
-  el.scrollHeight !== current.seenHeight || el.clientHeight !== current.seenClient;
+/**
+ * A move up that a layout the owner has not acted on yet explains: the browser clamped the position against the
+ * new viewport (it lands at the old content's bottom), or anchored it by no more than the sizes changed. A move
+ * larger than that is someone scrolling (the reader's threaded scroll before its wheel event, a selection drag,
+ * Find), even while a stream changes the layout every frame.
+ */
+export function layoutExplains(current: OwnerState, el: HTMLElement, top: number): boolean {
+  const height = el.scrollHeight - current.seenHeight;
+  const client = el.clientHeight - current.seenClient;
+  if (height === 0 && client === 0) return false;
+  const clamped = top >= current.seenHeight - el.clientHeight - AT_BOTTOM_PX;
+  return clamped || current.lastTop - top <= Math.abs(height) + Math.abs(client) + 1;
+}
 
 /** The reader's downward input is recent enough to explain reaching the bottom. */
 export const wantsDown = (current: OwnerState) =>

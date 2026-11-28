@@ -4,7 +4,7 @@
  */
 import { AT_BOTTOM_PX, isAtBottom } from './bottom-pin';
 import { listenForScrollInput } from './scroll-owner-input';
-import { laidOutSince, seen, wantsDown, type OwnerState } from './scroll-owner-state';
+import { layoutExplains, seen, wantsDown, type OwnerState } from './scroll-owner-state';
 
 interface Actions {
   publish: () => void;
@@ -40,9 +40,9 @@ function scrollHandler(viewport: HTMLElement, current: OwnerState, { publish, re
     const bottom = viewport.scrollHeight - viewport.clientHeight - top;
     if (current.following && top < current.lastTop - 1 && bottom > AT_BOTTOM_PX) {
       // A layout the resize callback has not seen moved it (the browser clamped or anchored the position between
-      // frames, #519): the reader is still at the tail. Up with no layout behind it (Find, a jump to a row) is not
-      // the owner's write, so the reader is no longer at the tail.
-      if (laidOutSince(current, viewport)) viewport.scrollTop = viewport.scrollHeight;
+      // frames, #519): the reader is still at the tail. Any other move up (the reader's scroll before its wheel
+      // event, a selection drag, Find, a jump to a row) is not the owner's write: the reader left the tail.
+      if (layoutExplains(current, viewport, top)) viewport.scrollTop = viewport.scrollHeight;
       else release();
     } else if (!current.following && bottom <= AT_BOTTOM_PX && top > current.lastTop && wantsDown(current)) {
       // Only the reader's own recent downward scroll into the bottom: content shrinking below clamps the position

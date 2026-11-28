@@ -98,6 +98,28 @@ describe('a layout the resize callback has not seen yet (#519)', () => {
     expect(bottomGap()).toBe(0);
   });
 
+  it('lets go when the reader scrolls up further than a streamed chunk grew the content', () => {
+    // A chunk adds 40 px before the frame; the reader's threaded scroll moved 100 px up and its wheel event comes after.
+    layout.height += 40;
+    layout.top = 1400;
+    fireEvent.scroll(viewport);
+    expect(following()).toBe(false);
+    resized();
+    fireEvent.wheel(viewport, { deltaY: -40 });
+    expect(layout.top).toBe(1400);
+  });
+
+  it('lets go for a selection drag up while a reply streams (no scroll input at all)', () => {
+    for (let frame = 0; frame < 5; frame++) {
+      layout.height += 30;
+      layout.top -= 60;
+      fireEvent.scroll(viewport);
+      resized();
+    }
+    expect(following()).toBe(false);
+    expect(layout.top).toBe(1200);
+  });
+
   it('still lets go when something scrolls up with no layout behind it (Find, a jump)', () => {
     layout.top = 900;
     fireEvent.scroll(viewport);

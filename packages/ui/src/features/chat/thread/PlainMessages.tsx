@@ -60,14 +60,19 @@ function useRows(): { rows: Row[]; anchorId: string | null } {
 export function PlainMessages({ components }: { components: MessageComponents }) {
   const { rows: loaded, anchorId: newest } = useRows();
   const foldedAway = useFoldedAwayRows();
+  // The newest sent message carries the run's status row: it always keeps its row.
   const all = useMemo(
-    () => (foldedAway.size ? loaded.filter((row) => !foldedAway.has(row.id)) : loaded),
-    [loaded, foldedAway],
+    () => (foldedAway.size ? loaded.filter((row) => !foldedAway.has(row.id) || row.id === newest) : loaded),
+    [loaded, foldedAway, newest],
   );
+  const orderOf = useMemo(() => {
+    const order = new Map(loaded.map((row) => [row.id, row.index]));
+    return (id: string) => order.get(id);
+  }, [loaded]);
   // The run's status sits under the newest message: a window around a jump target does not hold it.
   const anchorId = useAwayFromTail() ? null : newest;
   const scroll = useTranscriptScroll();
-  const rows = useTailFirstRows(all, scroll);
+  const rows = useTailFirstRows(all, scroll, orderOf);
   const userCount = loaded.filter((row) => row.user).length;
   const shown = rows.length > 0;
   useEffect(() => {

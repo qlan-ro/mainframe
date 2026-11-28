@@ -78,6 +78,8 @@ export const CASES = [
     { id: `R-read-nudge${name}`, query, run: 'readStream', options: { up: 1500, read: 12, endAt: 9, nudges: 4 }, engines: ['wk'] },
     // A reader just above the tail who scrolled back down a little: what folds or ends below must not pin them.
     { id: `R-read-tail${name}`, query, run: 'readStream', options: { up: 300, down: 60, read: 12, endAt: 8 }, engines: ['wk'] },
+    // A selection dragged above the viewport scrolls up with no wheel input while the reply streams.
+    { id: `R-read-drag${name}`, query, run: 'readStream', options: { up: 600, step: -40, drag: true, read: 6 }, engines: ['wk'] },
     { id: `R-read-tail-still${name}`, query, run: 'readStream', options: { up: 300, read: 12, endAt: 8 }, engines: ['wk'] },
     // Older pages land above a reader parked near the top of the window while the reply streams.
     { id: `R-read-page${name}`, query, run: 'readStream', options: { up: 300, parkAt: 200, read: 10, pages: 4, endAt: 8 }, engines: ['wk'] },

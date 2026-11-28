@@ -16,6 +16,9 @@ vi.mock('../TimeMarker', () => ({ TimeMarker: ({ index }: { index: number }) => 
 vi.mock('../TurnStatusRow', () => ({ TurnStatusRow: () => <b data-testid="status-row" /> }));
 vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="virtual-list" /> }));
 vi.mock('@/lib/after-first-paint', () => ({ markFirstTranscriptShown: vi.fn() }));
+/** The messages a folded turn draws nothing for (`use-folded-away-rows.ts`), set per test. */
+const foldedAway = vi.hoisted(() => ({ ids: new Set<string>() }));
+vi.mock('../use-folded-away-rows', () => ({ useFoldedAwayRows: () => foldedAway.ids }));
 
 import { PlainMessages } from '../PlainMessages';
 import { TranscriptList } from '../TranscriptList';
@@ -56,7 +59,10 @@ const controller = {
   beginInteraction: () => () => undefined,
 };
 
-beforeEach(() => vi.mocked(markFirstTranscriptShown).mockClear());
+beforeEach(() => {
+  vi.mocked(markFirstTranscriptShown).mockClear();
+  foldedAway.ids = new Set();
+});
 
 describe('PlainMessages', () => {
   it('draws every row of a short window, in order, with its index from the list', () => {
@@ -91,6 +97,30 @@ describe('PlainMessages', () => {
     expect(rows).toHaveLength(FIRST_ROWS);
     expect(rows[rows.length - 1]).toHaveTextContent('text 39');
     expect(screen.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
+  });
+});
+
+describe('a folded turn’s messages that draw nothing', () => {
+  it('get no row, while the loaded count still counts them', () => {
+    foldedAway.ids = new Set(['m1', 'm2']);
+    render(
+      <Harness messages={make(4)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    expect(screen.getAllByTestId('row').map((row) => row.textContent)).toEqual(['text 0', 'text 3']);
+    expect(screen.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '4');
+  });
+
+  it('never leave out the newest message, which carries the run’s status row', () => {
+    foldedAway.ids = new Set(['m2', 'm3']);
+    render(
+      <Harness messages={make(4)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    expect(screen.getAllByTestId('row').map((row) => row.textContent)).toEqual(['text 0', 'text 1', 'text 3']);
+    expect(screen.getByTestId('status-row')).toBeInTheDocument();
   });
 });
 
