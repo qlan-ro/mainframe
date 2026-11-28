@@ -17,6 +17,8 @@ pub(crate) struct StubHistory {
     pub(crate) pages: FakePages,
     /// The adapter declines to page, as for a short Claude transcript.
     pub(crate) declines: bool,
+    /// `will_page_history` says yes, then the read declines (an ambiguous cut).
+    pub(crate) declines_late: bool,
     pub(crate) source: Option<PathBuf>,
     pub(crate) loads: AtomicUsize,
 }
@@ -75,7 +77,7 @@ pub(super) fn window<'a>(
     history: Option<&'a StubHistory>,
     req: WindowRequest<'a>,
 ) -> HistoryPageFuture<'a> {
-    match history.filter(|history| !history.declines) {
+    match history.filter(|history| !history.declines && !history.declines_late) {
         Some(history) => history.pages.window(req),
         None => Box::pin(async { Ok(None) }),
     }

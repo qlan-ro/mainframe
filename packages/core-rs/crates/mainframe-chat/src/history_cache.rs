@@ -77,7 +77,8 @@ async fn stat(path: &Path) -> Option<SourceFingerprint> {
 
 /// Written in field order: `fingerprint` first, so a stale snapshot is told
 /// from the file's first bytes (`history_cache_peek.rs`). Files written before
-/// it led hold it after `adapter_state` and `dependencies`; they still parse.
+/// it led hold it after `adapter_state` and `dependencies`; they still parse,
+/// and the peek's limit decides whether they are served (see `HEAD_LIMIT`).
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
     fingerprint: HistoryFingerprint,

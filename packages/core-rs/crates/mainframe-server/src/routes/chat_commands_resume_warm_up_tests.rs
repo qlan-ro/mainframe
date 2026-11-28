@@ -28,6 +28,7 @@ struct Fixture {
     chat_id: String,
     db: Db,
     data: PathBuf,
+    _directory: tempfile::TempDir,
 }
 
 fn context(db: Db, data: PathBuf, history: Arc<StubHistory>) -> Arc<AppCtx> {
@@ -40,12 +41,12 @@ fn context(db: Db, data: PathBuf, history: Arc<StubHistory>) -> Arc<AppCtx> {
 
 /// An idle chat nothing has cached, on a stub adapter with `history`.
 async fn chat_with(history: Arc<StubHistory>, patch: ChatPatch) -> Fixture {
-    let directory = tempfile::tempdir().unwrap().keep();
+    let directory = tempfile::tempdir().unwrap();
     let db = Db::spawn(|| mainframe_db::DatabaseManager::open(std::path::Path::new(":memory:")))
         .unwrap();
-    let data = directory.join("data");
+    let data = directory.path().join("data");
     let ctx = context(db.clone(), data.clone(), history);
-    let path = directory.to_string_lossy().into_owned();
+    let path = directory.path().to_string_lossy().into_owned();
     let chat_id = ctx
         .core
         .db
@@ -70,6 +71,7 @@ async fn chat_with(history: Arc<StubHistory>, patch: ChatPatch) -> Fixture {
         chat_id,
         db,
         data,
+        _directory: directory,
     }
 }
 

@@ -265,3 +265,6 @@ async fn a_pending_gate_or_a_session_that_will_not_page_keeps_the_full_restore()
 
 #[path = "chat_manager_tests_claude_tail.rs"]
 mod claude_tail;
+
+#[path = "chat_manager_tests_history_reuse.rs"]
+mod history_reuse;

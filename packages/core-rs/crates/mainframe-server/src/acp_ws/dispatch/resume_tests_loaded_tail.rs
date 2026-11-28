@@ -25,10 +25,19 @@ struct Fixture {
     _directory: tempfile::TempDir,
 }
 
+/// How the adapter answers for the chat's pages.
+#[derive(Clone, Copy)]
+enum Paging {
+    Pages,
+    /// `will_page_history` says no.
+    Declines,
+    /// `will_page_history` says yes, then the read declines.
+    DeclinesLate,
+}
+
 /// An idle, uncached chat of 60 messages in three pages, pinned to a file so
-/// its history validates, on a hub that stores tails. `declines`: the
-/// adapter will not page it.
-async fn fixture(declines: bool) -> Fixture {
+/// its history validates, on a hub that stores tails.
+async fn fixture(paging: Paging) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
     let source = directory.path().join("thread.jsonl");
     tokio::fs::write(&source, "{}\n").await.unwrap();
@@ -46,7 +55,8 @@ async fn fixture(declines: bool) -> Fixture {
         .map(|page| ((2 - page) * 20..(3 - page) * 20).map(message).collect())
         .collect();
     let history = Arc::new(StubHistory {
-        declines,
+        declines: matches!(paging, Paging::Declines),
+        declines_late: matches!(paging, Paging::DeclinesLate),
         source: Some(source),
         ..StubHistory::new(pages)
     });
@@ -120,7 +130,7 @@ fn replied(frames: &[Value]) -> bool {
 
 #[tokio::test]
 async fn a_first_window_from_pages_leaves_a_tail_and_reads_the_history_once() {
-    let fixture = fixture(false).await;
+    let fixture = fixture(Paging::Pages).await;
 
     let frames = open(&fixture).await;
 
@@ -138,18 +148,53 @@ async fn a_first_window_from_pages_leaves_a_tail_and_reads_the_history_once() {
 async fn a_resume_that_read_the_history_itself_still_leaves_a_tail() {
     // Declined and opened with no warm-up first: the resume reads the whole
     // history before any validation exists, so it cannot store the tail itself.
-    let fixture = fixture(true).await;
+    let fixture = fixture(Paging::Declines).await;
 
     let frames = open(&fixture).await;
 
     assert!(replied(&frames));
     assert!(tail_stored(&fixture).await);
+    assert_eq!(
+        fixture.history.loads(),
+        1,
+        "the load behind the reply reuses the resume's read"
+    );
+    fixture.ctx.chat.chat_manager.dispose();
+}
+
+#[tokio::test]
+async fn a_read_that_declines_after_saying_it_would_page_reads_the_history_once() {
+    // The warm-up left the chat to the window, then the read declined (an
+    // ambiguous cut, a CLI without the method): the resume reads the history,
+    // and the full load behind it reuses that read.
+    let fixture = fixture(Paging::DeclinesLate).await;
+    assert!(
+        fixture
+            .ctx
+            .chat
+            .chat_manager
+            .adapter_window_candidate(&fixture.chat_id)
+            .await
+    );
+
+    let frames = open(&fixture).await;
+
+    assert!(replied(&frames));
+    assert!(tail_stored(&fixture).await);
+    assert_eq!(fixture.history.loads(), 1);
+    assert!(
+        fixture
+            .ctx
+            .chat
+            .chat_manager
+            .is_chat_loaded(&fixture.chat_id)
+    );
     fixture.ctx.chat.chat_manager.dispose();
 }
 
 #[tokio::test]
 async fn a_declined_chat_after_the_full_warm_up_reads_its_history_once() {
-    let fixture = fixture(true).await;
+    let fixture = fixture(Paging::Declines).await;
     let manager = &fixture.ctx.chat.chat_manager;
     assert!(!manager.adapter_window_candidate(&fixture.chat_id).await);
     manager.resume_transcript(&fixture.chat_id).await;
@@ -170,7 +215,7 @@ async fn a_declined_chat_after_the_full_warm_up_reads_its_history_once() {
 async fn a_resume_without_windowed_history_still_completes_the_lifecycle_load() {
     // A warm-up that returned early leaves the lifecycle load (active chat,
     // worktree baseline, scans) to the resume, windowed or not.
-    let fixture = fixture(false).await;
+    let fixture = fixture(Paging::Pages).await;
     let manager = &fixture.ctx.chat.chat_manager;
     let (_id, connection, mut rx) = fixture.ctx.chat.facade_hub.register("codex".into());
     let ports = Arc::new(ManagerPorts::new(Some(Arc::clone(manager))));

@@ -14,10 +14,13 @@ use serde::de::{Error as _, IgnoredAny, MapAccess, Visitor};
 
 use super::*;
 
-/// The most of a snapshot's start the peek reads. The fingerprint is the first
-/// field; a file written before that leads with `adapter_state` and
-/// `dependencies`, and one whose fingerprint lies past this reads as stale:
-/// the load then parses the transcript and rewrites it in the current order.
+/// The most of a snapshot's start the peek reads. Snapshots are written
+/// fingerprint first. A file written before that (by a build with the same
+/// daemon version and format, so its fingerprint can still match) leads with
+/// `adapter_state` and `dependencies`. With its fingerprint inside this limit
+/// it is read, served as current and left as it is until the transcript
+/// changes; with it past the limit it reads as stale, so the load parses the
+/// transcript and writes the snapshot again, fingerprint first.
 const HEAD_LIMIT: u64 = 1 << 20;
 
 /// What the visitor reports when it stops the read on purpose.

@@ -56,7 +56,9 @@ pub(super) async fn prepare_resume(
     };
     let from_cache = cached.is_some();
     let from_pages = from_cache && !from_tail;
-    let untailed = from_pages || (!from_cache && cache_validation.is_none());
+    // A tail is a windowed first reply; nothing else is ever stored as one.
+    let untailed =
+        options.windowed_history && (from_pages || (!from_cache && cache_validation.is_none()));
     let (response, replay) = match cached {
         Some(cached) => cached,
         None => dispatch_resume_with(request, ports, revision_log, options).await,
