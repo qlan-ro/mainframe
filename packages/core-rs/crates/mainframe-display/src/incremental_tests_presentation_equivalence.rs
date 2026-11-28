@@ -17,7 +17,7 @@ fn appended() -> RawChanges {
     c
 }
 
-/// The fixture shape `messages/presentation_grouping_tests.rs` uses: a Codex
+/// The fixture shape `presentation_grouping_tests.rs` uses: a Codex
 /// turn's `transcriptPresentation` context on raw message metadata.
 fn presented(mut message: ChatMessage, phase: &str, state: &str) -> ChatMessage {
     let context = json!({

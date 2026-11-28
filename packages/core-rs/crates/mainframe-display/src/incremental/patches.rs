@@ -10,8 +10,8 @@ use mainframe_types::tool_call_timing::ToolCallTiming;
 
 use super::fold::fold_merge_group;
 use super::group::{FrozenTracker, Group, group_at_raw_index, owned_after};
-use crate::task_subject_backfill::{SubjectScope, backfill_from};
-use crate::{apply_tool_call_timing, apply_tool_call_timing_to_container};
+use crate::task_subject_backfill::{SubjectScope, backfill_in_place};
+use crate::tool_call_timing::{apply_tool_call_timing, apply_tool_call_timing_to_container};
 
 /// Patch the owning group's container for a `timing(id)` journal entry.
 /// `O(1)`: a map lookup (the caller resolves `group_idx` from `tool_owner`)
@@ -118,13 +118,9 @@ fn reapply_post_processing(
     };
     let end = groups[g].raw_range.end.min(raw.len());
     let start = groups[g].raw_range.start.min(end);
-    apply_tool_call_timing(&raw[start..end], std::slice::from_mut(display));
-
-    let Some(display) = groups[g].display.take() else {
-        return;
-    };
-    let backfilled = backfill_from(std::slice::from_ref(&display), &mut scope);
-    groups[g].display = backfilled.into_iter().next();
+    let display = std::slice::from_mut(display);
+    apply_tool_call_timing(&raw[start..end], display);
+    backfill_in_place(display, &mut scope);
 }
 
 /// The ids of top-level `TaskCreate` entries a container registers — a

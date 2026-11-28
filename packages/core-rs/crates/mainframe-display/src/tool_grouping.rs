@@ -7,75 +7,57 @@
 
 use std::collections::HashMap;
 
-use mainframe_types::display::DisplayContent;
-use mainframe_types::display::ToolCategories;
+use mainframe_types::display::{DisplayContent, ToolCategories, ToolCategory};
 use serde_json::Value;
 
+use crate::display_helpers::with_parent_id;
 use crate::hidden_boundary::{HiddenBoundary, paragraph_break};
 use crate::tool_categorization::{
     is_explore_tool, is_hidden_tool_part, is_subagent_tool, is_task_progress_tool,
 };
 
+/// One tool call collected into an explore group or a task-progress feed.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ToolGroupItem {
-    pub tool_name: String,
-    pub tool_call_id: String,
-    pub args: HashMap<String, Value>,
-    pub result: Option<Value>,
-    pub is_error: Option<bool>,
-    pub parent_tool_use_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TaskProgressItem {
-    pub tool_name: String,
-    pub tool_call_id: String,
-    pub args: HashMap<String, Value>,
-    pub result: Option<Value>,
-    pub is_error: Option<bool>,
-    pub parent_tool_use_id: Option<String>,
+pub(crate) struct ToolGroupItem {
+    pub(crate) tool_name: String,
+    pub(crate) tool_call_id: String,
+    pub(crate) args: HashMap<String, Value>,
+    pub(crate) parent_tool_use_id: Option<String>,
 }
 
 /// Consecutive explore tools collapsed into one expandable group card.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ToolGroupEntry {
-    pub tool_call_id: String,
-    pub items: Vec<ToolGroupItem>,
-    /// Always `"grouped"`; never read.
-    pub result: &'static str,
-    pub parent_tool_use_id: Option<String>,
+pub(crate) struct ToolGroupEntry {
+    pub(crate) tool_call_id: String,
+    pub(crate) items: Vec<ToolGroupItem>,
+    pub(crate) parent_tool_use_id: Option<String>,
 }
 
 /// A subagent (Task) tool plus every part tagged with its tool_use id.
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskGroupEntry {
-    pub tool_call_id: String,
-    pub task_args: HashMap<String, Value>,
-    pub children: Vec<PartEntry>,
-    pub result: Option<Value>,
-    pub is_error: Option<bool>,
-    pub parent_tool_use_id: Option<String>,
+pub(crate) struct TaskGroupEntry {
+    pub(crate) tool_call_id: String,
+    pub(crate) task_args: HashMap<String, Value>,
+    pub(crate) children: Vec<PartEntry>,
 }
 
 /// Task-progress tools accumulated into one progress feed entry per parent.
 #[derive(Debug, Clone, PartialEq)]
-pub struct TaskProgressEntry {
-    pub tool_call_id: String,
-    pub items: Vec<TaskProgressItem>,
-    /// Always `"accumulated"`; never read.
-    pub result: &'static str,
-    pub parent_tool_use_id: Option<String>,
+pub(crate) struct TaskProgressEntry {
+    pub(crate) tool_call_id: String,
+    pub(crate) items: Vec<ToolGroupItem>,
+    pub(crate) parent_tool_use_id: Option<String>,
 }
 
+/// A tool call's result is not carried here: the display conversion
+/// re-reads it from the original content by tool call id.
 #[derive(Debug, Clone, PartialEq)]
-pub enum PartEntry {
+pub(crate) enum PartEntry {
     ToolCall {
         tool_call_id: String,
         tool_name: String,
         args: HashMap<String, Value>,
-        result: Option<Value>,
-        is_error: Option<bool>,
-        category: Option<String>,
+        category: Option<ToolCategory>,
         parent_tool_use_id: Option<String>,
     },
     Text {
@@ -84,7 +66,7 @@ pub enum PartEntry {
     },
     /// Non-groupable content (thinking, image, …) carried through in-place.
     Passthrough {
-        content: DisplayContent,
+        content: Box<DisplayContent>,
         parent_tool_use_id: Option<String>,
     },
     ToolGroup(ToolGroupEntry),
@@ -97,9 +79,7 @@ struct ToolCallRef<'a> {
     tool_call_id: &'a str,
     tool_name: &'a str,
     args: &'a HashMap<String, Value>,
-    result: &'a Option<Value>,
-    is_error: Option<bool>,
-    category: Option<&'a str>,
+    category: Option<ToolCategory>,
     parent_tool_use_id: &'a Option<String>,
 }
 
@@ -110,17 +90,13 @@ impl PartEntry {
                 tool_call_id,
                 tool_name,
                 args,
-                result,
-                is_error,
                 category,
                 parent_tool_use_id,
             } => Some(ToolCallRef {
                 tool_call_id,
                 tool_name,
                 args,
-                result,
-                is_error: *is_error,
-                category: category.as_deref(),
+                category: *category,
                 parent_tool_use_id,
             }),
             _ => None,
@@ -140,37 +116,18 @@ impl PartEntry {
                 parent_tool_use_id, ..
             } => parent_tool_use_id.as_deref(),
             PartEntry::ToolGroup(e) => e.parent_tool_use_id.as_deref(),
-            PartEntry::TaskGroup(e) => e.parent_tool_use_id.as_deref(),
+            PartEntry::TaskGroup(_) => None,
             PartEntry::TaskProgress(e) => e.parent_tool_use_id.as_deref(),
         }
     }
 }
 
-/// A parent tool-use id counts only when non-empty: `None` and `""` both
-/// collapse to `None`.
-fn truthy(value: &Option<String>) -> Option<String> {
-    match value {
-        Some(v) if !v.is_empty() => Some(v.clone()),
-        _ => None,
-    }
-}
-
-/// Borrowed form of [`truthy`]: `None` and `""` → `None`.
-fn truthy_str(value: Option<&str>) -> Option<&str> {
-    match value {
-        Some(v) if !v.is_empty() => Some(v),
-        _ => None,
-    }
-}
-
-fn tool_group_item_from(tc: &ToolCallRef<'_>) -> ToolGroupItem {
+fn group_item_from(tc: &ToolCallRef<'_>) -> ToolGroupItem {
     ToolGroupItem {
         tool_name: tc.tool_name.to_string(),
         tool_call_id: tc.tool_call_id.to_string(),
         args: tc.args.clone(),
-        result: tc.result.clone(),
-        is_error: tc.is_error,
-        parent_tool_use_id: truthy(tc.parent_tool_use_id),
+        parent_tool_use_id: with_parent_id(tc.parent_tool_use_id),
     }
 }
 
@@ -180,7 +137,7 @@ fn tool_group_item_from(tc: &ToolCallRef<'_>) -> ToolGroupItem {
 struct ProgressBucket {
     key: Option<String>,
     insert_index: usize,
-    items: Vec<TaskProgressItem>,
+    items: Vec<ToolGroupItem>,
 }
 
 /// Accumulate a progress tool into its parent's bucket, anchoring the bucket's
@@ -199,14 +156,7 @@ fn collect_task_item(buckets: &mut Vec<ProgressBucket>, result_len: usize, tc: &
             buckets.len() - 1
         }
     };
-    buckets[pos].items.push(TaskProgressItem {
-        tool_call_id: tc.tool_call_id.to_string(),
-        tool_name: tc.tool_name.to_string(),
-        args: tc.args.clone(),
-        result: tc.result.clone(),
-        is_error: tc.is_error,
-        parent_tool_use_id: truthy(tc.parent_tool_use_id),
-    });
+    buckets[pos].items.push(group_item_from(tc));
 }
 
 /// Post-processes parts to group consecutive explore tools, suppress hidden
@@ -216,7 +166,10 @@ fn collect_task_item(buckets: &mut Vec<ProgressBucket>, result_len: usize, tc: &
 /// A dropped hidden tool call still leaves a paragraph boundary for the text
 /// that follows it (`hidden_boundary.rs`) — the encoder itself is
 /// unchanged and still concatenates adjacent text leaves with no separator.
-pub fn group_tool_call_parts(parts: &[PartEntry], categories: &ToolCategories) -> Vec<PartEntry> {
+pub(crate) fn group_tool_call_parts(
+    parts: &[PartEntry],
+    categories: &ToolCategories,
+) -> Vec<PartEntry> {
     let mut result: Vec<PartEntry> = Vec::new();
     // Progress tools accumulate per parentToolUseId (None = main agent), so a
     // subagent's progress feed stays single-parented and can nest inside its
@@ -356,7 +309,7 @@ fn collect_explore_run(
         return start + 1;
     };
     let run_parent: Option<String> = first.parent_tool_use_id.clone();
-    let mut group: Vec<ToolGroupItem> = vec![tool_group_item_from(&first)];
+    let mut group: Vec<ToolGroupItem> = vec![group_item_from(&first)];
     let first_id = first.tool_call_id.to_string();
     let mut j = start + 1;
     while j < parts.len() {
@@ -368,7 +321,7 @@ fn collect_explore_run(
             break;
         }
         if is_explore_tool(next.tool_name, categories) {
-            group.push(tool_group_item_from(&next));
+            group.push(group_item_from(&next));
         } else if is_task_progress_tool(next.tool_name, categories) {
             // A progress tool inside the run is accumulated, not dropped.
             collect_task_item(buckets, result.len(), &next);
@@ -383,8 +336,7 @@ fn collect_explore_run(
         result.push(PartEntry::ToolGroup(ToolGroupEntry {
             tool_call_id: first_id,
             items: group,
-            result: "grouped",
-            parent_tool_use_id: truthy(&run_parent),
+            parent_tool_use_id: with_parent_id(&run_parent),
         }));
     } else {
         // run of one → push the original part unchanged.
@@ -407,9 +359,8 @@ fn splice_progress_entries(result: &mut Vec<PartEntry>, mut buckets: Vec<Progres
         };
         let entry = PartEntry::TaskProgress(TaskProgressEntry {
             tool_call_id: first_id,
-            parent_tool_use_id: truthy(&bucket.key),
+            parent_tool_use_id: with_parent_id(&bucket.key),
             items: bucket.items,
-            result: "accumulated",
         });
         result.insert(bucket.insert_index + offset, entry);
         offset += 1;
@@ -430,11 +381,14 @@ enum Slot {
 /// stay top-level in order. A tag matching no Task in this turn is subagent
 /// content whose parent is not visible here (nested-Task grandchildren) — it is
 /// dropped, never rendered in the main flow. Categories are adapter-declared.
-pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> Vec<PartEntry> {
+pub(crate) fn group_task_children(
+    parts: &[PartEntry],
+    categories: &ToolCategories,
+) -> Vec<PartEntry> {
     let mut groups: HashMap<String, TaskGroupEntry> = HashMap::new();
     for part in parts {
         if let Some(tc) = part.as_tool_call()
-            && truthy(tc.parent_tool_use_id).is_none()
+            && with_parent_id(tc.parent_tool_use_id).is_none()
             && is_subagent_tool(tc.tool_name, categories)
         {
             groups.insert(
@@ -443,9 +397,6 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
                     tool_call_id: tc.tool_call_id.to_string(),
                     task_args: tc.args.clone(),
                     children: Vec::new(),
-                    result: tc.result.clone(),
-                    is_error: tc.is_error,
-                    parent_tool_use_id: None,
                 },
             );
         }
@@ -454,13 +405,13 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
     let mut slots: Vec<Slot> = Vec::new();
     for part in parts {
         if let Some(tc) = part.as_tool_call()
-            && truthy(tc.parent_tool_use_id).is_none()
+            && with_parent_id(tc.parent_tool_use_id).is_none()
             && groups.contains_key(tc.tool_call_id)
         {
             slots.push(Slot::Group(tc.tool_call_id.to_string()));
             continue;
         }
-        if let Some(parent) = truthy_str(part.parent_tool_use_id()) {
+        if let Some(parent) = part.parent_tool_use_id().filter(|id| !id.is_empty()) {
             // An unknown parent (no matching Task in this turn) drops the part.
             if let Some(group) = groups.get_mut(parent) {
                 group.children.push(part.clone());
@@ -471,19 +422,13 @@ pub fn group_task_children(parts: &[PartEntry], categories: &ToolCategories) -> 
     }
 
     // A Task always renders as a `_task_group`, even with zero gathered
-    // children — the TaskCard handles an empty `children` list.
+    // children — the TaskCard handles an empty `children` list. A Task id
+    // repeated in one turn renders once, at its first position.
     slots
         .into_iter()
-        .map(|slot| match slot {
-            Slot::Part(p) => *p,
-            Slot::Group(id) => match groups.get(&id) {
-                Some(group) => PartEntry::TaskGroup(group.clone()),
-                // Unreachable: Group(id) is only pushed when `groups` has `id`.
-                None => PartEntry::Text {
-                    text: String::new(),
-                    parent_tool_use_id: None,
-                },
-            },
+        .filter_map(|slot| match slot {
+            Slot::Part(p) => Some(*p),
+            Slot::Group(id) => groups.remove(&id).map(PartEntry::TaskGroup),
         })
         .collect()
 }

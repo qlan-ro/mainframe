@@ -1,34 +1,34 @@
 //! Adapter-declared tool categorization. Adapter-agnostic: operates purely on the
 //! neutral `ToolCategories` sets from `mainframe-types`.
 
-use mainframe_types::display::ToolCategories;
+use mainframe_types::display::{ToolCategories, ToolCategory};
 
-pub fn is_explore_tool(name: &str, categories: &ToolCategories) -> bool {
+pub(crate) fn is_explore_tool(name: &str, categories: &ToolCategories) -> bool {
     categories.explore.contains(name)
 }
 
-pub fn is_hidden_tool(name: &str, categories: &ToolCategories) -> bool {
+pub(crate) fn is_hidden_tool(name: &str, categories: &ToolCategories) -> bool {
     categories.hidden.contains(name)
 }
 
 pub(crate) fn is_hidden_tool_part(
     name: &str,
-    category: Option<&str>,
+    category: Option<ToolCategory>,
     categories: &ToolCategories,
 ) -> bool {
     if name == "AskUserQuestion"
         && let Some(category) = category
     {
-        return category == "hidden";
+        return category == ToolCategory::Hidden;
     }
     is_hidden_tool(name, categories)
 }
 
-pub fn is_task_progress_tool(name: &str, categories: &ToolCategories) -> bool {
+pub(crate) fn is_task_progress_tool(name: &str, categories: &ToolCategories) -> bool {
     categories.progress.contains(name)
 }
 
-pub fn is_subagent_tool(name: &str, categories: &ToolCategories) -> bool {
+pub(crate) fn is_subagent_tool(name: &str, categories: &ToolCategories) -> bool {
     categories.subagent.contains(name)
 }
 
@@ -64,12 +64,24 @@ mod tests {
         let c = categories();
         // AskUserQuestion with an explicit category resolves by that category,
         // not by the hidden set.
-        assert!(is_hidden_tool_part("AskUserQuestion", Some("hidden"), &c));
-        assert!(!is_hidden_tool_part("AskUserQuestion", Some("default"), &c));
+        assert!(is_hidden_tool_part(
+            "AskUserQuestion",
+            Some(ToolCategory::Hidden),
+            &c
+        ));
+        assert!(!is_hidden_tool_part(
+            "AskUserQuestion",
+            Some(ToolCategory::Default),
+            &c
+        ));
         // Without a category, falls back to the hidden set (AskUserQuestion ∈ hidden).
         assert!(is_hidden_tool_part("AskUserQuestion", None, &c));
         // Other tools ignore the category argument and use the hidden set.
-        assert!(is_hidden_tool_part("HiddenTool", Some("default"), &c));
-        assert!(!is_hidden_tool_part("Read", Some("hidden"), &c));
+        assert!(is_hidden_tool_part(
+            "HiddenTool",
+            Some(ToolCategory::Default),
+            &c
+        ));
+        assert!(!is_hidden_tool_part("Read", Some(ToolCategory::Hidden), &c));
     }
 }

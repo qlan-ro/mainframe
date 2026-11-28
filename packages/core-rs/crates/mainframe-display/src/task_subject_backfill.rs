@@ -5,68 +5,46 @@
 //! `subject` into later TaskUpdate inputs that lack one.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use mainframe_types::display::{
     DisplayContent, DisplayMessage, DisplayMessageType, DisplayNode, TaskProgressItem,
 };
-use mainframe_types::task_progress::extract_task_id;
+use mainframe_types::task_progress::extract_task_id_from_text;
 use serde_json::Value;
 
-/// Mutable walk state for one task-id namespace. `pub(crate)` so the
-/// incremental projector can carry a scope across a rewind: it
-/// computes the scope *before* the rewind point by folding
-/// [`scope_after`] over the settled prefix, then continues the same fold
-/// via [`backfill_from`] over the refolded suffix, so a resumed fold
-/// produces exactly the subjects a full walk from index 0 would.
+/// Mutable walk state for one task-id namespace. The incremental projector
+/// keeps one checkpoint per group so a refold can resume from the scope
+/// entering any group; the subject map is shared copy-on-write, so a
+/// checkpoint costs a reference count until the next subject is recorded.
 #[derive(Clone)]
 pub(crate) struct SubjectScope {
     next_id: i64,
-    subjects: HashMap<String, String>,
+    subjects: Arc<HashMap<String, String>>,
 }
 
 impl SubjectScope {
     pub(crate) fn new() -> Self {
         Self {
             next_id: 1,
-            subjects: HashMap::new(),
+            subjects: Arc::default(),
         }
+    }
+
+    fn record(&mut self, task_id: String, subject: &str) {
+        Arc::make_mut(&mut self.subjects).insert(task_id, subject.to_string());
     }
 }
 
-pub(crate) fn backfill_task_subjects(messages: &[DisplayMessage]) -> Vec<DisplayMessage> {
-    let mut scope = SubjectScope::new();
-    backfill_from(messages, &mut scope)
-}
-
 /// Fold `messages` through `scope`, continuing from whatever state it
-/// already carries. Mirrors `backfill_task_subjects`'s per-message walk.
-pub(crate) fn backfill_from(
-    messages: &[DisplayMessage],
-    scope: &mut SubjectScope,
-) -> Vec<DisplayMessage> {
-    let mut result = messages.to_vec();
-    backfill_in_place(&mut result, scope);
-    result
-}
-
+/// already carries, and write each resolved subject into the TaskUpdate
+/// inputs that lack one.
 pub(crate) fn backfill_in_place(messages: &mut [DisplayMessage], scope: &mut SubjectScope) {
     for message in messages {
         if message.r#type == DisplayMessageType::Assistant {
             backfill_blocks(&mut message.content, scope);
         }
     }
-}
-
-/// The scope after folding `messages` from a fresh namespace — used to seed
-/// a resumed fold over a later suffix without re-walking from index 0.
-/// `pub(crate)` for its unit test below only; production code gets this
-/// from the incremental projector's cached `scope_before` checkpoints
-/// instead (see `messages/incremental/rewind.rs`).
-#[cfg(test)]
-pub(crate) fn scope_after(messages: &[DisplayMessage]) -> SubjectScope {
-    let mut scope = SubjectScope::new();
-    let _ = backfill_from(messages, &mut scope);
-    scope
 }
 
 fn backfill_blocks(blocks: &mut [DisplayContent], scope: &mut SubjectScope) {
@@ -76,9 +54,8 @@ fn backfill_blocks(blocks: &mut [DisplayContent], scope: &mut SubjectScope) {
                 backfill_blocks(calls, &mut SubjectScope::new());
             }
             DisplayContent::Node(DisplayNode::TaskProgress { items }) => {
-                let (updated, changed) = backfill_items(items, scope);
-                if changed {
-                    *items = updated;
+                for item in items {
+                    backfill_item(item, scope);
                 }
             }
             _ => {}
@@ -86,89 +63,57 @@ fn backfill_blocks(blocks: &mut [DisplayContent], scope: &mut SubjectScope) {
     }
 }
 
-/// `String(x ?? '')` — coerce a non-string JSON value the way JS would.
-fn js_string_coerce(v: Option<&Value>) -> String {
-    match v {
+/// A non-string `taskId` (a number, say) as text; `null` or absent is empty.
+fn task_id_text(value: Option<&Value>) -> String {
+    match value {
         None | Some(Value::Null) => String::new(),
-        Some(Value::Number(n)) => n.to_string(),
-        Some(Value::Bool(b)) => b.to_string(),
+        Some(Value::String(s)) => s.clone(),
         Some(other) => other.to_string(),
     }
 }
 
-/// Returns `Some(new_item)` only when the item is rewritten (TaskUpdate gains a
-/// subject); `None` leaves the item unchanged (but may mutate `scope`).
-fn backfill_item(item: &TaskProgressItem, scope: &mut SubjectScope) -> Option<TaskProgressItem> {
+fn non_empty_subject(item: &TaskProgressItem) -> Option<&str> {
+    item.input
+        .get("subject")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+}
+
+/// Record a TaskCreate's subject, or give a TaskUpdate that lacks a subject
+/// the one recorded for its task.
+fn backfill_item(item: &mut TaskProgressItem, scope: &mut SubjectScope) {
     if item.name == "TaskCreate" {
-        let result_val = item
+        let id = item
             .result
             .as_ref()
-            .and_then(|r| serde_json::to_value(r).ok())
-            .unwrap_or(Value::Null);
-        let id = extract_task_id(&result_val).unwrap_or_else(|| scope.next_id.to_string());
+            .and_then(|r| extract_task_id_from_text(&r.content))
+            .unwrap_or_else(|| scope.next_id.to_string());
         let n = id.parse::<i64>().unwrap_or(scope.next_id);
-        scope.next_id = scope.next_id.max(n) + 1;
-        if let Some(subject) = item
-            .input
-            .get("subject")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-        {
-            scope.subjects.insert(id, subject.to_string());
+        scope.next_id = scope.next_id.max(n).saturating_add(1);
+        if let Some(subject) = non_empty_subject(item) {
+            scope.record(id, subject);
         }
-        return None;
+        return;
     }
-    if item.name == "TaskUpdate" {
-        let task_id = match item.input.get("taskId") {
-            Some(Value::String(s)) => s.clone(),
-            other => js_string_coerce(other),
-        };
-        if let Some(own) = item
-            .input
-            .get("subject")
-            .and_then(Value::as_str)
-            .filter(|s| !s.is_empty())
-        {
-            // Explicit rename — record it so later updates inherit the new name.
-            if !task_id.is_empty() {
-                scope.subjects.insert(task_id, own.to_string());
-            }
-            return None;
-        }
-        let known = if !task_id.is_empty() {
-            scope.subjects.get(&task_id).cloned()
-        } else {
-            None
-        };
-        let known = known?;
-        let mut new_input = item.input.clone();
-        new_input.insert("subject".to_string(), Value::String(known));
-        return Some(TaskProgressItem {
-            input: new_input,
-            ..item.clone()
-        });
+    if item.name != "TaskUpdate" {
+        return;
     }
-    None
+    let task_id = task_id_text(item.input.get("taskId"));
+    if task_id.is_empty() {
+        return;
+    }
+    if let Some(own) = non_empty_subject(item) {
+        // Explicit rename — record it so later updates inherit the new name.
+        let own = own.to_string();
+        scope.record(task_id, &own);
+        return;
+    }
+    if let Some(known) = scope.subjects.get(&task_id) {
+        item.input
+            .insert("subject".to_string(), Value::String(known.clone()));
+    }
 }
 
 #[cfg(test)]
 #[path = "task_subject_backfill_tests.rs"]
 mod tests;
-
-fn backfill_items(
-    items: &[TaskProgressItem],
-    scope: &mut SubjectScope,
-) -> (Vec<TaskProgressItem>, bool) {
-    let mut items_changed = false;
-    let new_items: Vec<TaskProgressItem> = items
-        .iter()
-        .map(|item| match backfill_item(item, scope) {
-            Some(new_item) => {
-                items_changed = true;
-                new_item
-            }
-            None => item.clone(),
-        })
-        .collect();
-    (new_items, items_changed)
-}

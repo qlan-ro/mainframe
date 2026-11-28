@@ -4,13 +4,12 @@
 
 /// `<open>[^<]*<close>` — remove every non-overlapping occurrence (regex `g`).
 fn replace_tag_all(text: &str, open: &str, close: &str) -> String {
-    let bytes = text;
     let mut out = String::new();
     let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i..].starts_with(open) {
+    while i < text.len() {
+        if text[i..].starts_with(open) {
             let after = i + open.len();
-            let rest = &bytes[after..];
+            let rest = &text[after..];
             if let Some(lt) = rest.find('<')
                 && rest[lt..].starts_with(close)
             {
@@ -18,7 +17,7 @@ fn replace_tag_all(text: &str, open: &str, close: &str) -> String {
                 continue;
             }
         }
-        let ch = bytes[i..].chars().next().unwrap_or('\0');
+        let ch = text[i..].chars().next().unwrap_or('\0');
         out.push(ch);
         i += ch.len_utf8();
     }
@@ -81,13 +80,13 @@ pub(crate) fn decode_xml_attr(value: &str) -> String {
         .replace("&amp;", "&")
 }
 
-pub struct AttachedFile {
-    pub name: String,
+pub(crate) struct AttachedFile {
+    pub(crate) name: String,
 }
 
-pub struct AttachedFilePaths {
-    pub files: Vec<AttachedFile>,
-    pub clean_text: String,
+pub(crate) struct AttachedFilePaths {
+    pub(crate) files: Vec<AttachedFile>,
+    pub(crate) clean_text: String,
 }
 
 /// Extract `name="…"` from the first `name="([^"]+)"` in an attribute string.
@@ -141,10 +140,15 @@ pub(crate) fn parse_attached_file_path_tags(text: &str) -> AttachedFilePaths {
     AttachedFilePaths { files, clean_text }
 }
 
-/// IMAGE_COORDINATE_NOTE_RE — a fixed-template note the CLI injects.
+const IMAGE_NOTE_OPEN: &str = "[Image:";
+
+/// A fixed-template note the CLI injects after an attached image.
 /// Pattern: `\[Image:\s*original\s+\d+x\d+,\s*displayed at\s+\d+x\d+\.\s*Multiply
 /// coordinates by\s+[0-9.]+\s+to map to original image\.\]`
 fn strip_image_coordinate_note(text: &str) -> String {
+    if !text.contains(IMAGE_NOTE_OPEN) {
+        return text.to_string();
+    }
     let chars: Vec<char> = text.chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -162,7 +166,7 @@ fn strip_image_coordinate_note(text: &str) -> String {
 fn match_image_note(c: &[char], start: usize) -> Option<usize> {
     let mut i = start;
 
-    i = lit(c, i, "[Image:")?;
+    i = lit(c, i, IMAGE_NOTE_OPEN)?;
     i = ws_star(c, i);
     i = lit(c, i, "original")?;
     i = ws_plus(c, i)?;
@@ -188,28 +192,7 @@ fn match_image_note(c: &[char], start: usize) -> Option<usize> {
     Some(i)
 }
 
-#[cfg(test)]
-pub(crate) fn format_turn_duration(duration_ms: f64) -> String {
-    if !duration_ms.is_finite() || duration_ms < 0.0 {
-        return String::new();
-    }
-    if duration_ms < 1000.0 {
-        return format!("{}ms", js_round(duration_ms));
-    }
-    let seconds = duration_ms / 1000.0;
-    if seconds < 10.0 {
-        return format!("{seconds:.1}s");
-    }
-    format!("{}s", js_round(seconds))
-}
-
-/// `Math.round(x)` for non-negative x (`floor(x + 0.5)`).
-#[cfg(test)]
-fn js_round(x: f64) -> i64 {
-    (x + 0.5).floor() as i64
-}
-
-pub fn strip_mainframe_command_tags(text: &str) -> String {
+pub(crate) fn strip_mainframe_command_tags(text: &str) -> String {
     // MAINFRAME_CMD_RESPONSE_RE = /<mainframe-command-response[^>]*>([\s\S]*?)<\/mainframe-command-response>/
     if let Some(captured) = capture_mainframe_response(text) {
         return captured.trim().to_string();
@@ -264,12 +247,14 @@ fn remove_mainframe_wrapper(text: &str) -> String {
 mod tests;
 
 fn lit(c: &[char], i: usize, s: &str) -> Option<usize> {
-    let sc: Vec<char> = s.chars().collect();
-    if i + sc.len() <= c.len() && c[i..i + sc.len()] == sc[..] {
-        Some(i + sc.len())
-    } else {
-        None
+    let mut j = i;
+    for expected in s.chars() {
+        if c.get(j) != Some(&expected) {
+            return None;
+        }
+        j += 1;
     }
+    Some(j)
 }
 
 fn ws_star(c: &[char], mut i: usize) -> usize {

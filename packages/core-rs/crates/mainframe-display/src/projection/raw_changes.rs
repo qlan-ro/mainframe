@@ -3,8 +3,7 @@
 
 use mainframe_types::tool_call_timing::ToolCallTiming;
 
-/// One recorded `MessageCache` mutation. Variants mirror the table in the
-/// plan's "Journal and lifecycle" section.
+/// One recorded `MessageCache` mutation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RawChange {
     /// A message was appended at the tail (`append`, `append_live`).

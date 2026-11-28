@@ -26,7 +26,11 @@ pub(crate) fn task_result_text(result: &Value) -> String {
 /// Mirrors `TASK_ID_RE.exec(...)?.[1]` — the digits following the first
 /// `"Task #"` occurrence, or `None` when no digit follows.
 pub fn extract_task_id(result: &Value) -> Option<String> {
-    let text = task_result_text(result);
+    extract_task_id_from_text(&task_result_text(result))
+}
+
+/// The digits following the first `"Task #"` in a task tool's result text.
+pub fn extract_task_id_from_text(text: &str) -> Option<String> {
     let start = text.find(TASK_ID_PREFIX)? + TASK_ID_PREFIX.len();
     let digits: String = text[start..]
         .chars()

@@ -1,4 +1,4 @@
-use crate::message_parsing::ParsedCommand;
+pub use crate::message_parsing::ParsedCommand;
 use mainframe_types::display::AskUserQuestionAnswer;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -86,10 +86,8 @@ impl ToolResultDecoders for DecoderSet {
             .unwrap_or(routes.ids.len())
             .min(routes.ids.len())
             .min(messages.len());
-        while routes.ids.len() > start {
-            if let Some(id) = routes.ids.pop() {
-                routes.adapters.remove(&id);
-            }
+        for id in routes.ids.split_off(start) {
+            routes.adapters.remove(&id);
         }
         let mut adapter = routes
             .ids
