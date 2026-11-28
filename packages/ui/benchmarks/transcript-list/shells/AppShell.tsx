@@ -13,6 +13,7 @@ import { TranscriptEdgeFades } from '@/features/chat/thread/TranscriptEdgeFades'
 import { useScrollOwner } from '@/features/chat/thread/use-scroll-owner';
 import { useTrimAtTail } from '@/features/chat/thread/use-trim-at-tail';
 import { controls } from '../controls';
+import { params } from '../params';
 import { CHAT_ID, store } from '../store';
 import { ComposerStub } from './ComposerStub';
 
@@ -54,7 +55,7 @@ export function AppShell() {
           <TranscriptEdgeFades />
         </div>
         {/* As `ThreadFooter` sits under the app's viewport: the owner samples what changes in it (#519). */}
-        <div ref={owner.setFooter} className="flex shrink-0 flex-col">
+        <div ref={params.noFooter ? undefined : owner.setFooter} className="flex shrink-0 flex-col">
           <ComposerStub />
         </div>
       </div>

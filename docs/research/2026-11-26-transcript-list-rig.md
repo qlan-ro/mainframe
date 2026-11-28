@@ -676,7 +676,9 @@ The owner recorded the jump: a send while the agent was still working, so the me
 
 In the send's task the composer cleared and the strip lost 12 px, so the viewport grew by 102 px. The field's autosize read layout, and WebKit clamped the position to the bottom of that taller viewport (68625 − 570 = 68055). The queue snapshot then put a 40 px row in the composer, shrinking the viewport again before the frame. The scroll event saw the position 102 px up and 40 px above the bottom, while the net viewport change was only 62 px. `layoutExplains` compared the move with that net change and with the current bottom, found neither explained it, and released follow. The reply then streamed below a reader who was no longer followed.
 
-**The fix.** The owner keeps the lowest bottom position (`scrollHeight − clientHeight`) since it last acted, as #1016 keeps the lowest content height. It samples it whenever the rows change and whenever the thread footer changes (a mutation observer on the footer: rows, text, and the styles an autosizing field sets). A clamp lands on one of those samples. A reader's scroll lands anywhere, so it still releases.
+**The fix.** The owner keeps the lowest bottom position (`scrollHeight − clientHeight`) since it last acted, as #1016 keeps the lowest content height. It samples it in a microtask whenever the rows change and whenever the thread footer changes (a mutation observer on the footer: rows, text, and the styles an autosizing field sets). A move up that stops at or below the lowest sample keeps follow: a clamp lands on a sample, and a move that stops short of one is kept too. A reader's scroll goes past the samples, so it still releases.
+
+The samples only see layouts a microtask apart. A clamp made by two commits within one task, with nothing in between, is not sampled. The quote segment's prose box in the composer did exactly that on every keystroke: it set its height to `auto`, read `scrollHeight` and set the height again, so the footer shrank for one forced layout. It now measures a hidden copy (`react-textarea-autosize`, as the composer's own field does). No other field in the footer measures itself that way.
 
 **WKWebView, one pass, load average 2.9 (recorded, not waited out):**
 
@@ -688,5 +690,9 @@ In the send's task the composer cleared and the strip lost 12 px, so the viewpor
 | R-send (14 cases), R-read (16), B-short, P1 to P5 | not rerun | pass; R-send matches #1016's recorded run case for case |
 
 A one-line message passes on main: the strip's 12 px clamp is smaller than the queued row's 40 px, so the net change explains it. A draft over one line, or a wrapped line, fails. The default list (`v0`) keeps following through the same send. Its bottom pin treats a scroll with no reader input as layout and follows again. Its only gaps are single frames as rows grow, which it shows on every streamed row.
+
+**Typing cost.** With the chip field every key changes the footer's DOM, so the observer reads layout once per key while following. R-type types 60 characters into it on `shape=heavy` with a reply streaming, with and without the observer, two repetitions each (load average 4.6). Per key, task plus microtasks: p50 6 to 7 ms and p95 14 ms with the observer, against 6 to 7 ms and 14 to 16 ms without it. To the next frame: p95 15 to 16 ms against 17 to 18 ms. The single worst key was 39 ms with the observer and 121 ms without it, so the maxima are noise. The observer adds no measurable typing cost.
+
+**What the rig does not cover.** With `rtt=0` the queue snapshot lands in a microtask queued after React's flush of the composer's reset, so it commits after the clamp and the owner's sample. In the app the snapshot arrives in a later task (a WebSocket message), so the rig orders it at least as tightly. No rig case makes a clamp within a single task; the unit tests and the segment field's measurement change cover that path.
 
 Raw results: [`results/queued-send-wk.json`](../../packages/ui/benchmarks/transcript-list/results/queued-send-wk.json).

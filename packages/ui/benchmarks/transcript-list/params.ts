@@ -59,6 +59,10 @@ export const params = {
    * lands it right after the send's task, before the next frame).
    */
   queue: query.get('queue') === '1',
+  /** `composer=real&chips=1`: the app's chip field (Lexical, Settings › Chat) instead of the textarea. */
+  chips: query.get('chips') === '1',
+  /** `app`: the owner is not given the footer, so it samples nothing there (the footer observer's A/B, `R-type`). */
+  noFooter: query.get('nofooter') === '1',
   rtt: query.has('rtt') ? Math.max(0, Number(query.get('rtt')) || 0) : 40,
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',

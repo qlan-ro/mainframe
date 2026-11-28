@@ -32,7 +32,9 @@ function Harness() {
       <div ref={owner.setContent} data-testid="content">
         <p>Read</p>
       </div>
-      <div ref={owner.setFooter} data-testid="footer" />
+      <div ref={owner.setFooter} data-testid="footer">
+        <div data-testid="footer-field" />
+      </div>
     </div>
   );
 }
@@ -67,6 +69,14 @@ async function footerChanges(client: number) {
   layout.client = client;
   await act(async () => {
     viewport.querySelector('[data-testid="footer"]')!.append(document.createElement('span'));
+    await Promise.resolve();
+  });
+}
+/** An autosizing field in the footer sets its height and the viewport is `client` high (a `style` mutation only). */
+async function footerFieldResizes(client: number) {
+  layout.client = client;
+  await act(async () => {
+    viewport.querySelector<HTMLElement>('[data-testid="footer-field"]')!.style.height = `${700 - client}px`;
     await Promise.resolve();
   });
 }
@@ -139,6 +149,37 @@ describe('a layout the resize callback has not seen yet (#519)', () => {
     layout.height += 30;
     resized();
     expect(bottomGap()).toBe(0);
+  });
+
+  it('samples a footer field that only changes its style height', async () => {
+    await footerFieldResizes(602);
+    clamp();
+    await footerFieldResizes(562);
+    fireEvent.scroll(viewport);
+    expect(following()).toBe(true);
+    expect(bottomGap()).toBe(0);
+  });
+
+  it('keeps a move that stops between the lowest sample and the bottom', async () => {
+    // The lowest sample is 1398 (a viewport of 602); the move stops further down, at 1420, short of the bottom (1438).
+    await footerChanges(602);
+    await footerChanges(562);
+    layout.top = 1420;
+    fireEvent.scroll(viewport);
+    expect(following()).toBe(true);
+    expect(bottomGap()).toBe(0);
+  });
+
+  it('forgets the samples once it has acted: a later move up to the old sample is the reader', async () => {
+    await footerChanges(602);
+    clamp();
+    await footerChanges(562);
+    fireEvent.scroll(viewport);
+    resized();
+    // The owner is back at the bottom (1438) and has acted: the 1398 sample no longer explains anything.
+    layout.top = 1420;
+    fireEvent.scroll(viewport);
+    expect(following()).toBe(false);
   });
 
   it('lets go when the reader scrolls up past every layout the footer changes made', async () => {

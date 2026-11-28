@@ -116,6 +116,10 @@ export const CASES = [
     { id: `R-send-queued${name}`, query: `&composer=real&queue=1${rtt}`, run: 'sendQueued', options, engines: ['wk'] },
     { id: `R-send-queued${name}-real`, query: `&composer=real&queue=1${rtt}&shape=real`, run: 'sendQueued', options, engines: ['wk'] },
   ]),
+  // #519: the footer observer's cost while typing in the chip field on a large chat, with a reply streaming;
+  // `-nofooter` is the same page without the observer.
+  { id: 'R-type-heavy-chips', query: '&shape=heavy&composer=real&chips=1', run: 'typing', options: {}, engines: ['wk'] },
+  { id: 'R-type-heavy-chips-nofooter', query: '&shape=heavy&composer=real&chips=1&nofooter=1', run: 'typing', options: {}, engines: ['wk'] },
   // #518: switch away from a large chat and back; the rows remount tail-first. `heavy` folds ~1,500 messages into 1 px rows.
   { id: 'R-switch-heavy', query: '&shape=heavy', run: 'switchBack', options: {}, engines: ['wk'] },
   { id: 'R-switch-real', query: '&shape=real', run: 'switchBack', options: {}, engines: ['wk'] },

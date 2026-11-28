@@ -19,10 +19,10 @@
  * - keeps following through a move up that a layout change explains, made before the resize callback saw it:
  *   when something reads layout between React's commit and the frame, the browser clamps or anchors the
  *   position there, and its scroll event arrives before the resize callback. Only a layout change that explains
- *   the move keeps follow: a clamp to the lowest bottom position since the owner last acted (sampled whenever the
- *   rows or the footer change: a composer that clears and then takes a queued row moves the viewport both ways
- *   before the frame), or a move no larger than the content shrank plus the viewport changed (`layoutExplains`).
- *   Any other move up releases (#519),
+ *   the move keeps follow: a move that stops at or below the lowest bottom position since the owner last acted
+ *   (sampled in a microtask whenever the rows or the footer change: a composer that clears and then takes a queued
+ *   row moves the viewport both ways before the frame; layouts within one task are not sampled), or a move no
+ *   larger than the content shrank plus the viewport changed (`layoutExplains`). Any other move up releases (#519),
  * - corrects a page that lands within a viewport of the top (or a slice of the opening window)
  *   where the browser did not hold the reader: the block they read is recorded in content
  *   coordinates before the commit, and after layout whatever shift the browser did not apply is

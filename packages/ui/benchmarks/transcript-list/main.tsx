@@ -30,6 +30,7 @@ import { openSomeTurns } from './open-turns';
 import { readStream } from './scenarios/read-stream';
 import { send } from './scenarios/send';
 import { sendQueued } from './scenarios/send-queued';
+import { typing } from './scenarios/typing';
 import { inputOrder } from './scenarios/input-order';
 import { switchBack } from './scenarios/switch-back';
 
@@ -60,11 +61,13 @@ const SCENARIOS = {
   readStream,
   send,
   sendQueued,
+  typing,
   inputOrder,
   switchBack,
 } as Record<string, (o: object) => Promise<unknown>>;
 
 openSomeTurns();
+if (params.chips) useUiPrefs.setState({ chipComposer: true });
 if (params.live && params.shape !== 'real')
   store.set({ messages: [...store.get().messages, ...buildLongTurn(9000)], running: true });
 

@@ -34,11 +34,12 @@ export interface OwnerState {
    */
   minHeight: number;
   /**
-   * The lowest bottom position (`scrollHeight - clientHeight`) since then, sampled whenever the rows or the footer
-   * under the viewport change while following. The browser clamps the position against every layout it makes, and
-   * something reading layout between two commits makes one the resize callback never sees: the composer clears
-   * (the viewport grows, the position clamps), then a queued row lands in it (the viewport shrinks back) before the
-   * scroll event (#519).
+   * The lowest bottom position (`scrollHeight - clientHeight`) since then, sampled (in a microtask) whenever the rows
+   * or the footer under the viewport change while following. The browser clamps the position against every layout
+   * it makes, and something reading layout between two commits makes one the resize callback never sees: the
+   * composer clears (the viewport grows, the position clamps), then a queued row lands in it (the viewport shrinks
+   * back) before the scroll event (#519). Only layouts a microtask apart are sampled: a footer that shrinks and grows
+   * back within one task (an autosize that sets `height: auto` to measure) must not, so footer fields measure a copy.
    */
   lowest: number;
   published: boolean;
@@ -88,9 +89,9 @@ export function sampleLayout(current: OwnerState, el: HTMLElement) {
 }
 
 /**
- * A move up that a layout the owner has not acted on yet explains: the browser clamped the position against a
- * layout since (it lands at the lowest bottom position sampled, or at the bottom of the lowest content), or
- * anchored it by no more than the content shrank plus the viewport changed. Content that only grew explains no move
+ * A move up that a layout the owner has not acted on yet explains: it stops at or below the lowest bottom position
+ * sampled since, or the bottom of the lowest content (a clamp lands on one of those; a move that stops short of
+ * them is kept too), or the browser anchored it by no more than the content shrank plus the viewport changed. Content that only grew explains no move
  * up, so any other move is someone scrolling (the reader's threaded scroll before its wheel event, a selection drag,
  * Find), even while a stream changes the layout every frame.
  */

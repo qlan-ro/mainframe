@@ -1,5 +1,5 @@
 {
- "note": "#519 queued send: R-send-queued on app@main (main at 874cdfd0) and v0@main; app@fix: R-send-queued plus one pass of R-send, R-read, B-short and P1 to P5. WKWebView, one pass, no load gating.",
+ "note": "#519 queued send: R-send-queued on app@main (main at 874cdfd0) and v0@main; app@fix: R-send-queued plus one pass of R-send, R-read, B-short and P1 to P5. WKWebView, one pass, no load gating. app@fix2: the final branch (segment field measures a copy): R-send-queued again, and R-type on shape=heavy with the chip field, with and without the footer observer, two repetitions.",
  "runs": [
   {
    "part": "main",
@@ -15,6 +15,14 @@
     2.86279296875,
     3.2255859375,
     3.34375
+   ]
+  },
+  {
+   "part": "fix2",
+   "load": [
+    4.5673828125,
+    5.08203125,
+    4.84619140625
    ]
   }
  ],
@@ -2881,6 +2889,440 @@
     "rowsInDomMs": 36,
     "firstVisibleMs": 36,
     "mountMs": 36,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "field": "chips",
+    "typed": 60,
+    "following": true,
+    "taskP50": 7,
+    "taskP95": 14,
+    "taskMax": 39,
+    "frameP50": 5,
+    "frameP95": 15
+   },
+   "engine": "wk",
+   "case": "R-type-heavy-chips",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 187,
+    "firstVisibleMs": 187,
+    "mountMs": 187,
+    "firstFrameScrollTop": 2499,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "field": "chips",
+    "typed": 60,
+    "following": true,
+    "taskP50": 6,
+    "taskP95": 14,
+    "taskMax": 24,
+    "frameP50": 7,
+    "frameP95": 16
+   },
+   "engine": "wk",
+   "case": "R-type-heavy-chips",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 132,
+    "firstVisibleMs": 132,
+    "mountMs": 132,
+    "firstFrameScrollTop": 2499,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "field": "chips",
+    "typed": 60,
+    "following": true,
+    "taskP50": 7,
+    "taskP95": 16,
+    "taskMax": 121,
+    "frameP50": 6,
+    "frameP95": 18
+   },
+   "engine": "wk",
+   "case": "R-type-heavy-chips-nofooter",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 143,
+    "firstVisibleMs": 143,
+    "mountMs": 143,
+    "firstFrameScrollTop": 2499,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "field": "chips",
+    "typed": 60,
+    "following": true,
+    "taskP50": 6,
+    "taskP95": 14,
+    "taskMax": 17,
+    "frameP50": 5,
+    "frameP95": 17
+   },
+   "engine": "wk",
+   "case": "R-type-heavy-chips-nofooter",
+   "rep": 1,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 136,
+    "firstVisibleMs": 136,
+    "mountMs": 136,
+    "firstFrameScrollTop": 2499,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 129,
+    "firstVisibleMs": 129,
+    "mountMs": 129,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-real",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 43,
+    "firstVisibleMs": 43,
+    "mountMs": 43,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 1,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-line",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 71,
+    "firstVisibleMs": 71,
+    "mountMs": 71,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-line-real",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 43,
+    "firstVisibleMs": 43,
+    "mountMs": 43,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-tasks-end",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-tasks-end-real",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 41,
+    "firstVisibleMs": 41,
+    "mountMs": 41,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 2,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-rtt40",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 101,
+    "firstVisibleMs": 101,
+    "mountMs": 101,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 2,
+    "sentWorstBelow": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-rtt40-real",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 41,
+    "firstVisibleMs": 41,
+    "mountMs": 41,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": -44.61,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-idle",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 108,
+    "firstVisibleMs": 108,
+    "mountMs": 108,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix2",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "sentShownAt": 0,
+    "sentWorstBelow": -45,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-queued-idle-real",
+   "rep": 0,
+   "react": "profiling",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 62,
+    "firstVisibleMs": 62,
+    "mountMs": 62,
     "firstFrameScrollTop": 174,
     "firstFrameGap": 0,
     "newestMoved": 0

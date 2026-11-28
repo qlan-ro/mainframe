@@ -1,6 +1,7 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { ComposerPrimitive, useAui, useAuiState } from '@assistant-ui/react';
 import { QueuedRows } from '@/features/chat/composer/queue/QueuedRows';
+import { ComposerField, useChipFieldBridge } from '@/features/chat/composer/composer-field';
 import { controls } from '../controls';
 import { params } from '../params';
 import { store } from '../store';
@@ -32,7 +33,9 @@ function RealComposer() {
   return (
     <ComposerPrimitive.Root className="rounded-xl border border-border bg-card p-3">
       {params.queue && <QueuedRows />}
+      {params.chips && <ChipField />}
       <ComposerPrimitive.Input
+        hidden={params.chips}
         data-rig-input
         rows={1}
         submitMode="enter"
@@ -44,6 +47,23 @@ function RealComposer() {
       />
       <div className="h-8" />
     </ComposerPrimitive.Root>
+  );
+}
+
+/** `chips=1`: the app's chip field (Lexical), as the composer mounts it with Settings › Chat › chips on. */
+function ChipField() {
+  const bridge = useChipFieldBridge();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const noop = () => undefined;
+  return (
+    <ComposerField
+      bridge={bridge}
+      textareaRef={textareaRef}
+      placeholder="Queue a message for when the agent finishes…"
+      onKeyDown={noop}
+      onEnter={noop}
+      onShiftTab={noop}
+    />
   );
 }
 
