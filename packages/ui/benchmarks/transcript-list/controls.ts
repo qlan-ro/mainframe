@@ -6,4 +6,8 @@ export const controls = {
   isFollowing: null as null | (() => boolean),
   /** `composer=real`: puts text in the real composer field. */
   setDraft: null as null | ((text: string) => void),
+  /** `queue=1`: what else changes in the send's task (the scenario moves the activity strip). */
+  onSend: null as null | (() => void),
+  /** `queue=1&rtt=0`: the queue snapshot, landed by the composer right after its reset commits. */
+  afterSend: null as null | (() => void),
 };

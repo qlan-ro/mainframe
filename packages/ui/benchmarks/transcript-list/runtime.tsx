@@ -1,6 +1,7 @@
 /** The transcript runtime the app mounts (`useExternalStoreRuntime`), fed by the rig's store. */
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { AssistantRuntimeProvider, useExternalStoreRuntime, type ThreadMessage } from '@assistant-ui/react';
+import type { BackgroundActivityTask } from '@qlan-ro/mainframe-types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import type { AcpChatController } from '@/features/chat/controller/acp-chat-controller';
 import { createChatThreadState } from '@/features/chat/controller/chat-thread-state';
@@ -8,6 +9,18 @@ import { buildChatExtras } from '@/features/chat/runtime/chat-extras';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
 import { CHAT_ID, store } from './store';
 import { controls } from './controls';
+import { params } from './params';
+
+/** `n` running background tasks, as the daemon's live activity reports them. */
+function backgroundTasks(n: number): Record<string, BackgroundActivityTask> {
+  const tasks = Array.from({ length: n }, (_, i) => ({
+    id: `task-${i}`,
+    kind: 'bash' as BackgroundActivityTask['kind'],
+    description: `Background task ${i + 1}`,
+    startedAt: 0,
+  }));
+  return Object.fromEntries(tasks.map((task) => [task.id, task]));
+}
 
 /** No daemon: every controller call is inert, and nothing reads port 31415. */
 const controller = new Proxy({}, { get: () => async () => undefined }) as unknown as AcpChatController;
@@ -21,18 +34,31 @@ export function RigRuntime({ children }: { children: ReactNode }) {
       ...base,
       historyWindow: { hasMore, loading: state.loading },
       runState: state.running ? ({ type: 'running' } as const) : base.runState,
+      backgroundTasks: backgroundTasks(state.tasks),
+      interactions: { ...base.interactions, queued: Object.fromEntries(state.queued.map((ref) => [ref.uuid, ref])) },
     };
     // `loadEarlier` stays undefined: scenarios land pages themselves, at known times.
     return { ...buildChatExtras(controller, 0, chat), loadEarlier: undefined };
-  }, [hasMore, state.running, state.loading]);
+  }, [hasMore, state.running, state.loading, state.tasks, state.queued]);
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: state.messages,
     isRunning: state.running,
     extras,
     // `composer=real` sends as the app does (`sendChatMessage`): the prompt row and the run start, then the
     // transcript is told the user sent (`announceUserSend` → the owner's `pinToBottom`), all in the send's task.
+    // `queue=1`: behind a running turn the prompt is queued (`chat-actions.ts`): no row in the transcript, the re-pin in
+    // the send's task, and the daemon's queue snapshot after a round trip.
     onNew: async (message) => {
       const text = message.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+      if (params.queue && store.get().running) {
+        controls.onSend?.();
+        controls.jump();
+        const land = () => store.queueUser(text);
+        // `rtt=0`: after the composer's reset has committed (and its field read layout), before the frame for certain.
+        if (params.rtt === 0) controls.afterSend = land;
+        else setTimeout(land, params.rtt);
+        return;
+      }
       store.sendUser(4242, text);
       controls.jump();
     },

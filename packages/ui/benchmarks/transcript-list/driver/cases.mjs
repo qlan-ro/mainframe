@@ -101,6 +101,25 @@ export const CASES = [
     { id: `R-send-layout${name}`, query, run: 'send', options: { forceLayout: true }, engines: ['wk'] },
     { id: `R-send-layout-prev${name}`, query, run: 'send', options: { forceLayout: true, previous: 4, endBefore: -150 }, engines: ['wk'] },
   ]),
+  // #519: a send behind a running turn queues (the row goes to the composer's queue, none to the transcript), while
+  // background tasks run and the activity strip above the composer loses a line in the send's task. The queue
+  // snapshot lands before the next frame (`rtt=0`, a local daemon), or 40 ms later (`-rtt40`). `-line` sends a
+  // one-line message (only the strip moves the viewport up), `-tasks-end` has the tasks finish as the user sends,
+  // `-idle` sends with only the tasks running (no queue).
+  ...[
+    ['', '&rtt=0', {}],
+    ['-line', '&rtt=0', { lines: 1 }],
+    ['-tasks-end', '&rtt=0', { tasksAfter: 0 }],
+    ['-rtt40', '', {}],
+    ['-idle', '', { idle: true }],
+  ].flatMap(([name, rtt, options]) => [
+    { id: `R-send-queued${name}`, query: `&composer=real&queue=1${rtt}`, run: 'sendQueued', options, engines: ['wk'] },
+    { id: `R-send-queued${name}-real`, query: `&composer=real&queue=1${rtt}&shape=real`, run: 'sendQueued', options, engines: ['wk'] },
+  ]),
+  // #519: the footer observer's cost while typing in the chip field on a large chat, with a reply streaming;
+  // `-nofooter` is the same page without the observer.
+  { id: 'R-type-heavy-chips', query: '&shape=heavy&composer=real&chips=1', run: 'typing', options: {}, engines: ['wk'] },
+  { id: 'R-type-heavy-chips-nofooter', query: '&shape=heavy&composer=real&chips=1&nofooter=1', run: 'typing', options: {}, engines: ['wk'] },
   // #518: switch away from a large chat and back; the rows remount tail-first. `heavy` folds ~1,500 messages into 1 px rows.
   { id: 'R-switch-heavy', query: '&shape=heavy', run: 'switchBack', options: {}, engines: ['wk'] },
   { id: 'R-switch-real', query: '&shape=real', run: 'switchBack', options: {}, engines: ['wk'] },

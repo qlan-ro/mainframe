@@ -145,6 +145,31 @@ describe('ComposerSegments', () => {
     expect((await screen.findByRole('tooltip')).textContent).toBe(quote);
   });
 
+  it('sizes a committed box without shrinking the live field to measure it (#519)', async () => {
+    useComposerSegments.setState({
+      byThread: { [THREAD_ID]: { committed: [{ id: 's1', quote: 'Q1', text: 'one\ntwo' }], liveQuote: null } },
+    });
+    render(<Harness />);
+    const input = (await segmentInput('s1')) as HTMLTextAreaElement;
+    // Every height written to the live field, even within one task: a height of `auto` there shortens the footer for
+    // any layout read before the next write, and the browser clamps the transcript the reader follows.
+    const heights: string[] = [];
+    const style = input.style;
+    const setProperty = style.setProperty.bind(style);
+    style.setProperty = (name: string, value: string | null, priority?: string) => {
+      if (name === 'height') heights.push(value ?? '');
+      setProperty(name, value, priority);
+    };
+    Object.defineProperty(style, 'height', {
+      configurable: true,
+      get: () => style.getPropertyValue('height'),
+      set: (value: string) => style.setProperty('height', value),
+    });
+    fireEvent.change(input, { target: { value: 'one\ntwo\nthree' } });
+    await act(async () => Promise.resolve());
+    expect(heights).not.toContain('auto');
+  });
+
   it('removing a quote can be named apart from removing a tile', () => {
     useComposerSegments.setState({
       byThread: { [THREAD_ID]: { committed: [], liveQuote: { id: 'live1', text: 'Q2' } } },

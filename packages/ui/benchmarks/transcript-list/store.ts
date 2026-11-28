@@ -5,6 +5,7 @@
  * `useSyncExternalStore`.
  */
 import type { ThreadMessage } from '@assistant-ui/react';
+import type { QueuedMessageRef } from '@qlan-ro/mainframe-types';
 import { buildRealTranscript } from './fixture-real';
 import { buildHeavyTranscript } from './fixture-heavy';
 import { answerText, buildTranscript, previousPage, userMessage, type Transcript } from './fixture';
@@ -19,6 +20,12 @@ export interface RigState {
   composerLines: number;
   /** Which chat the shell shows: a switch away and back remounts the transcript as the app's chat column does. */
   thread: string;
+  /** Background tasks running (`state.backgroundTasks`): the turn status row names them. */
+  tasks: number;
+  /** The daemon's queue snapshot (`interactions.queued`): the composer lists these rows. */
+  queued: readonly QueuedMessageRef[];
+  /** `queue=1`: the activity strip stub's height above the composer, in px (0: no strip). */
+  strip: number;
 }
 
 export const CHAT_ID = 'rig-chat';
@@ -55,6 +62,9 @@ function createStore() {
     loading: false,
     composerLines: 1,
     thread: CHAT_ID,
+    tasks: 0,
+    queued: [],
+    strip: 0,
   };
   /** Where the newest page starts: what the app cuts the window back to when the reader returns to the tail. */
   const newestStart = start;
@@ -100,6 +110,12 @@ function createStore() {
         ...message,
         content: [{ type: 'text', text: answerText(index, { image: image(index), codeExtra: lines }) }],
       }));
+    },
+    /** The daemon's queue snapshot after a send behind a running turn: the prompt waits in the composer's queue. */
+    queueUser(text: string) {
+      const id = `queued-${state.queued.length + 1}`;
+      const ref = { messageId: id, chatId: CHAT_ID, uuid: id, content: text, timestamp: new Date().toISOString() };
+      set({ queued: [...state.queued, ref] });
     },
     sendUser(index: number, text: string) {
       set({ messages: [...state.messages, userMessage(`live-${index}-u`, 1000 + index, text)], running: true });
