@@ -253,6 +253,7 @@ impl Inner {
 
 fn refresh(inner: &Inner, config: &EnvBootConfig) {
     let started_at = SystemTime::now();
+    let fish_at_start = cache::fish_snapshot(&config.cache_scope());
     let started = Instant::now();
     tracing::info!(shell = %config.shell, "resolving login-shell environment");
     let env = match shell_env::capture_login_env(&config.shell, config.kill_after) {
@@ -283,7 +284,13 @@ fn refresh(inner: &Inner, config: &EnvBootConfig) {
             tracing::info!("launched from a terminal; not caching the login-shell env");
         }
         Some(path) => {
-            if let Err(err) = cache::write(path, &config.cache_scope(), &env, started_at) {
+            if let Err(err) = cache::write(
+                path,
+                &config.cache_scope(),
+                &env,
+                started_at,
+                Some(&fish_at_start),
+            ) {
                 tracing::warn!(error = %err, path = %path.display(), "could not cache login-shell env");
             }
         }

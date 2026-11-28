@@ -8,8 +8,14 @@
 //! kernel does not reuse a pid while it is still a session id, so the match
 //! never reaches an unrelated process.
 
-/// SIGKILL every process in the session `leader` leads, and their groups.
-/// Returns how many member processes were found (the leader included).
+/// Passes over the process table; a member forked between scans is caught by
+/// the next one.
+#[cfg(unix)]
+const MAX_PASSES: usize = 3;
+
+/// SIGKILL every process in the session `leader` leads, and their groups,
+/// repeating until a pass finds nothing (at most [`MAX_PASSES`]). Returns how
+/// many member processes the first pass found (the leader included).
 #[cfg(unix)]
 pub fn kill_session(leader: u32) -> usize {
     let Ok(leader) = libc::pid_t::try_from(leader) else {
@@ -18,6 +24,22 @@ pub fn kill_session(leader: u32) -> usize {
     if leader <= 1 {
         return 0;
     }
+    let first = kill_pass(leader);
+    let mut found = first;
+    for _ in 1..MAX_PASSES {
+        if found == 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        found = kill_pass(leader);
+    }
+    first
+}
+
+/// One scan: SIGKILL each live member and its group. Returns how many live
+/// members it found; killed processes awaiting reaping are not counted.
+#[cfg(unix)]
+fn kill_pass(leader: libc::pid_t) -> usize {
     let own_pid = std::process::id() as libc::pid_t;
     // SAFETY: `getpgrp` has no preconditions.
     let own_group = unsafe { libc::getpgrp() };
@@ -27,7 +49,7 @@ pub fn kill_session(leader: u32) -> usize {
         // SAFETY: `getsid`/`getpgid`/`kill` are plain syscalls on a pid value;
         // a pid that has exited in the meantime just yields an error.
         unsafe {
-            if pid <= 1 || pid == own_pid || libc::getsid(pid) != leader {
+            if pid <= 1 || pid == own_pid || libc::getsid(pid) != leader || is_zombie(pid) {
                 continue;
             }
             found += 1;
@@ -45,6 +67,41 @@ pub fn kill_session(leader: u32) -> usize {
         }
     }
     found
+}
+
+/// A killed process that has not been reaped yet: nothing left to kill.
+#[cfg(target_os = "macos")]
+fn is_zombie(pid: libc::pid_t) -> bool {
+    // SAFETY: `proc_bsdinfo` is plain data; all-zero is a valid value.
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    // SAFETY: `info` is a writable `proc_bsdinfo` of exactly `size` bytes.
+    let got = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            (&mut info as *mut libc::proc_bsdinfo).cast(),
+            size,
+        )
+    };
+    got == size && info.pbi_status == libc::SZOMB
+}
+
+#[cfg(target_os = "linux")]
+fn is_zombie(pid: libc::pid_t) -> bool {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|stat| {
+            stat.rsplit_once(')')
+                .map(|(_, rest)| rest.trim_start().starts_with('Z'))
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+fn is_zombie(_pid: libc::pid_t) -> bool {
+    false
 }
 
 #[cfg(target_os = "macos")]

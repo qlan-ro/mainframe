@@ -131,7 +131,7 @@ pub fn read(path: &Path, scope: &CacheScope<'_>) -> Option<Env> {
 fn drop_dead_ssh_agent(env: &mut Env) {
     let dead = env
         .get("SSH_AUTH_SOCK")
-        .is_some_and(|sock| std::fs::symlink_metadata(sock).is_err());
+        .is_some_and(|sock| std::fs::metadata(sock).is_err()); // follows symlinks
     if dead {
         env.remove("SSH_AUTH_SOCK");
         env.remove("SSH_AGENT_PID");
@@ -139,22 +139,41 @@ fn drop_dead_ssh_agent(env: &mut Env) {
     }
 }
 
+/// The fish exports digest taken when a capture starts, so a change made while
+/// the shell runs invalidates the cache rather than being recorded as seen.
+pub struct FishSnapshot {
+    dir: Option<PathBuf>,
+    digest: Option<u64>,
+}
+
+/// Take the [`FishSnapshot`] for `scope` (fish dir from the process env).
+pub fn fish_snapshot(scope: &CacheScope<'_>) -> FishSnapshot {
+    let dir = scope.fish_dir(&Env::new());
+    let digest = dir.as_deref().and_then(fish_exports_digest);
+    FishSnapshot { dir, digest }
+}
+
 /// Write `env`, captured starting at `captured_at`, atomically and owner-only.
+/// `fish` is the snapshot taken at capture start; it is used unless the
+/// capture moved the fish dir (a profile-set `XDG_CONFIG_HOME`), in which case
+/// the digest is taken now.
 pub fn write(
     path: &Path,
     scope: &CacheScope<'_>,
     env: &Env,
     captured_at: SystemTime,
+    fish: Option<&FishSnapshot>,
 ) -> std::io::Result<()> {
     let captured_at_ms = captured_at
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
     let env = without_never_cached(env.clone());
-    let fish_exports = scope
-        .fish_dir(&env)
-        .as_deref()
-        .and_then(fish_exports_digest);
+    let fish_dir = scope.fish_dir(&env);
+    let fish_exports = match fish {
+        Some(snapshot) if snapshot.dir == fish_dir => snapshot.digest,
+        _ => fish_dir.as_deref().and_then(fish_exports_digest),
+    };
     let body = serde_json::to_vec(&CacheFile {
         version: CACHE_VERSION,
         shell: scope.shell.to_string(),
@@ -192,22 +211,36 @@ pub fn write(
     })
 }
 
-/// FNV-1a over the `SETUVAR --export` lines of `fish_variables` (stable across
-/// Rust releases, unlike `DefaultHasher`). Other universal variables are
-/// ignored: they never reach the environment.
+/// FNV-1a (stable across Rust releases, unlike `DefaultHasher`) over the
+/// `fish_variables` lines that can change the environment: exported universal
+/// variables, and `fish_user_paths` with any flags, which `fish_add_path`
+/// writes unexported and fish prepends to `PATH`. Other universal variables
+/// never reach the environment and are ignored.
 fn fish_exports_digest(fish_dir: &Path) -> Option<u64> {
     let text = std::fs::read_to_string(fish_dir.join("fish_variables")).ok()?;
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for line in text
-        .lines()
-        .filter(|line| line.starts_with("SETUVAR --export"))
-    {
+    for line in text.lines().filter(|line| fish_line_affects_env(line)) {
         for byte in line.bytes().chain(std::iter::once(b'\n')) {
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
     Some(hash)
+}
+
+/// `SETUVAR [--flag]... name:value`: exported, or the `fish_user_paths` list.
+fn fish_line_affects_env(line: &str) -> bool {
+    let Some(rest) = line.strip_prefix("SETUVAR ") else {
+        return false;
+    };
+    let mut exported = false;
+    for token in rest.split_whitespace() {
+        match token.strip_prefix("--") {
+            Some(flag) => exported |= flag == "export",
+            None => return exported || token.split(':').next() == Some("fish_user_paths"),
+        }
+    }
+    false
 }
 
 fn tmp_path(path: &Path) -> PathBuf {

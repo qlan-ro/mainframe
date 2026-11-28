@@ -43,7 +43,7 @@ fn seed_cache(dir: &Path, shell: &Path) {
         home: None,
         base: &Env::new(),
     };
-    cache::write(&cache_path(dir), &scope, &env, SystemTime::now()).unwrap();
+    cache::write(&cache_path(dir), &scope, &env, SystemTime::now(), None).unwrap();
 }
 
 fn read_cache(dir: &Path, shell: &Path) -> Option<Env> {

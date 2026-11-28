@@ -32,6 +32,8 @@ const CAPTURE_POLL: Duration = Duration::from_millis(20);
 /// After the shell exits, how long to wait for its stdout to drain. A process
 /// the rc files started in the background can keep the pipe open.
 const STDOUT_DRAIN: Duration = Duration::from_secs(2);
+/// After killing whatever held stdout open, how long to wait for the pipe to close.
+const STDOUT_DRAIN_AFTER_KILL: Duration = Duration::from_millis(500);
 
 /// The fallback extra PATH entries when the login-shell invocation fails.
 /// Mirrors the Electron desktop `extra` array.
@@ -111,13 +113,20 @@ fn capture_shell_env(shell: &str, kill_after: Duration) -> Result<Env, String> {
         }
     };
 
-    let stdout = out_rx.recv_timeout(STDOUT_DRAIN).map_err(|_| {
-        // Something the start-up files launched still holds the pipe. The shell
-        // is gone, but its session id lives on in those processes.
-        #[cfg(unix)]
-        kill::kill_session(child.id());
-        "shell exited but its stdout stayed open".to_string()
-    })?;
+    let stdout = match out_rx.recv_timeout(STDOUT_DRAIN) {
+        Ok(stdout) => stdout,
+        Err(_) => {
+            // Something the start-up files launched still holds the pipe. The
+            // shell is gone, but its session id lives on in those processes;
+            // once they are killed the pipe closes and the env the shell
+            // already printed arrives.
+            #[cfg(unix)]
+            kill::kill_session(child.id());
+            out_rx
+                .recv_timeout(STDOUT_DRAIN_AFTER_KILL)
+                .map_err(|_| "shell exited but its stdout stayed open".to_string())?
+        }
+    };
 
     if !status.success() && stdout.is_empty() {
         return Err(format!("shell exited {:?} with no output", status.code()));
@@ -347,8 +356,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A shell that exits while something it started keeps stdout open: the
-    /// capture gives up after the drain wait and kills that process too.
+    /// A shell that exits while something it started keeps stdout open: after
+    /// the drain wait that process is killed, and the env the shell printed is
+    /// still used.
     #[cfg(unix)]
     #[test]
     fn a_process_holding_stdout_after_the_shell_exits_is_killed() {
@@ -363,14 +373,49 @@ mod tests {
             ),
         );
 
-        let err = capture_login_env(shell.to_str().unwrap(), SHELL_KILL_AFTER).unwrap_err();
-        assert!(
-            err.contains("stdout stayed open"),
-            "unexpected error: {err}"
-        );
+        let env = capture_login_env(shell.to_str().unwrap(), SHELL_KILL_AFTER).unwrap();
+        assert_eq!(env["PATH"], "/x");
 
         let holder = read_pid(&pid_file);
         wait_until_gone(holder, "the process holding stdout");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The session kill is bounded by the session: a process that left it with
+    /// its own `setsid` is not touched.
+    #[cfg(unix)]
+    #[test]
+    fn a_process_that_left_the_session_survives_the_kill() {
+        if !std::path::Path::new("/usr/bin/perl").exists() {
+            return;
+        }
+        let dir = crate::env_boot::test_support::scratch_dir("escapee");
+        let pid_file = dir.join("escapee.pid");
+        // Single-quoted for sh, so perl sees `$f` and `$$` itself.
+        let perl = format!(
+            r#"exit 0 if fork(); POSIX::setsid(); open STDOUT, ">/dev/null"; open my $f, ">", "{}"; print $f "$$\n"; close $f; sleep 30"#,
+            pid_file.display()
+        );
+        let shell = script(
+            &dir,
+            "escaping-shell",
+            &format!("#!/bin/sh\n/usr/bin/perl -MPOSIX -e '{perl}'\nsleep 30\n"),
+        );
+
+        let err =
+            capture_login_env(shell.to_str().unwrap(), Duration::from_millis(700)).unwrap_err();
+        assert!(err.contains("killed"), "unexpected error: {err}");
+
+        let escapee = read_pid(&pid_file);
+        std::thread::sleep(Duration::from_millis(200));
+        // SAFETY: signal 0 only checks that the pid exists.
+        let alive = unsafe { libc::kill(escapee, 0) } == 0;
+        // SAFETY: clean up the escapee this test started.
+        unsafe { libc::kill(escapee, libc::SIGKILL) };
+        assert!(
+            alive,
+            "the kill reached a process outside the shell's session"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
