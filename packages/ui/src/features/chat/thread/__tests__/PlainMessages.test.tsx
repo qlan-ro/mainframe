@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import {
@@ -97,6 +97,34 @@ describe('PlainMessages', () => {
     expect(rows).toHaveLength(FIRST_ROWS);
     expect(rows[rows.length - 1]).toHaveTextContent('text 39');
     expect(screen.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
+  });
+
+  it('marks rows still to mount above the newest ones (the boot cover reads it), and clears the mark once all are in', async () => {
+    render(
+      <Harness messages={make(40)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    const list = screen.getByTestId('chat-message-list');
+    expect(list).toHaveAttribute('data-rows-pending', '');
+    await waitFor(() => expect(screen.getAllByTestId('row')).toHaveLength(40));
+    expect(list).not.toHaveAttribute('data-rows-pending');
+    expect(list).not.toHaveAttribute('data-rows-empty');
+  });
+
+  it('says it draws nothing when every loaded message is folded away', () => {
+    // Only reachable when no message carries the run's status row (it always keeps its row): here every one is queued.
+    foldedAway.ids = new Set(['m0', 'm1']);
+    const queued = { custom: { mainframe: { queued: true } } };
+    render(
+      <Harness messages={make(2).map((message) => ({ ...message, metadata: queued }))}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    const list = screen.getByTestId('chat-message-list');
+    expect(screen.queryAllByTestId('row')).toHaveLength(0);
+    expect(list).toHaveAttribute('data-rows-empty', '');
+    expect(list).toHaveAttribute('data-loaded-count', '2');
   });
 });
 

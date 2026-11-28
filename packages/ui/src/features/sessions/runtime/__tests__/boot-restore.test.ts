@@ -252,6 +252,52 @@ describe('boot restore hold', () => {
       expect(isBootRestoring()).toBe(false);
     });
 
+    it('lifts at the deadline over a default list whose height never holds for two frames', () => {
+      const { el, box } = mountTranscript('chat-1');
+      addList(el, { loaded: 40, drawn: 12 }).setAttribute('data-virtualized', 'true');
+      box.scrollHeight = 5000;
+      box.scrollTop = 4900;
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      // It keeps correcting a row height every frame: never steady, at the tail every time.
+      for (let elapsed = 16; elapsed < BOOT_HOLD_MAX_MS; elapsed += 16) {
+        box.scrollHeight += 3;
+        box.scrollTop += 3;
+        vi.advanceTimersByTime(16);
+        expect(isBootRestoring()).toBe(true);
+      }
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('shows a plain list whose loaded messages are all folded away as an empty chat', () => {
+      const { el } = mountTranscript('chat-1');
+      addList(el, { loaded: 30, drawn: 0 }).setAttribute('data-rows-empty', '');
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(true);
+      vi.advanceTimersByTime(48);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it.each(['chat-system-message', 'chat-reply-placeholder'])(
+      'counts a tail of rows with no message id as drawn (%s)',
+      (testId) => {
+        const { el } = mountTranscript('chat-1');
+        const list = addList(el, { loaded: 1, drawn: 0 });
+        const row = document.createElement('div');
+        row.setAttribute('data-testid', testId);
+        list.append(row);
+        beginBootRestore();
+        loadState['chat-1'] = 'ready';
+        decideBootRestore('chat-1');
+        expect(isBootRestoring()).toBe(false);
+      },
+    );
+
     it('keeps holding while the newest rows do not fill the viewport and more are still to mount', () => {
       const { el, box } = mountTranscript('chat-1');
       const list = addList(el, { loaded: 40, drawn: 6 });

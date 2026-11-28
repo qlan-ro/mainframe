@@ -86,6 +86,8 @@ export function PlainMessages({ components }: { components: MessageComponents })
         data-loaded-user-count={userCount}
         data-virtualized={false}
         data-rows-pending={rows.length < all.length ? '' : undefined}
+        // Every loaded message is folded away: nothing will be drawn, as for an empty chat (the boot cover reads it).
+        data-rows-empty={all.length === 0 ? '' : undefined}
       >
         {rows.map(({ id, index }) => (
           <MessageRow key={id} index={index} anchor={id === anchorId} components={components} />
