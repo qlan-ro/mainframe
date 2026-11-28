@@ -40,13 +40,18 @@ export const params = {
    * 24 tool calls, 5 texts and 5 thoughts) between five short user messages, about one viewport tall,
    * and each older page of 80 items adds about one more (`fixture-real.ts`).
    */
-  shape: query.get('shape') === 'real' ? ('real' as const) : ('default' as const),
+  shape: (['real', 'heavy'].includes(query.get('shape') ?? '') ? query.get('shape') : 'default') as
+    'real' | 'heavy' | 'default',
+  /** `shape=heavy`: assistant messages per turn (one tool call each), so a folded turn draws `per - 2` rows of 1 px. */
+  perTurn: number('per', 150),
   pageDelay: query.has('delay') ? Math.max(0, Number(query.get('delay')) || 0) : 60,
   /**
    * Manual mode: the overlay scrollbar thumb. Off by default, as the app's transcript has none (it jumped and
    * resized as older pages landed); `scrollbar=1` brings it back for a comparison.
    */
   scrollbar: query.get('scrollbar') === '1',
+  /** `composer=real`: assistant-ui's autosizing composer input instead of the stub; Enter sends through `onNew`. */
+  realComposer: query.get('composer') === 'real',
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */

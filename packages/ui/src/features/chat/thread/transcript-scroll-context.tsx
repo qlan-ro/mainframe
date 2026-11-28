@@ -21,6 +21,11 @@ export interface TranscriptScrollController {
     subscribe: (listener: () => void) => () => void;
     set: (pending: boolean) => void;
   };
+  /** The plain list's owner: the reader is at the tail (following, or at the bottom). Off: they read above it. */
+  pinned?: {
+    get: () => boolean;
+    subscribe: (listener: () => void) => () => void;
+  };
 }
 const Context = createContext<TranscriptScrollController | null>(null);
 export const TranscriptScrollProvider = Context.Provider;

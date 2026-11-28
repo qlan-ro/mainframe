@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeMarker } from '../time-markers';
+import { hasTimeMarker, timeMarker } from '../time-markers';
 
 const at = (iso: string) => ({ createdAt: new Date(iso) });
 const NOW = new Date('2026-11-24T20:00:00');
@@ -34,5 +34,23 @@ describe('timeMarker', () => {
   it('is silent without a usable time or when times run backwards', () => {
     expect(timeMarker([{}], 0, true, NOW)).toBeNull();
     expect(timeMarker([at('2026-11-24T12:00:00'), at('2026-11-24T11:00:00')], 1, true, NOW)).toBeNull();
+  });
+});
+
+describe('hasTimeMarker', () => {
+  it('says a marker shows exactly where timeMarker draws one at the start of the conversation', () => {
+    const times = [
+      '2026-11-23T23:50:00',
+      '2026-11-23T23:59:00',
+      '2026-11-24T00:01:00',
+      '2026-11-24T00:20:00',
+      '2026-11-24T00:50:00',
+      '2026-11-24T00:40:00',
+      '2026-11-24T01:19:59',
+      '2026-11-26T09:00:00',
+    ].map(at);
+    const messages = [...times.slice(0, 3), {}, ...times.slice(3)];
+    for (let index = 0; index < messages.length; index++)
+      expect(hasTimeMarker(messages, index)).toBe(timeMarker(messages, index, true, NOW) !== null);
   });
 });

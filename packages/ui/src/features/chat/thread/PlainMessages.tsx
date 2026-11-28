@@ -1,4 +1,4 @@
-import { memo, useEffect, type ComponentProps } from 'react';
+import { memo, useEffect, useMemo, type ComponentProps } from 'react';
 import { ThreadPrimitive, useAuiState } from '@assistant-ui/react';
 import { DisclosureStateProvider } from '@/components/ui/disclosure-state';
 import { markFirstTranscriptShown } from '@/lib/after-first-paint';
@@ -7,6 +7,7 @@ import { TimeMarker } from './TimeMarker';
 import { TurnStatusRow } from './TurnStatusRow';
 import { statusAnchorId } from './turn-phase';
 import { useTranscriptScroll } from './transcript-scroll-context';
+import { useFoldedAwayRows } from './use-folded-away-rows';
 import { useTailFirstRows } from './use-tail-first-rows';
 
 type MessageComponents = ComponentProps<typeof ThreadPrimitive.MessageByIndex>['components'];
@@ -42,24 +43,32 @@ function useRows(): { rows: Row[]; anchorId: string | null } {
     s.thread.messages.map((message) => `${message.role === 'user' ? 'u' : 'x'}${message.id}`).join('\0'),
   );
   const anchorId = useAuiState((s) => statusAnchorId(s.thread.messages));
-  const rows = serialized
-    ? serialized.split('\0').map((row, index) => ({ id: row.slice(1), index, user: row[0] === 'u' }))
-    : [];
+  const rows = useMemo(
+    () =>
+      serialized ? serialized.split('\0').map((row, index) => ({ id: row.slice(1), index, user: row[0] === 'u' })) : [],
+    [serialized],
+  );
   return { rows, anchorId };
 }
 
 /**
  * The transcript's messages as plain rows: every loaded row is in the DOM, the scroll owner
  * (`use-scroll-owner.ts`) holds the position and the browser anchors what changes above the reader.
- * The newest rows mount first and the rest follows in slices (`use-tail-first-rows.ts`).
+ * The newest rows mount first and the rest follows in slices (`use-tail-first-rows.ts`). A folded
+ * turn's messages that draw nothing get no row (`use-folded-away-rows.ts`).
  */
 export function PlainMessages({ components }: { components: MessageComponents }) {
-  const { rows: all, anchorId: newest } = useRows();
+  const { rows: loaded, anchorId: newest } = useRows();
+  const foldedAway = useFoldedAwayRows();
+  const all = useMemo(
+    () => (foldedAway.size ? loaded.filter((row) => !foldedAway.has(row.id)) : loaded),
+    [loaded, foldedAway],
+  );
   // The run's status sits under the newest message: a window around a jump target does not hold it.
   const anchorId = useAwayFromTail() ? null : newest;
   const scroll = useTranscriptScroll();
   const rows = useTailFirstRows(all, scroll);
-  const userCount = all.filter((row) => row.user).length;
+  const userCount = loaded.filter((row) => row.user).length;
   const shown = rows.length > 0;
   useEffect(() => {
     if (shown) markFirstTranscriptShown();
@@ -68,7 +77,7 @@ export function PlainMessages({ components }: { components: MessageComponents })
     <DisclosureStateProvider>
       <div
         data-testid="chat-message-list"
-        data-loaded-count={all.length}
+        data-loaded-count={loaded.length}
         data-loaded-user-count={userCount}
         data-virtualized={false}
         data-rows-pending={rows.length < all.length ? '' : undefined}

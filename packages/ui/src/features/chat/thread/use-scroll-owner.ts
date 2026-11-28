@@ -11,8 +11,15 @@
  *   on a jump to a row, and on any scroll that moves up by itself (Find, a programmatic jump),
  * - takes follow back only on the reader's downward input that reaches the bottom, the End key,
  *   the jump button, or the user's own send (`controller/user-sent.ts`). Never on a scroll event
- *   at the bottom: WebKit delivers a wheel event after its threaded scroll, so a follow write can
- *   land at the bottom between the two and would re-pin a reader who just left,
+ *   at the bottom by itself: WebKit delivers a wheel event after its threaded scroll, so a follow write can
+ *   land at the bottom between the two and would re-pin a reader who just left. Downward input counts only
+ *   while it is recent (`DOWN_INTENT_MS`) and only for a scroll that moved down: content that shrinks below
+ *   the reader clamps the position to the bottom (a turn folding, a run of reads folding), and that is no
+ *   reader asking to follow (#521),
+ * - keeps following through a position change that a layout made before the resize callback saw it: when
+ *   something reads layout between React's commit and the frame (the composer's autosize does), the browser
+ *   clamps or anchors the position there, and its scroll event arrives before the resize callback. Only a
+ *   move up with no size change behind it releases (#519),
  * - corrects a page that lands within a viewport of the top (or a slice of the opening window)
  *   where the browser did not hold the reader: the block they read is recorded in content
  *   coordinates before the commit, and after layout whatever shift the browser did not apply is
@@ -30,28 +37,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITY_JUMP_EVENT, type ActivityJump } from '@/features/session-panel/activity-source';
 import { onUserSent } from '../controller/user-sent';
-import { AT_BOTTOM_PX, isAtBottom } from './bottom-pin';
+import { isAtBottom } from './bottom-pin';
 import { HISTORY_PREPEND_EVENT } from './history-prepend-event';
 import { anchoringSupported } from './scroll-anchoring';
-import { listenForScrollInput } from './scroll-owner-input';
+import { observeScrollOwner } from './scroll-owner-observe';
+import { createFlag, createOwnerState, readerAnchor, seen } from './scroll-owner-state';
 import type { TranscriptScrollController } from './transcript-scroll-context';
 
-const BLOCKS = 'p, pre, table, li, h2, h3, img, [data-message-id], [data-history-item-id]';
-
-/** What the reader is looking at: the block a third of the way down the viewport. */
-function readerAnchor(viewport: HTMLElement) {
-  const box = viewport.getBoundingClientRect();
-  const hit = document.elementFromPoint(box.left + box.width / 2, box.top + viewport.clientHeight / 3);
-  const row = hit?.closest<HTMLElement>(BLOCKS);
-  return row && viewport.contains(row) ? { row, offset: row.getBoundingClientRect().top - box.top } : null;
-}
-
-interface Near {
-  row: HTMLElement;
-  /** The block's top in the content, which a page above it moves by exactly the page's height. */
-  at: number;
-  scrollTop: number;
-}
+export { DOWN_INTENT_MS } from './scroll-owner-state';
 
 export function useScrollOwner(
   threadId: string | null,
@@ -76,18 +69,7 @@ export function useScrollOwner(
     contentElement.current = element;
     setContentState(element);
   }, []);
-  const state = useRef({
-    following: atTail,
-    movedDown: false,
-    lastTop: 0,
-    published: atTail,
-    listeners: new Set<() => void>(),
-    restore: null as null | ReturnType<typeof readerAnchor>,
-    near: null as Near | null,
-    /** The frame that clears a record no resize used (a page that changed nothing's height). */
-    staleFrame: 0,
-    away,
-  });
+  const state = useRef(createOwnerState(atTail, away));
   const publish = useCallback(() => {
     const current = state.current;
     const el = viewportElement.current;
@@ -99,18 +81,18 @@ export function useScrollOwner(
   const pinToBottom = useCallback(() => {
     const current = state.current;
     current.following = !current.away;
-    current.movedDown = false;
+    current.downAt = 0;
     const el = viewportElement.current;
     if (el) {
       el.scrollTop = el.scrollHeight;
-      current.lastTop = el.scrollTop;
+      seen(current, el);
     }
     publish();
   }, [publish]);
   const release = useCallback(() => {
     const current = state.current;
     current.following = false;
-    current.movedDown = false;
+    current.downAt = 0;
     publish();
   }, [publish]);
   /** Before rows land above the reader (a page, or a slice of the opening window). */
@@ -139,7 +121,7 @@ export function useScrollOwner(
     const el = viewportElement.current;
     if (!el || !state.current.following) return;
     el.scrollTop = el.scrollHeight;
-    state.current.lastTop = el.scrollTop;
+    seen(state.current, el);
   }, []);
   useLayoutEffect(() => {
     state.current.near = null;
@@ -186,70 +168,7 @@ export function useScrollOwner(
   }, [chatId, release, beforePrepend]);
   useEffect(() => {
     if (!viewport || !content) return;
-    const current = state.current;
-    current.lastTop = viewport.scrollTop;
-    const onResize = () => {
-      if (viewport.clientHeight === 0) return;
-      const pending = current.restore;
-      current.restore = null;
-      const near = current.near;
-      current.near = null;
-      if (near?.row.isConnected) {
-        const moved = near.row.getBoundingClientRect().top - content.getBoundingClientRect().top - near.at;
-        // The browser held the reader when scrollTop followed the content; otherwise add what it missed.
-        const held = viewport.scrollTop - near.scrollTop > moved / 2;
-        if (moved >= 0.5 && !held) viewport.scrollBy({ top: moved, behavior: 'instant' });
-      } else if (pending?.row.isConnected && !current.following) {
-        viewport.scrollTop +=
-          pending.row.getBoundingClientRect().top - viewport.getBoundingClientRect().top - pending.offset;
-      }
-      if (current.following) viewport.scrollTop = viewport.scrollHeight;
-      current.lastTop = viewport.scrollTop;
-      publish();
-    };
-    const onScroll = () => {
-      const top = viewport.scrollTop;
-      const bottom = viewport.scrollHeight - viewport.clientHeight - top;
-      // Up by itself (Find, a jump to a row): not the owner's write, so the reader is no longer at the tail.
-      if (current.following && top < current.lastTop - 1 && bottom > AT_BOTTOM_PX) release();
-      else if (!current.following && current.movedDown && bottom <= AT_BOTTOM_PX) pinToBottom();
-      current.lastTop = top;
-      publish();
-    };
-    // A record is for the commit that follows it: its resize comes in the next frame. Once rows have changed
-    // and that frame has passed, a record nobody used belongs to a change that moved nothing; drop it, or a later
-    // resize would use it. Tied to the DOM change, not to the clock, so a slow commit keeps its record.
-    const staleCheck = () => {
-      if (!current.near && !current.restore) return;
-      cancelAnimationFrame(current.staleFrame);
-      current.staleFrame = requestAnimationFrame(() => {
-        current.staleFrame = requestAnimationFrame(() => {
-          current.staleFrame = 0;
-          current.near = null;
-          current.restore = null;
-        });
-      });
-    };
-    const mutations = new MutationObserver(staleCheck);
-    mutations.observe(content, { childList: true, subtree: true });
-    const observer = new ResizeObserver(onResize);
-    observer.observe(content);
-    observer.observe(viewport);
-    viewport.addEventListener('scroll', onScroll, { passive: true });
-    const stopInput = listenForScrollInput(viewport, {
-      release,
-      end: pinToBottom,
-      down: () => {
-        current.movedDown = true;
-        if (isAtBottom(viewport)) pinToBottom();
-      },
-    });
-    return () => {
-      observer.disconnect();
-      mutations.disconnect();
-      viewport.removeEventListener('scroll', onScroll);
-      stopInput();
-    };
+    return observeScrollOwner(viewport, content, state.current, { publish, release, pinToBottom });
   }, [viewport, content, publish, release, pinToBottom]);
   const subscribePinned = useCallback((listener: () => void) => {
     const { listeners } = state.current;
@@ -258,26 +177,10 @@ export function useScrollOwner(
       listeners.delete(listener);
     };
   }, []);
-  const tailPending = useMemo(() => {
-    const listeners = new Set<() => void>();
-    let pending = false;
-    return {
-      get: () => pending,
-      subscribe: (listener: () => void) => {
-        listeners.add(listener);
-        return () => {
-          listeners.delete(listener);
-        };
-      },
-      set: (next: boolean) => {
-        if (next === pending) return;
-        pending = next;
-        listeners.forEach((listener) => listener());
-      },
-    };
-  }, []);
+  const tailPending = useMemo(() => createFlag(), []);
   const isFollowing = useCallback(() => state.current.following, []);
   const isPinned = useCallback(() => state.current.published, []);
+  const pinned = useMemo(() => ({ get: isPinned, subscribe: subscribePinned }), [isPinned, subscribePinned]);
   const controller: TranscriptScrollController = useMemo(
     () => ({
       owned: true,
@@ -291,8 +194,9 @@ export function useScrollOwner(
       chatId,
       findOwner,
       tailPending,
+      pinned,
     }),
-    [viewport, isFollowing, beforePrepend, followNow, chatId, findOwner, tailPending],
+    [viewport, isFollowing, beforePrepend, followNow, chatId, findOwner, tailPending, pinned],
   );
   return { controller, setViewport, setContent, isPinned, subscribePinned, pinToBottom };
 }

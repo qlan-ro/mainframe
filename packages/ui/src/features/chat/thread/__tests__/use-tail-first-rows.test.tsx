@@ -187,6 +187,15 @@ describe('a tail shorter than the viewport', () => {
     expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
   });
 
+  it('keeps the tail in view when the pass that mounts the last rows is the one that overflows', () => {
+    // Six rows are 240 px; the next pass mounts all fifteen (600 px, past the 500 px viewport) and ends the mount.
+    // The owner's resize observer only exists after the first paint, so that pass must ask it to follow.
+    const { use, followNow } = sized(40);
+    const { result } = renderHook(() => use(make(15)));
+    expect(result.current).toHaveLength(15);
+    expect(followNow).toHaveBeenCalledTimes(2);
+  });
+
   it('stops at the whole window when it never overflows', () => {
     const rows = make(40);
     const { use } = sized(2);

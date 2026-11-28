@@ -82,13 +82,17 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     };
   }, [startIndex, state.startId]);
   const pending = startIndex > 0;
+  const wasPending = useRef(false);
   useLayoutEffect(() => {
-    if (!pending) return;
+    // The pass that mounts the last rows ends the mount: it must still bring the tail into view before paint.
+    const finished = wasPending.current && !pending;
+    wasPending.current = pending;
+    if (!pending && !finished) return;
     const viewport = scroll?.viewportElement.current;
     if (!viewport || viewport.clientHeight === 0) return;
     // The owner's resize observer is created after the first paint, so keep the tail in view from here.
     scroll?.followNow?.();
-    if (viewport.scrollHeight > viewport.clientHeight) return;
+    if (finished || viewport.scrollHeight > viewport.clientHeight) return;
     if (layoutPasses.current >= MAX_LAYOUT_PASSES) return;
     const at = rows.findIndex((row) => row.id === state.startId);
     if (at <= 0) return;

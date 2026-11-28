@@ -6,6 +6,7 @@
  */
 import type { ThreadMessage } from '@assistant-ui/react';
 import { buildRealTranscript } from './fixture-real';
+import { buildHeavyTranscript } from './fixture-heavy';
 import { answerText, buildTranscript, previousPage, userMessage, type Transcript } from './fixture';
 import { params } from './params';
 
@@ -14,6 +15,10 @@ export interface RigState {
   running: boolean;
   /** `app` only: an older page is in flight (the real `historyWindow.loading`). */
   loading: boolean;
+  /** Lines in the composer stub's draft: a send clears it to one, and the viewport above grows. */
+  composerLines: number;
+  /** Which chat the shell shows: a switch away and back remounts the transcript as the app's chat column does. */
+  thread: string;
 }
 
 export const CHAT_ID = 'rig-chat';
@@ -25,11 +30,32 @@ function image(index: number) {
   return `${location.origin}/rig-img?id=${index}&delay=${150 + (index % 5) * 120}${hold}`;
 }
 
+/** The start of the `turns` whole turns before `start` (a turn starts at a user message). */
+function previousTurns(all: readonly ThreadMessage[], start: number, turns: number): number {
+  let at = start;
+  let seen = 0;
+  while (at > 0 && seen < turns) {
+    at--;
+    if (all[at]!.role === 'user') seen++;
+  }
+  return at;
+}
+
 function createStore() {
   const transcript: Transcript =
-    params.shape === 'real' ? buildRealTranscript() : buildTranscript(params.totalTurns, params.groups, { image });
+    params.shape === 'real'
+      ? buildRealTranscript()
+      : params.shape === 'heavy'
+        ? buildHeavyTranscript(30, 10, params.perTurn)
+        : buildTranscript(params.totalTurns, params.groups, { image });
   let start = params.windowItems > 0 ? Math.max(0, transcript.all.length - params.windowItems) : transcript.windowStart;
-  let state: RigState = { messages: transcript.all.slice(start), running: false, loading: false };
+  let state: RigState = {
+    messages: transcript.all.slice(start),
+    running: false,
+    loading: false,
+    composerLines: 1,
+    thread: CHAT_ID,
+  };
   /** Where the newest page starts: what the app cuts the window back to when the reader returns to the tail. */
   const newestStart = start;
   const listeners = new Set<() => void>();
@@ -59,7 +85,9 @@ function createStore() {
     },
     /** Lands the page before the window, the way `AcpSessionPlane.prependPage` does. */
     prependPage(): number {
-      const from = previousPage(transcript.all, start);
+      // `shape=heavy` pages as the app does since #999: ten whole turns before the window.
+      const from =
+        params.shape === 'heavy' ? previousTurns(transcript.all, start, 10) : previousPage(transcript.all, start);
       if (from === start) return 0;
       const page = transcript.all.slice(from, start);
       start = from;

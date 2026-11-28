@@ -7,6 +7,7 @@ import { createChatThreadState } from '@/features/chat/controller/chat-thread-st
 import { buildChatExtras } from '@/features/chat/runtime/chat-extras';
 import { TranscriptScopeProvider } from '@/features/chat/messages/turn/transcript-scope';
 import { CHAT_ID, store } from './store';
+import { controls } from './controls';
 
 /** No daemon: every controller call is inert, and nothing reads port 31415. */
 const controller = new Proxy({}, { get: () => async () => undefined }) as unknown as AcpChatController;
@@ -28,7 +29,13 @@ export function RigRuntime({ children }: { children: ReactNode }) {
     messages: state.messages,
     isRunning: state.running,
     extras,
-    onNew: async () => {},
+    // `composer=real` sends as the app does (`sendChatMessage`): the prompt row and the run start, then the
+    // transcript is told the user sent (`announceUserSend` → the owner's `pinToBottom`), all in the send's task.
+    onNew: async (message) => {
+      const text = message.content.map((part) => (part.type === 'text' ? part.text : '')).join('');
+      store.sendUser(4242, text);
+      controls.jump();
+    },
   });
   const scope = useMemo(
     () => ({ rootThreadId: CHAT_ID, chatId: CHAT_ID, ancestors: [], pendingToolIds: new Set<string>() }),
