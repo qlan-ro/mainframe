@@ -207,6 +207,8 @@ Rust modules under `src-tauri/src/`:
 | Module | Responsibility |
 |---|---|
 | `sidecar.rs` | Spawns and supervises the daemon child process; merges the resolved login-shell environment over the process env before spawn. Supports `MAINFRAME_EXTERNAL_DAEMON` to skip spawning and attach to a daemon the user started themselves. |
+| `env_boot.rs`, `shell_env/` | Capture the login-shell environment (`$SHELL -lic env`) on a background thread at launch, and cache the last capture in `<data dir>/shell-env.json`, so neither the window nor the daemon waits for a slow shell. A changed environment reaches new terminals at once and the daemon on its next start. |
+| `daemon_launch.rs` | Starts the sidecar off the main thread once its environment is ready, and answers `get_daemon_status` (`starting`, `running:<pid>`, `error:<reason>`) in the meantime. |
 | `commands/` | `#[tauri::command]` handlers invoked from the webview (`app_info.rs`, `auth.rs`, `daemons.rs`, `fs.rs`) — desktop-native primitives like reading files, the app's OS keychain-backed daemon token, and multi-daemon bookkeeping. |
 | `terminal/` | A native pty (embedded terminal pane in the Workspace surface). |
 | `preview/` | Manages an embedded child webview used to preview a launched dev server, plus screen-region capture for it. |

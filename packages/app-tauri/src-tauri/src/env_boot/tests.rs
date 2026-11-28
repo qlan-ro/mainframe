@@ -108,6 +108,21 @@ fn slow_shell_with_cache_creates_window_first_and_starts_daemon_from_cache() {
 }
 
 #[test]
+fn a_capture_that_finished_before_the_launch_wins_over_the_cache() {
+    let dir = scratch_dir("fast");
+    let shell = fake_shell(&dir, 0, FRESH);
+    seed_cache(&dir, &shell);
+
+    let boot = EnvBoot::start(config(&dir, &shell, DAEMON_ENV_WAIT));
+    assert!(boot.wait_for_capture(Duration::from_secs(10)));
+    let (env, source) = launch(&boot);
+
+    assert_eq!(source, EnvSource::LoginShell);
+    assert_eq!(env["MF_SOURCE"], "fresh");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn without_cache_daemon_waits_for_the_login_shell_env() {
     let dir = scratch_dir("nocache");
     let shell = fake_shell(&dir, 1, FRESH);

@@ -6,7 +6,7 @@
 //! [`EnvBoot::daemon_env`]:
 //!
 //! - **Cached env** (valid cache): returned immediately. The daemon never waits
-//!   for the shell.
+//!   for the shell. A capture that has already finished wins over the cache.
 //! - **No usable cache** (first launch, or a shell start-up file changed): waits
 //!   up to [`DAEMON_ENV_WAIT`] for the capture, then falls back to
 //!   [`build_fallback_env`].
@@ -154,7 +154,10 @@ impl EnvBoot {
     pub fn daemon_env(&self) -> (Env, EnvSource) {
         let started = Instant::now();
         let mut state = self.inner.lock();
-        let (env, source) = if let Some(cached) = &self.inner.cached {
+        let (env, source) = if let Capture::Done(env) = &state.capture {
+            // A fast shell finished before the launch: prefer it to the cache.
+            (env.clone(), EnvSource::LoginShell)
+        } else if let Some(cached) = &self.inner.cached {
             (cached.clone(), EnvSource::Cached)
         } else {
             state = self
