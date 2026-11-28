@@ -61,6 +61,8 @@ pub struct FakeSession {
     pub history_sources: Vec<PathBuf>,
     /// Collected files reported by `peek_history_files`.
     pub history_files: Mutex<Option<crate::CollectedHistoryFiles>>,
+    /// What `load_history` collects into `history_files`, as a real read does.
+    pub collects_files: Option<crate::CollectedHistoryFiles>,
     /// Fires synchronously inside `respond_to_permission`, before it resolves —
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
@@ -221,6 +223,9 @@ impl AdapterSession for FakeSession {
         if let Some(loads) = &self.history_loads {
             loads.fetch_add(1, Ordering::SeqCst);
         }
+        if let Some(files) = &self.collects_files {
+            *self.history_files.lock_recover() = Some(files.clone());
+        }
         let history = self.history.clone();
         let gate = self.history_gate.clone();
         Box::pin(async move {
@@ -253,6 +258,9 @@ impl AdapterSession for FakeSession {
     }
     fn peek_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
         self.history_files.lock_recover().clone()
+    }
+    fn take_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
+        self.history_files.lock_recover().take()
     }
     fn restore_history_files(&self, files: crate::CollectedHistoryFiles) {
         *self.history_files.lock_recover() = Some(files);

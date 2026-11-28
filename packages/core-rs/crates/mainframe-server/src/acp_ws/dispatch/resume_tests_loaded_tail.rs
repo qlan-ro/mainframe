@@ -122,6 +122,22 @@ async fn tail_stored(fixture: &Fixture) -> bool {
     .is_ok()
 }
 
+/// No tail appears within a short wait. Called once the load behind the reply
+/// has finished, which is when a tail would be written.
+async fn no_tail_stored(fixture: &Fixture) -> bool {
+    let manifest = fixture
+        .data
+        .join("tails")
+        .join(format!("{}.meta.json", fixture.chat_id));
+    tokio::time::timeout(std::time::Duration::from_millis(300), async {
+        while !manifest.exists() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .is_err()
+}
+
 fn replied(frames: &[Value]) -> bool {
     frames
         .iter()
@@ -235,5 +251,42 @@ async fn a_resume_without_windowed_history_still_completes_the_lifecycle_load() 
     })
     .await;
     assert!(loaded.is_ok(), "the chat was loaded behind the reply");
+    assert!(
+        no_tail_stored(&fixture).await,
+        "a tail is only ever a windowed first reply"
+    );
     manager.dispose();
+}
+
+/// `prepare_resume` for an uncached first resume of 10 turns.
+async fn prepared(fixture: &Fixture, windowed_history: bool) -> prepare::PreparedResume {
+    let ports = ManagerPorts::new(Some(Arc::clone(&fixture.ctx.chat.chat_manager)));
+    let mut request = resume_request(1, &fixture.chat_id);
+    request.params.as_mut().unwrap()["_meta"] =
+        json!({ "_mainframe.dev": { "window": { "turns": 10 } } });
+    let options = mainframe_acp::ResumeOptions {
+        windowed_history,
+        ..Default::default()
+    };
+    prepare::prepare_resume(
+        request,
+        Some(&fixture.chat_id),
+        &fixture.ctx,
+        &ports,
+        None,
+        options,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_resume_without_windowed_history_asks_for_no_tail() {
+    // The same uncached read on a windowed resume asks for one.
+    let plain = fixture(Paging::Declines).await;
+    let windowed = fixture(Paging::Declines).await;
+
+    assert!(prepared(&plain, false).await.tail_request.is_none());
+    assert!(prepared(&windowed, true).await.tail_request.is_some());
+    plain.ctx.chat.chat_manager.dispose();
+    windowed.ctx.chat.chat_manager.dispose();
 }

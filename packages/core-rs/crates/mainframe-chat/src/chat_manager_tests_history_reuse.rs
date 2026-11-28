@@ -70,3 +70,46 @@ async fn a_transcript_changed_since_the_read_is_read_again() {
 
     assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 2);
 }
+
+#[tokio::test]
+async fn a_history_changed_in_memory_since_the_read_is_read_again_and_resyncs() {
+    // A live change (here a transient message) moves the cache's generation:
+    // the full load must not take the changed cache for the transcript.
+    let dir = tempfile::tempdir().unwrap();
+    let (_, manager, surface, _) = manager(&dir).await;
+    manager.get_messages("c1").await;
+    let transient: ChatMessage = serde_json::from_value(json!({"id":"t1","chatId":"c1",
+        "type":"assistant","timestamp":"2026-10-02T00:00:01Z","content":[{"type":"text","text":"live"}]}))
+    .unwrap();
+    manager
+        .shared
+        .messages
+        .lock()
+        .unwrap()
+        .append("c1", transient);
+
+    manager.load_chat("c1").await;
+
+    assert_eq!(surface.0.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        manager.shared.messages.lock().unwrap().get("c1").cloned(),
+        Some(vec![history()])
+    );
+}
+
+#[tokio::test]
+async fn a_reused_history_hands_the_scan_the_files_its_read_collected() {
+    let dir = tempfile::tempdir().unwrap();
+    let (deps, manager, _, _) = manager(&dir).await;
+    let files = mainframe_adapter_api::CollectedHistoryFiles {
+        plans: vec!["plan.md".into()],
+        ..Default::default()
+    };
+    *deps.adapters.scan.collects.lock().unwrap() = Some(files.clone());
+    manager.get_messages("c1").await;
+
+    manager.load_chat("c1").await;
+
+    assert_eq!(deps.adapters.history_loads.load(Ordering::SeqCst), 1);
+    assert_eq!(*deps.adapters.scan.scanned.lock().unwrap(), [Some(files)]);
+}
