@@ -4,7 +4,7 @@
  */
 import { AT_BOTTOM_PX, isAtBottom } from './bottom-pin';
 import { listenForScrollInput } from './scroll-owner-input';
-import { layoutExplains, seen, wantsDown, type OwnerState } from './scroll-owner-state';
+import { layoutExplains, sampleHeight, seen, wantsDown, type OwnerState } from './scroll-owner-state';
 
 interface Actions {
   publish: () => void;
@@ -76,7 +76,11 @@ function staleHandler(current: OwnerState) {
 export function observeScrollOwner(viewport: HTMLElement, content: HTMLElement, current: OwnerState, actions: Actions) {
   seen(current, viewport);
   const onScroll = scrollHandler(viewport, current, actions);
-  const mutations = new MutationObserver(staleHandler(current));
+  const stale = staleHandler(current);
+  const mutations = new MutationObserver(() => {
+    sampleHeight(current, viewport);
+    stale();
+  });
   mutations.observe(content, { childList: true, subtree: true });
   const observer = new ResizeObserver(resizeHandler(viewport, content, current, actions));
   observer.observe(content);

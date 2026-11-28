@@ -28,6 +28,11 @@ export interface OwnerState {
   /** The layout the owner last acted on: a scroll that comes with another one is the browser's, not the reader's. */
   seenHeight: number;
   seenClient: number;
+  /**
+   * The lowest content height since then, sampled when rows change while following: a shrink and a growth before the
+   * same scroll event (a fold, then a new row) leave a net change that hides the shrink the browser clamped against.
+   */
+  minHeight: number;
   published: boolean;
   listeners: Set<() => void>;
   restore: null | ReturnType<typeof readerAnchor>;
@@ -44,6 +49,7 @@ export function createOwnerState(following: boolean, away: boolean): OwnerState 
     lastTop: 0,
     seenHeight: 0,
     seenClient: 0,
+    minHeight: 0,
     published: following,
     listeners: new Set(),
     restore: null,
@@ -58,20 +64,27 @@ export function seen(current: OwnerState, el: HTMLElement) {
   current.lastTop = el.scrollTop;
   current.seenHeight = el.scrollHeight;
   current.seenClient = el.clientHeight;
+  current.minHeight = current.seenHeight;
+}
+
+/** Rows changed: while following, remember how low the content went before the next scroll or resize. */
+export function sampleHeight(current: OwnerState, el: HTMLElement) {
+  if (current.following) current.minHeight = Math.min(current.minHeight, el.scrollHeight);
 }
 
 /**
  * A move up that a layout the owner has not acted on yet explains: the browser clamped the position against the
- * new viewport (it lands at the old content's bottom), or anchored it by no more than the sizes changed. A move
- * larger than that is someone scrolling (the reader's threaded scroll before its wheel event, a selection drag,
- * Find), even while a stream changes the layout every frame.
+ * new viewport (it lands at the bottom of the lowest content since), or anchored it by no more than the content
+ * shrank plus the viewport changed. Content that only grew explains no move up, so any other move is someone
+ * scrolling (the reader's threaded scroll before its wheel event, a selection drag, Find), even while a stream
+ * changes the layout every frame.
  */
 export function layoutExplains(current: OwnerState, el: HTMLElement, top: number): boolean {
-  const height = el.scrollHeight - current.seenHeight;
+  const shrink = Math.max(0, current.seenHeight - Math.min(current.minHeight, el.scrollHeight));
   const client = el.clientHeight - current.seenClient;
-  if (height === 0 && client === 0) return false;
-  const clamped = top >= current.seenHeight - el.clientHeight - AT_BOTTOM_PX;
-  return clamped || current.lastTop - top <= Math.abs(height) + Math.abs(client) + 1;
+  if (el.scrollHeight === current.seenHeight && client === 0 && shrink === 0) return false;
+  const clamped = top >= Math.min(current.minHeight, el.scrollHeight) - el.clientHeight - AT_BOTTOM_PX;
+  return clamped || current.lastTop - top <= shrink + Math.abs(client) + 1;
 }
 
 /** The reader's downward input is recent enough to explain reaching the bottom. */

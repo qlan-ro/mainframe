@@ -112,8 +112,9 @@ describe('PlainMessages', () => {
     expect(list).not.toHaveAttribute('data-rows-empty');
   });
 
-  it('says it draws nothing when every loaded message is folded away', () => {
-    // Only reachable when no message carries the run's status row (it always keeps its row): here every one is queued.
+  it('says it draws nothing when every loaded message is folded away (a defensive state the app cannot reach)', () => {
+    // Built by hand: the folded set is mocked to hold every message, and all are queued so none is the status anchor.
+    // In the app queued prompts are never folded away and the newest message always keeps its row.
     foldedAway.ids = new Set(['m0', 'm1']);
     const queued = { custom: { mainframe: { queued: true } } };
     render(

@@ -25,11 +25,18 @@ interface Row {
 
 /**
  * Where to go on from when the first mounted row `gone` is no longer in `rows`: the first row at or after its place
- * in the full list (`orderOf`), or else a fresh tail of `FIRST_ROWS`.
+ * in the full list (`orderOf`). When it left the full list too (the window changed), the first row that was already
+ * mounted and is still there, so nothing mounted is mounted again; a fresh tail only when none is left.
  */
-function resumeAt(rows: readonly Row[], gone: string, orderOf?: (id: string) => number | undefined): number {
-  const place = orderOf?.(gone);
-  const next = place === undefined ? -1 : rows.findIndex((row) => (orderOf!(row.id) ?? -1) >= place);
+function resumeAt(
+  rows: readonly Row[],
+  gone: string,
+  orderOf: (id: string) => number | undefined,
+  mounted: ReadonlySet<string>,
+): number {
+  const place = orderOf(gone);
+  let next = place === undefined ? -1 : rows.findIndex((row) => (orderOf(row.id) ?? -1) >= place);
+  if (next < 0) next = rows.findIndex((row) => mounted.has(row.id));
   return next >= 0 ? next : Math.max(0, rows.length - FIRST_ROWS);
 }
 
@@ -50,7 +57,8 @@ function resumeAt(rows: readonly Row[], gone: string, orderOf?: (id: string) => 
 export function useTailFirstRows<T extends Row>(
   rows: T[],
   scroll: TranscriptScrollController | null,
-  orderOf?: (id: string) => number | undefined,
+  /** A row's place in the full list, including rows `rows` leaves out (a folded turn's empty messages). */
+  orderOf: (id: string) => number | undefined,
 ): T[] {
   const [state, setState] = useState<{ startId: string | null; done: boolean }>({ startId: null, done: false });
   if (!state.done && state.startId === null && rows.length > 0) {
@@ -58,11 +66,13 @@ export function useTailFirstRows<T extends Row>(
     setState({ startId: rows[start]!.id, done: start === 0 });
   }
   const findOpen = useFindInChatStore((s) => s.isOpen) && scroll?.findOwner === true;
+  /** The rows the last commit mounted. */
+  const mounted = useRef<ReadonlySet<string>>(new Set());
   let found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
   if (found < 0 && !state.done && state.startId !== null && rows.length > 0) {
     // The first mounted row left the list (its turn folded it away, the window changed): go on from the nearest row
     // still there at or after it, never from the top, which would mount the whole window in one commit (#517).
-    found = resumeAt(rows, state.startId, orderOf);
+    found = resumeAt(rows, state.startId, orderOf, mounted.current);
     setState({ startId: rows[found]!.id, done: found === 0 });
   }
   const startIndex = state.done || found < 0 ? 0 : found;
@@ -102,6 +112,10 @@ export function useTailFirstRows<T extends Row>(
     };
   }, [startIndex, state.startId]);
   const pending = startIndex > 0;
+  const shown = pending ? rows.slice(startIndex) : rows;
+  useLayoutEffect(() => {
+    mounted.current = new Set(shown.map((row) => row.id));
+  });
   const wasPending = useRef(false);
   useLayoutEffect(() => {
     // The pass that mounts the last rows ends the mount: it must still bring the tail into view before paint.
@@ -126,5 +140,5 @@ export function useTailFirstRows<T extends Row>(
     setPending?.(pending);
     return () => setPending?.(false);
   }, [pending, setPending]);
-  return pending ? rows.slice(startIndex) : rows;
+  return shown;
 }

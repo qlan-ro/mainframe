@@ -29,7 +29,7 @@ function Harness() {
   owner = useScrollOwner('thread', 'chat');
   return (
     <div ref={owner.setViewport} data-testid="viewport" tabIndex={-1}>
-      <div ref={owner.setContent}>
+      <div ref={owner.setContent} data-testid="content">
         <p>Read</p>
       </div>
     </div>
@@ -53,6 +53,14 @@ const DRIVEN = {
 const following = () => owner.controller.isFollowing();
 const bottomGap = () => layout.height - layout.client - layout.top;
 const resized = () => act(() => resize());
+/** Rows change to `height` (the owner's mutation observer samples the content height in a microtask). */
+async function rowsChange(height: number) {
+  layout.height = height;
+  await act(async () => {
+    viewport.querySelector('[data-testid="content"]')!.append(document.createElement('span'));
+    await Promise.resolve();
+  });
+}
 let now = 1000;
 
 beforeEach(() => {
@@ -90,9 +98,19 @@ describe('a layout the resize callback has not seen yet (#519)', () => {
     expect(bottomGap()).toBe(0);
   });
 
-  it('keeps following when anchoring moved the position up with content above and below changing', () => {
-    layout.height = 2060;
-    layout.top = 1440;
+  it('keeps following when a fold shrank the content, a layout read clamped to it and a row landed before the scroll event', async () => {
+    await rowsChange(1600);
+    layout.top = 1100; // clamped to the folded content
+    await rowsChange(1750);
+    fireEvent.scroll(viewport);
+    expect(following()).toBe(true);
+    expect(bottomGap()).toBe(0);
+  });
+
+  it('keeps following when anchoring moved the position up for a shrink above, with growth below after it', async () => {
+    await rowsChange(1940); // 60 px fold above the anchor
+    layout.top = 1440; // the browser anchors
+    await rowsChange(2040); // 100 px of new rows below
     fireEvent.scroll(viewport);
     expect(following()).toBe(true);
     expect(bottomGap()).toBe(0);

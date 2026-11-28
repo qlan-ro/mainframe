@@ -16,10 +16,11 @@
  *   while it is recent (`DOWN_INTENT_MS`) and only for a scroll that moved down: content that shrinks below
  *   the reader clamps the position to the bottom (a turn folding, a run of reads folding), and that is no
  *   reader asking to follow (#521),
- * - keeps following through a position change that a layout made before the resize callback saw it: when
- *   something reads layout between React's commit and the frame (the composer's autosize does), the browser
- *   clamps or anchors the position there, and its scroll event arrives before the resize callback. Only a
- *   move up with no size change behind it releases (#519),
+ * - keeps following through a move up that a layout change explains, made before the resize callback saw it:
+ *   when something reads layout between React's commit and the frame, the browser clamps or anchors the
+ *   position there, and its scroll event arrives before the resize callback. Only a layout change that explains
+ *   the move keeps follow: a clamp to the lowest content since the owner last acted, or a move no larger than
+ *   the content shrank plus the viewport changed (`layoutExplains`). Any other move up releases (#519),
  * - corrects a page that lands within a viewport of the top (or a slice of the opening window)
  *   where the browser did not hold the reader: the block they read is recorded in content
  *   coordinates before the commit, and after layout whatever shift the browser did not apply is

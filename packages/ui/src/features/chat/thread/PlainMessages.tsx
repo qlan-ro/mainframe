@@ -86,7 +86,8 @@ export function PlainMessages({ components }: { components: MessageComponents })
         data-loaded-user-count={userCount}
         data-virtualized={false}
         data-rows-pending={rows.length < all.length ? '' : undefined}
-        // Every loaded message is folded away: nothing will be drawn, as for an empty chat (the boot cover reads it).
+        // Defensive, unreachable today: the newest message always keeps its row. Should a list ever draw no row for any
+        // loaded message, it reads as an empty chat (the boot cover's `listState`), not as rows still to come.
         data-rows-empty={all.length === 0 ? '' : undefined}
       >
         {rows.map(({ id, index }) => (
