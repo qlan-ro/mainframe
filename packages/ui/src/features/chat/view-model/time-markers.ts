@@ -34,3 +34,17 @@ export function timeMarker(messages: readonly Timed[], index: number, atStart: b
   if (!sameDay(previous, date)) return `${dayName(date, now)}, ${clock(date)}`;
   return date.getTime() - previous.getTime() >= GAP_MS ? clock(date) : null;
 }
+
+/**
+ * Whether `timeMarker` shows a marker above `messages[index]` when the window starts the conversation, without
+ * formatting one: checked for every message on every streamed chunk (`turn/folded-away.ts`).
+ */
+export function hasTimeMarker(messages: readonly Timed[], index: number): boolean {
+  const date = valid(messages[index]);
+  if (!date) return false;
+  if (index === 0) return true;
+  const previous = valid(messages[index - 1]);
+  if (!previous || date < previous) return false;
+  // A gap of 30 minutes shows a marker whether or not the day changed; a shorter one only across midnight.
+  return date.getTime() - previous.getTime() >= GAP_MS || date.getDate() !== previous.getDate();
+}

@@ -92,6 +92,9 @@ function chatColumnUnmounted(): boolean {
   return document.querySelector('[data-surface="chat"]') == null;
 }
 
+/** A drawn row: a message, or the rows that carry no message id (a system marker, the reply's placeholder). */
+const ROWS = '[data-message-id], [data-testid="chat-system-message"], [data-testid="chat-reply-placeholder"]';
+
 function atTail(el: HTMLElement): boolean {
   return el.scrollTop + el.clientHeight >= el.scrollHeight - TAIL_SLOP_PX;
 }
@@ -103,7 +106,8 @@ function atTail(el: HTMLElement): boolean {
  * fills the viewport with its newest rows before its first paint and marks `data-rows-pending`
  * while older rows of the first window are still to mount above them.
  *
- * - `empty`: the list says it holds no messages (an empty chat): nothing more will arrive.
+ * - `empty`: the list says it holds no messages (an empty chat), or draws none of those it holds (the plain list's
+ *   `data-rows-empty`: every one is folded away): nothing more will arrive.
  * - `pending`: messages are loaded but no row is drawn yet, the list is not mounted, or it is
  *   hidden: what it will show is not on screen yet.
  * - `underfilled`: rows are shown but do not fill the viewport while more are still to mount.
@@ -111,8 +115,11 @@ function atTail(el: HTMLElement): boolean {
  */
 function listState(el: HTMLElement): 'empty' | 'pending' | 'underfilled' | 'shown' {
   const list = el.querySelector<HTMLElement>('[data-testid="chat-message-list"]');
-  const row = el.querySelector('[data-message-id]');
-  if (row == null) return list?.getAttribute('data-loaded-count') === '0' ? 'empty' : 'pending';
+  const row = el.querySelector(ROWS);
+  if (row == null)
+    return list?.getAttribute('data-loaded-count') === '0' || list?.hasAttribute('data-rows-empty')
+      ? 'empty'
+      : 'pending';
   if (getComputedStyle(list ?? (row as HTMLElement)).visibility === 'hidden') return 'pending';
   if (list?.hasAttribute('data-rows-pending') && el.scrollHeight <= el.clientHeight) return 'underfilled';
   return 'shown';

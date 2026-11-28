@@ -5,7 +5,7 @@
  * `TurnTranscript`, in a viewport laid out as `OwnedChatThreadViewport` lays it out, with the app's trim at the tail
  * (`use-trim-at-tail.ts`). Only the composer is a stub.
  */
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { EarlierMessages } from '@/features/chat/thread/EarlierMessages';
 import { TurnTranscript } from '@/features/chat/messages/turn/TurnTranscript';
 import { TranscriptScrollProvider } from '@/features/chat/thread/transcript-scroll-context';
@@ -19,14 +19,17 @@ import { ComposerStub } from './ComposerStub';
 const trimWindow = () => void store.trimToNewestPage();
 
 export function AppShell() {
-  const owner = useScrollOwner(CHAT_ID, CHAT_ID);
+  // A switch away and back (`scenarios/switch-back.ts`) changes the thread, as the app's chat column does.
+  const thread = useSyncExternalStore(store.subscribe, () => store.get().thread);
+  const owner = useScrollOwner(thread, CHAT_ID);
   const { viewport } = owner.controller;
   // The app's own hook; the rig's store cuts the window as `AcpHistory.trim` does.
   useTrimAtTail(owner, trimWindow, false);
   useEffect(() => {
     controls.viewport = viewport ?? null;
     controls.jump = owner.pinToBottom;
-  }, [viewport, owner.pinToBottom]);
+    controls.isFollowing = owner.controller.isFollowing;
+  }, [viewport, owner.pinToBottom, owner.controller.isFollowing]);
   return (
     <TranscriptScrollProvider value={owner.controller}>
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -45,7 +48,7 @@ export function AppShell() {
               className="relative mx-auto w-[calc(100%-0.5rem)] max-w-(--mf-transcript-width) flex-1 px-5 py-4"
             >
               <EarlierMessages />
-              <TurnTranscript key={CHAT_ID} />
+              {thread !== 'away' && <TurnTranscript key={thread} />}
             </div>
           </div>
           <TranscriptEdgeFades />

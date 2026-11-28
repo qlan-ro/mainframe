@@ -7,6 +7,8 @@ import { FIRST_ROWS, MAX_LAYOUT_PASSES, STEP_ROWS, useTailFirstRows } from '../u
 import type { TranscriptScrollController } from '../transcript-scroll-context';
 
 const make = (count: number, from = 0) => Array.from({ length: count }, (_, i) => ({ id: `m${from + i}` }));
+/** A row's place in the full list: `m12` is 12th. */
+const order = (id: string) => Number(id.slice(1));
 const owner = (
   beforePrepend: () => void,
   extra: Partial<TranscriptScrollController> = {},
@@ -39,7 +41,7 @@ const tick = () => act(() => void vi.advanceTimersByTime(17));
 describe('tail-first mount', () => {
   it('mounts the newest rows first, then lands the rest above in slices', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, null));
+    const { result } = renderHook(() => useTailFirstRows(rows, null, order));
     expect(result.current.map((r) => r.id)).toEqual(rows.slice(-FIRST_ROWS).map((r) => r.id));
     tick();
     expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
@@ -51,7 +53,7 @@ describe('tail-first mount', () => {
 
   it('keeps the newest rows at the end while the slices land', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, null));
+    const { result } = renderHook(() => useTailFirstRows(rows, null, order));
     for (let i = 0; i < 4; i++) {
       expect(result.current[result.current.length - 1]!.id).toBe('m39');
       tick();
@@ -61,7 +63,7 @@ describe('tail-first mount', () => {
   it('tells the owner before each slice, so a reader near the top is re-anchored', () => {
     const beforePrepend = vi.fn();
     const rows = make(40);
-    renderHook(() => useTailFirstRows(rows, owner(beforePrepend)));
+    renderHook(() => useTailFirstRows(rows, owner(beforePrepend), order));
     expect(beforePrepend).not.toHaveBeenCalled();
     tick();
     expect(beforePrepend).toHaveBeenCalledTimes(1);
@@ -72,13 +74,13 @@ describe('tail-first mount', () => {
 
   it('shows a short window whole at once', () => {
     const rows = make(FIRST_ROWS);
-    const { result } = renderHook(() => useTailFirstRows(rows, null));
+    const { result } = renderHook(() => useTailFirstRows(rows, null, order));
     expect(result.current).toHaveLength(FIRST_ROWS);
   });
 
   it('waits for the first messages, then mounts the tail first', () => {
     let rows = make(0);
-    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null));
+    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null, order));
     expect(result.current).toHaveLength(0);
     rows = make(40);
     rerender();
@@ -87,7 +89,7 @@ describe('tail-first mount', () => {
 
   it('adds rows streamed at the end without losing the rows above', () => {
     let rows = make(40);
-    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null));
+    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null, order));
     tick();
     rows = make(41);
     rerender();
@@ -99,7 +101,7 @@ describe('tail-first mount', () => {
 
   it('puts an older page that lands meanwhile in the rows still to come', () => {
     let rows = make(40, 100);
-    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null));
+    const { result, rerender } = renderHook(() => useTailFirstRows(rows, null, order));
     rows = [...make(30, 70), ...rows];
     rerender();
     const shown = result.current.length;
@@ -111,7 +113,7 @@ describe('tail-first mount', () => {
 
   it('shows every row at once for a jump to a row of this chat, and ignores one for another chat', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn()), order));
     act(() => void window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId: 'other' } })));
     expect(result.current).toHaveLength(FIRST_ROWS);
     act(() => void window.dispatchEvent(new CustomEvent(ACTIVITY_JUMP_EVENT, { detail: { chatId: 'chat' } })));
@@ -120,14 +122,14 @@ describe('tail-first mount', () => {
 
   it('shows every row at once while Find is open in the chat that owns it', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn()), order));
     act(() => useFindInChatStore.setState({ isOpen: true }));
     expect(result.current).toHaveLength(40);
   });
 
   it('keeps every row mounted when Find closes again (Escape), so the reader’s block does not unmount', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn())));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn()), order));
     act(() => useFindInChatStore.setState({ isOpen: true }));
     const above = result.current.map((row) => row.id);
     act(() => useFindInChatStore.setState({ isOpen: false }));
@@ -139,7 +141,7 @@ describe('tail-first mount', () => {
 
   it('does not reveal rows for Find in a list that does not own it', () => {
     const rows = make(40);
-    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn(), { findOwner: false })));
+    const { result } = renderHook(() => useTailFirstRows(rows, owner(vi.fn(), { findOwner: false }), order));
     act(() => useFindInChatStore.setState({ isOpen: true }));
     expect(result.current).toHaveLength(FIRST_ROWS);
   });
@@ -151,6 +153,7 @@ describe('tail-first mount', () => {
       useTailFirstRows(
         rows,
         owner(vi.fn(), { tailPending: { get: () => false, subscribe: () => () => {}, set: pending } }),
+        order,
       ),
     );
     expect(pending).toHaveBeenLastCalledWith(true);
@@ -165,18 +168,25 @@ describe('a tail shorter than the viewport', () => {
   const sized = (rowHeight: number, clientHeight = 500) => {
     const state = { mounted: 0 };
     const viewport = document.createElement('div');
+    let scrollTop = 0;
     Object.defineProperties(viewport, {
       clientHeight: { get: () => clientHeight },
       scrollHeight: { get: () => Math.max(clientHeight, state.mounted * rowHeight) },
+      scrollTop: { get: () => scrollTop },
     });
-    const followNow = vi.fn();
+    // The owner's `followNow`: the position goes to the bottom of what is mounted when it is asked.
+    const followNow = vi.fn(() => {
+      scrollTop = viewport.scrollHeight - clientHeight;
+    });
     const controller = owner(vi.fn(), { viewportElement: { current: viewport }, followNow });
-    const use = (rows: { id: string }[]) => {
-      const shown = useTailFirstRows(rows, controller);
+    const use = (rows: { id: string }[], orderOf: (id: string) => number | undefined = order) => {
+      const shown = useTailFirstRows(rows, controller, orderOf);
       state.mounted = shown.length;
       return shown;
     };
-    return { use, followNow };
+    /** The tail is in view: the position is at the bottom of the mounted rows. */
+    const atTail = () => scrollTop === viewport.scrollHeight - clientHeight;
+    return { use, followNow, atTail };
   };
 
   it('mounts further slices before the first paint until the content overflows the viewport', () => {
@@ -185,6 +195,39 @@ describe('a tail shorter than the viewport', () => {
     // Six rows are 180 px, eighteen are 540 px: the second slice fills the viewport, in the first commit.
     const { result } = renderHook(() => use(rows));
     expect(result.current).toHaveLength(FIRST_ROWS + STEP_ROWS);
+  });
+
+  it('keeps the tail in view when the pass that mounts the last rows is the one that overflows', () => {
+    // Six rows are 240 px; the next pass mounts all fifteen (600 px, past the 500 px viewport) and ends the mount.
+    // The owner's resize observer only exists after the first paint, so that pass must ask it to follow.
+    const { use, atTail } = sized(40);
+    const { result } = renderHook(() => use(make(15)));
+    expect(result.current).toHaveLength(15);
+    expect(atTail()).toBe(true);
+  });
+
+  it('goes on from the nearest row left when the first mounted one is folded away mid-mount', () => {
+    const all = make(60);
+    const orderOf = (id: string) => Number(id.slice(1));
+    const { use } = sized(200);
+    const { result, rerender } = renderHook(({ rows }) => use(rows, orderOf), { initialProps: { rows: all } });
+    expect(result.current.map((row) => row.id)).toEqual(['m54', 'm55', 'm56', 'm57', 'm58', 'm59']);
+    // A turn folds and its empty messages m40 to m56 leave the list, the first mounted row among them.
+    rerender({ rows: all.filter((row) => orderOf(row.id) < 40 || orderOf(row.id) > 56) });
+    expect(result.current.map((row) => row.id)).toEqual(['m57', 'm58', 'm59']);
+  });
+
+  it('goes on from the first row it had mounted when the first one left the window altogether', () => {
+    const all = make(60);
+    const { use } = sized(200);
+    const { result, rerender } = renderHook(({ rows, orderOf }) => use(rows, orderOf), {
+      initialProps: { rows: all, orderOf: order as (id: string) => number | undefined },
+    });
+    expect(result.current.map((row) => row.id)).toEqual(['m54', 'm55', 'm56', 'm57', 'm58', 'm59']);
+    // m54 and m55 are gone from the full list too: there is no place to go on from, only what was mounted.
+    const left = (id: string) => (id === 'm54' || id === 'm55' ? undefined : order(id));
+    rerender({ rows: all.filter((row) => left(row.id) !== undefined), orderOf: left });
+    expect(result.current.map((row) => row.id)).toEqual(['m56', 'm57', 'm58', 'm59']);
   });
 
   it('stops at the whole window when it never overflows', () => {

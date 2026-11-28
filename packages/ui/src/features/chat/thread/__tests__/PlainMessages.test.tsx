@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import {
@@ -16,6 +16,9 @@ vi.mock('../TimeMarker', () => ({ TimeMarker: ({ index }: { index: number }) => 
 vi.mock('../TurnStatusRow', () => ({ TurnStatusRow: () => <b data-testid="status-row" /> }));
 vi.mock('../VirtualMessages', () => ({ VirtualMessages: () => <div data-testid="virtual-list" /> }));
 vi.mock('@/lib/after-first-paint', () => ({ markFirstTranscriptShown: vi.fn() }));
+/** The messages a folded turn draws nothing for (`use-folded-away-rows.ts`), set per test. */
+const foldedAway = vi.hoisted(() => ({ ids: new Set<string>() }));
+vi.mock('../use-folded-away-rows', () => ({ useFoldedAwayRows: () => foldedAway.ids }));
 
 import { PlainMessages } from '../PlainMessages';
 import { TranscriptList } from '../TranscriptList';
@@ -56,7 +59,10 @@ const controller = {
   beginInteraction: () => () => undefined,
 };
 
-beforeEach(() => vi.mocked(markFirstTranscriptShown).mockClear());
+beforeEach(() => {
+  vi.mocked(markFirstTranscriptShown).mockClear();
+  foldedAway.ids = new Set();
+});
 
 describe('PlainMessages', () => {
   it('draws every row of a short window, in order, with its index from the list', () => {
@@ -91,6 +97,59 @@ describe('PlainMessages', () => {
     expect(rows).toHaveLength(FIRST_ROWS);
     expect(rows[rows.length - 1]).toHaveTextContent('text 39');
     expect(screen.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '40');
+  });
+
+  it('marks rows still to mount above the newest ones (the boot cover reads it), and clears the mark once all are in', async () => {
+    render(
+      <Harness messages={make(40)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    const list = screen.getByTestId('chat-message-list');
+    expect(list).toHaveAttribute('data-rows-pending', '');
+    await waitFor(() => expect(screen.getAllByTestId('row')).toHaveLength(40));
+    expect(list).not.toHaveAttribute('data-rows-pending');
+    expect(list).not.toHaveAttribute('data-rows-empty');
+  });
+
+  it('says it draws nothing when every loaded message is folded away (a defensive state the app cannot reach)', () => {
+    // Built by hand: the folded set is mocked to hold every message, and all are queued so none is the status anchor.
+    // In the app queued prompts are never folded away and the newest message always keeps its row.
+    foldedAway.ids = new Set(['m0', 'm1']);
+    const queued = { custom: { mainframe: { queued: true } } };
+    render(
+      <Harness messages={make(2).map((message) => ({ ...message, metadata: queued }))}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    const list = screen.getByTestId('chat-message-list');
+    expect(screen.queryAllByTestId('row')).toHaveLength(0);
+    expect(list).toHaveAttribute('data-rows-empty', '');
+    expect(list).toHaveAttribute('data-loaded-count', '2');
+  });
+});
+
+describe('a folded turn’s messages that draw nothing', () => {
+  it('get no row, while the loaded count still counts them', () => {
+    foldedAway.ids = new Set(['m1', 'm2']);
+    render(
+      <Harness messages={make(4)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    expect(screen.getAllByTestId('row').map((row) => row.textContent)).toEqual(['text 0', 'text 3']);
+    expect(screen.getByTestId('chat-message-list')).toHaveAttribute('data-loaded-count', '4');
+  });
+
+  it('never leave out the newest message, which carries the run’s status row', () => {
+    foldedAway.ids = new Set(['m2', 'm3']);
+    render(
+      <Harness messages={make(4)}>
+        <PlainMessages components={components} />
+      </Harness>,
+    );
+    expect(screen.getAllByTestId('row').map((row) => row.textContent)).toEqual(['text 0', 'text 1', 'text 3']);
+    expect(screen.getByTestId('status-row')).toBeInTheDocument();
   });
 });
 

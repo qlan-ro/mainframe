@@ -67,6 +67,47 @@ export const CASES = [
   { id: 'S-noise-flick', query: '', run: 'sNoise', options: { dy: -700, flicks: 2 }, engines: ['wk'] },
   // #462: the window stays bounded. Scroll up 10 pages and back down, twice, on the app's list (`--variants app`).
   { id: 'W-bound', query: '&total=400', run: 'bound', options: { pages: 10, cycles: 2 }, engines: ['wk'] },
+  // #521: the reader scrolls up while a Claude-shaped reply streams and holds still; the run ends (and the turn
+  // folds) while they read. `-real` is the measured shape of a real chat (folded tool-heavy turns).
+  ...[
+    ['', ''],
+    ['-real', '&shape=real'],
+  ].flatMap(([name, query]) => [
+    { id: `R-read-near${name}`, query, run: 'readStream', options: { up: 600, read: 12, endAt: 8 }, engines: ['wk'] },
+    { id: `R-read-far${name}`, query, run: 'readStream', options: { up: 3000, read: 12, endAt: 8 }, engines: ['wk'] },
+    { id: `R-read-nudge${name}`, query, run: 'readStream', options: { up: 1500, read: 12, endAt: 9, nudges: 4 }, engines: ['wk'] },
+    // A reader just above the tail who scrolled back down a little: what folds or ends below must not pin them.
+    { id: `R-read-tail${name}`, query, run: 'readStream', options: { up: 300, down: 60, read: 12, endAt: 8 }, engines: ['wk'] },
+    // A selection dragged above the viewport scrolls up with no wheel input while the reply streams.
+    { id: `R-read-drag${name}`, query, run: 'readStream', options: { up: 600, step: -40, drag: true, read: 6 }, engines: ['wk'] },
+    { id: `R-read-tail-still${name}`, query, run: 'readStream', options: { up: 300, read: 12, endAt: 8 }, engines: ['wk'] },
+    // Older pages land above a reader parked near the top of the window while the reply streams.
+    { id: `R-read-page${name}`, query, run: 'readStream', options: { up: 300, parkAt: 200, read: 10, pages: 4, endAt: 8 }, engines: ['wk'] },
+    { id: `R-read-page-mid${name}`, query, run: 'readStream', options: { up: 300, parkAt: 1200, read: 10, pages: 4, endAt: 8 }, engines: ['wk'] },
+  ]),
+  // #519: a send at the tail (composer clearing, prompt row, the owner's re-pin), then thinking and content
+  // stream in. `-prev` ends a running turn just before the send, `-prev-after` just after, so its fold lands then.
+  ...[
+    ['', ''],
+    ['-real', '&shape=real'],
+  ].flatMap(([name, query]) => [
+    { id: `R-send${name}`, query, run: 'send', options: {}, engines: ['wk'] },
+    { id: `R-send-prev${name}`, query, run: 'send', options: { previous: 4, endBefore: 300 }, engines: ['wk'] },
+    { id: `R-send-prev-after${name}`, query, run: 'send', options: { previous: 4, endBefore: -150 }, engines: ['wk'] },
+    // The real autosizing composer field (assistant-ui's `ComposerPrimitive.Input`) holding a six-line draft; Enter sends.
+    { id: `R-send-composer${name}`, query: `${query}&composer=real`, run: 'send', options: {}, engines: ['wk'] },
+    { id: `R-send-composer-prev${name}`, query: `${query}&composer=real`, run: 'send', options: { previous: 4, endBefore: 300 }, engines: ['wk'] },
+    // Something reads layout after each commit, in the same task (the composer's autosize does at a send).
+    { id: `R-send-layout${name}`, query, run: 'send', options: { forceLayout: true }, engines: ['wk'] },
+    { id: `R-send-layout-prev${name}`, query, run: 'send', options: { forceLayout: true, previous: 4, endBefore: -150 }, engines: ['wk'] },
+  ]),
+  // #518: switch away from a large chat and back; the rows remount tail-first. `heavy` folds ~1,500 messages into 1 px rows.
+  { id: 'R-switch-heavy', query: '&shape=heavy', run: 'switchBack', options: {}, engines: ['wk'] },
+  { id: 'R-switch-real', query: '&shape=real', run: 'switchBack', options: {}, engines: ['wk'] },
+  { id: 'R-switch', query: '', run: 'switchBack', options: {}, engines: ['wk'] },
+  // #517 / #516: flicks up through older pages of ten whole turns, each about 1,500 rows (most of them 1 px folded rows).
+  { id: 'S-top-heavy-flick', query: '&shape=heavy', run: 'sTop', options: { dy: -900, flicks: 4, park: true }, engines: ['wk'] },
+  { id: 'S-top-heavy-300', query: '&shape=heavy', run: 'sTop', options: { dy: -300, steps: 30, park: true }, engines: ['wk'] },
   { id: 'P7-flicks', query: '', run: 'p7proxy', options: { loads: 3 }, engines: ['wk'] },
   // #463: a long sub-agent's steps (`--variants agent,agent+inline,agent+plain=0,agent+inline+plain=0`). A-park: one
   // older page lands under a parked reader (400 px into the steps, or at offset 0 in the tab). A-wheel: the reader

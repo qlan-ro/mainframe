@@ -47,6 +47,8 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // `RIG_MINIFY=0` keeps names, so the per-frame log (`frame-log.ts`) can say who wrote the scroll position.
+    minify: process.env.RIG_MINIFY !== '0',
     outDir: process.env.RIG_OUT ?? resolve(here, '../../node_modules/.rig-transcript-list'),
     emptyOutDir: true,
   },

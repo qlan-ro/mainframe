@@ -24,6 +24,23 @@ interface Row {
 }
 
 /**
+ * Where to go on from when the first mounted row `gone` is no longer in `rows`: the first row at or after its place
+ * in the full list (`orderOf`). When it left the full list too (the window changed), the first row that was already
+ * mounted and is still there, so nothing mounted is mounted again; a fresh tail only when none is left.
+ */
+function resumeAt(
+  rows: readonly Row[],
+  gone: string,
+  orderOf: (id: string) => number | undefined,
+  mounted: ReadonlySet<string>,
+): number {
+  const place = orderOf(gone);
+  let next = place === undefined ? -1 : rows.findIndex((row) => (orderOf(row.id) ?? -1) >= place);
+  if (next < 0) next = rows.findIndex((row) => mounted.has(row.id));
+  return next >= 0 ? next : Math.max(0, rows.length - FIRST_ROWS);
+}
+
+/**
  * Tail-first mount. The first window mounts its newest `FIRST_ROWS` rows, then the rest lands
  * above them `STEP_ROWS` at a time, one slice per task. A reader at the tail stays there (the owner
  * follows); a reader who has already moved up near the top is re-anchored per slice
@@ -37,14 +54,27 @@ interface Row {
  * So while the content does not overflow the viewport and rows are still waiting, the next slice
  * mounts in a layout effect (committed before paint), until it overflows or the window runs out.
  */
-export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScrollController | null): T[] {
+export function useTailFirstRows<T extends Row>(
+  rows: T[],
+  scroll: TranscriptScrollController | null,
+  /** A row's place in the full list, including rows `rows` leaves out (a folded turn's empty messages). */
+  orderOf: (id: string) => number | undefined,
+): T[] {
   const [state, setState] = useState<{ startId: string | null; done: boolean }>({ startId: null, done: false });
   if (!state.done && state.startId === null && rows.length > 0) {
     const start = Math.max(0, rows.length - FIRST_ROWS);
     setState({ startId: rows[start]!.id, done: start === 0 });
   }
   const findOpen = useFindInChatStore((s) => s.isOpen) && scroll?.findOwner === true;
-  const found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
+  /** The rows the last commit mounted. */
+  const mounted = useRef<ReadonlySet<string>>(new Set());
+  let found = state.startId === null ? -1 : rows.findIndex((row) => row.id === state.startId);
+  if (found < 0 && !state.done && state.startId !== null && rows.length > 0) {
+    // The first mounted row left the list (its turn folded it away, the window changed): go on from the nearest row
+    // still there at or after it, never from the top, which would mount the whole window in one commit (#517).
+    found = resumeAt(rows, state.startId, orderOf, mounted.current);
+    setState({ startId: rows[found]!.id, done: found === 0 });
+  }
   const startIndex = state.done || found < 0 ? 0 : found;
   const layoutPasses = useRef(0);
   const latest = useRef({ rows, scroll });
@@ -82,13 +112,21 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     };
   }, [startIndex, state.startId]);
   const pending = startIndex > 0;
+  const shown = pending ? rows.slice(startIndex) : rows;
   useLayoutEffect(() => {
-    if (!pending) return;
+    mounted.current = new Set(shown.map((row) => row.id));
+  });
+  const wasPending = useRef(false);
+  useLayoutEffect(() => {
+    // The pass that mounts the last rows ends the mount: it must still bring the tail into view before paint.
+    const finished = wasPending.current && !pending;
+    wasPending.current = pending;
+    if (!pending && !finished) return;
     const viewport = scroll?.viewportElement.current;
     if (!viewport || viewport.clientHeight === 0) return;
     // The owner's resize observer is created after the first paint, so keep the tail in view from here.
     scroll?.followNow?.();
-    if (viewport.scrollHeight > viewport.clientHeight) return;
+    if (finished || viewport.scrollHeight > viewport.clientHeight) return;
     if (layoutPasses.current >= MAX_LAYOUT_PASSES) return;
     const at = rows.findIndex((row) => row.id === state.startId);
     if (at <= 0) return;
@@ -102,5 +140,5 @@ export function useTailFirstRows<T extends Row>(rows: T[], scroll: TranscriptScr
     setPending?.(pending);
     return () => setPending?.(false);
   }, [pending, setPending]);
-  return pending ? rows.slice(startIndex) : rows;
+  return shown;
 }

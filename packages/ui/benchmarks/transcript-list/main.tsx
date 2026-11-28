@@ -27,6 +27,10 @@ import { V2Shell } from './shells/V2Shell';
 import { AppShell } from './shells/AppShell';
 import { AgentShell } from './shells/AgentShell';
 import { openSomeTurns } from './open-turns';
+import { readStream } from './scenarios/read-stream';
+import { send } from './scenarios/send';
+import { inputOrder } from './scenarios/input-order';
+import { switchBack } from './scenarios/switch-back';
 
 const SHELLS = {
   v0: V0Shell,
@@ -52,6 +56,10 @@ const SCENARIOS = {
   agentPark,
   agentWheel,
   agentBound,
+  readStream,
+  send,
+  inputOrder,
+  switchBack,
 } as Record<string, (o: object) => Promise<unknown>>;
 
 openSomeTurns();

@@ -197,6 +197,8 @@ export async function sTop({
     wheelEvents: events.length,
     wheelSum: round(events.reduce((acc, e) => acc + e.dy, 0)),
     frames: all.length,
+    // The longest gap between two frames: a page that mounts every row at once stalls the main thread here.
+    longestFrameMs: round(Math.max(0, ...all.slice(1).map((s, i) => s.t - all[i]!.t))),
   };
 }
 
