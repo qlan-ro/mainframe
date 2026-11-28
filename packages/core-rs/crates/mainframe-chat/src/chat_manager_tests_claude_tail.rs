@@ -48,24 +48,40 @@ impl Writer {
     }
 
     fn user(&mut self, text: &str) {
-        self.line("u", true, json!({"message": {"role": "user", "content": text}}));
+        self.line(
+            "u",
+            true,
+            json!({"message": {"role": "user", "content": text}}),
+        );
     }
 
     fn reply(&mut self, text: &str) {
         let id = format!("msg-{}", self.n);
-        self.line("a", false, json!({"message": {"id": id, "role": "assistant",
-            "stop_reason": "end_turn", "content": [{"type": "text", "text": text}]}}));
+        self.line(
+            "a",
+            false,
+            json!({"message": {"id": id, "role": "assistant",
+            "stop_reason": "end_turn", "content": [{"type": "text", "text": text}]}}),
+        );
     }
 
     fn call(&mut self, id: &str, name: &str, input: Value) {
-        self.line("a", false, json!({"message": {"id": format!("msg-{id}"), "role": "assistant",
+        self.line(
+            "a",
+            false,
+            json!({"message": {"id": format!("msg-{id}"), "role": "assistant",
             "stop_reason": "tool_use",
-            "content": [{"type": "tool_use", "id": id, "name": name, "input": input}]}}));
+            "content": [{"type": "tool_use", "id": id, "name": name, "input": input}]}}),
+        );
     }
 
     fn result(&mut self, id: &str, text: &str) {
-        self.line("r", false, json!({"message": {"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": id, "content": text}]}}));
+        self.line(
+            "r",
+            false,
+            json!({"message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": id, "content": text}]}}),
+        );
     }
 }
 
@@ -99,8 +115,12 @@ fn transcript(path: &std::path::Path, shape: &Shape) {
             || (turn == TURNS - 3 && matches!(shape, Shape::IdleInWindow))
         {
             {
-                w.line("s", false, json!({"type": "system", "subtype": "compact_boundary",
-                    "uuid": "boundary", "content": "Conversation compacted"}));
+                w.line(
+                    "s",
+                    false,
+                    json!({"type": "system", "subtype": "compact_boundary",
+                    "uuid": "boundary", "content": "Conversation compacted"}),
+                );
                 w.parent = Some("boundary".into());
             }
         }
@@ -109,7 +129,11 @@ fn transcript(path: &std::path::Path, shape: &Shape) {
         w.result(&id, &blob);
         if turn == TURNS - 1 && matches!(shape, Shape::TaskAcrossCut) {
             {
-                w.call("update", "TaskUpdate", json!({"taskId": "1", "status": "completed"}));
+                w.call(
+                    "update",
+                    "TaskUpdate",
+                    json!({"taskId": "1", "status": "completed"}),
+                );
                 w.result("update", "Updated task #1 status");
             }
         }
@@ -127,7 +151,13 @@ fn user_count(messages: &[mainframe_types::display::DisplayMessage]) -> usize {
 
 /// Opens the chat through its tail window, then loads it in full. The
 /// window (`None` when the adapter fell back) and the number of resyncs.
-async fn open(shape: Shape, idle_marker: bool) -> (Option<(Vec<mainframe_types::display::DisplayMessage>, bool)>, usize) {
+async fn open(
+    shape: Shape,
+    idle_marker: bool,
+) -> (
+    Option<(Vec<mainframe_types::display::DisplayMessage>, bool)>,
+    usize,
+) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join(format!("{SESSION}.jsonl"));
     transcript(&path, &shape);

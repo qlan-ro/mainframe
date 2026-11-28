@@ -113,6 +113,43 @@ impl FacadeHub {
         });
     }
 
+    /// Stores the first window a cold resume would send, built from the
+    /// history the chat now holds in full. A reply answered from adapter pages
+    /// is never stored (its list was partial), so without this the restart
+    /// after a first-ever open would find no tail. Skipped when the chat holds
+    /// a pending permission or no current validation.
+    pub(crate) async fn persist_loaded_tail(
+        &self,
+        manager: Arc<ChatManager>,
+        request: JsonRpcRequest,
+        options: ResumeOptions,
+    ) {
+        let Some((chat_id, window)) = first_window(&request, options) else {
+            return;
+        };
+        let (Some(store), Some(validation)) =
+            (&self.history_tails, manager.history_validation(&chat_id))
+        else {
+            return;
+        };
+        // Encoded straight from the cached history, borrowed: only the window
+        // is copied. A pending gate or a stream leaves nothing to store.
+        let port = crate::acp_ws::ports::ManagerPorts::new(Some(Arc::clone(&manager)));
+        let options = ResumeOptions {
+            defer_log_seed: false,
+            ..options
+        };
+        let encoded = mainframe_acp::dispatch_resume_with(request, &port, None, options).await;
+        let window = TailWindow {
+            window,
+            previews: options.result_previews,
+        };
+        super::history_refresh::store_encoded(
+            &manager, store, &chat_id, window, validation, encoded,
+        )
+        .await;
+    }
+
     fn remember_window(&self, chat_id: &str, window: &Value, options: ResumeOptions) {
         self.remember_tail_window(
             chat_id,

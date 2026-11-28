@@ -45,6 +45,8 @@ pub(crate) struct FakeAdapterPort {
     pub(crate) history_loads: Arc<AtomicUsize>,
     /// `AdapterSession::history_sources()` for every `FakeSession` handed out.
     pub(crate) history_sources: Mutex<Vec<std::path::PathBuf>>,
+    /// The files each read collects, and what every scan was handed.
+    pub(crate) scan: super::fake_scan::FakeScan,
     /// When `Some`, `create_session` returns it instead of a `FakeSession`.
     pub(crate) session_to_return: Mutex<Option<Arc<dyn AdapterSession>>>,
     /// Every `SessionOptions` `create_session` was called with, in order.
@@ -159,6 +161,7 @@ impl AdapterPort for FakeDeps {
                 history,
                 history_loads: Some(Arc::clone(&self.adapters.history_loads)),
                 history_sources: self.adapters.history_sources.lock_recover().clone(),
+                collects_files: self.adapters.scan.collects.lock_recover().clone(),
                 spawn_ok: *self.adapters.spawn_ok.lock_recover(),
                 ..Default::default()
             }) as Arc<dyn AdapterSession>
@@ -174,15 +177,9 @@ impl AdapterPort for FakeDeps {
         &'a self,
         _chat_id: &'a str,
         _canonical: Option<&'a [ChatMessage]>,
-        _files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
+        files: Option<mainframe_adapter_api::CollectedHistoryFiles>,
     ) -> BoxFuture<'a, ()> {
-        let gate = self.adapters.scan_gate.lock_recover().clone();
-        Box::pin(async move {
-            self.adapters.scan_started.notify_one();
-            if let Some(gate) = gate {
-                gate.notified().await;
-            }
-        })
+        self.adapters.scan(files)
     }
     fn resolve_tuning<'a>(&'a self, _chat_id: &'a str) -> BoxFuture<'a, Option<ResolvedTuning>> {
         let resolved = self.adapters.resolved_tuning.lock_recover().clone();

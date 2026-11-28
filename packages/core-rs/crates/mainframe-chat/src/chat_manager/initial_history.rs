@@ -7,6 +7,12 @@ impl ChatManager {
         self.shared.history_cache.mark_served(chat_id, validation);
     }
 
+    /// Whether the chat is loaded (it has an active cell): its history, worktree
+    /// baseline and scans have run.
+    pub fn is_chat_loaded(&self, chat_id: &str) -> bool {
+        self.shared.active_chats.contains_key(chat_id)
+    }
+
     pub fn publish_initial_history_state(&self, chat_id: &str) {
         self.lifecycle.publish_resume_state(chat_id);
     }

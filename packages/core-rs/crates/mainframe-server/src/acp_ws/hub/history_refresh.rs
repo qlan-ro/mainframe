@@ -16,7 +16,7 @@ use super::FacadeHub;
 use super::history_tail::TailStore;
 #[path = "history_refresh_tail.rs"]
 mod tail;
-use tail::write_tail;
+pub(super) use tail::{store_encoded, write_tail};
 
 /// Long enough for the CLI to finish writing the turn's last records, short
 /// enough that quitting soon after a turn usually finds nothing left to do.

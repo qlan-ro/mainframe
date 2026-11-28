@@ -134,7 +134,15 @@ async fn resume(
     }
     let cm = &ctx.chat.chat_manager;
     if query.wait_for.is_some() {
-        if query.initial_window && ctx.chat.facade_hub.initial_history_ready(cm, &id).await {
+        // A first window the resume can answer without the whole history (a
+        // persisted tail, or the adapter's newest pages) needs no restore
+        // first: the resume completes the history in the background after
+        // its reply. Restoring here would fill the history before the resume
+        // arrives and leave it nothing to answer from.
+        if query.initial_window
+            && (ctx.chat.facade_hub.initial_history_ready(cm, &id).await
+                || cm.adapter_window_candidate(&id).await)
+        {
             cm.publish_initial_history_state(&id);
             return ok_empty();
         }

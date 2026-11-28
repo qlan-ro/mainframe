@@ -247,10 +247,10 @@ impl AdapterSession for CodexSession {
     }
 
     fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
-        Box::pin(
-            self.load_history_window_inner(req)
-                .instrument(self.span.clone()),
-        )
+        self.history_window_future(req)
+    }
+    fn will_page_history(&self) -> BoxFuture<'_, bool> {
+        self.will_page_future()
     }
 
     fn history_dependencies(&self) -> Option<Vec<mainframe_adapter_api::HistoryDependency>> {

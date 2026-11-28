@@ -75,11 +75,15 @@ async fn stat(path: &Path) -> Option<SourceFingerprint> {
     })
 }
 
+/// Written in field order: `fingerprint` first, so a stale snapshot is told
+/// from the file's first bytes (`history_cache_peek.rs`). Files written before
+/// it led hold it after `adapter_state` and `dependencies`; they still parse,
+/// and the peek's limit decides whether they are served (see `HEAD_LIMIT`).
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
+    fingerprint: HistoryFingerprint,
     adapter_state: serde_json::Value,
     dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
-    fingerprint: HistoryFingerprint,
     messages: Vec<ChatMessage>,
     /// Older snapshots lack it; the scan then reads the transcript as before.
     #[serde(default)]
@@ -128,15 +132,6 @@ impl HistorySnapshotCache {
         }
     }
 
-    /// Whether a snapshot file exists for `chat_id`, valid or not. A cheap
-    /// stand-in for a hit: a stale one costs the full read it would have cost
-    /// anyway, a missing one is what paged reads are for.
-    pub(crate) async fn has_snapshot(&self, chat_id: &str) -> bool {
-        tokio::fs::metadata(self.snapshot_path(chat_id))
-            .await
-            .is_ok()
-    }
-
     pub(crate) fn mark_window(&self, chat_id: &str, marker: Vec<crate::window_marker::Mark>) {
         let mut windows = self.windows.lock().unwrap_or_else(|e| e.into_inner());
         if windows.len() >= self.max_snapshots
@@ -178,6 +173,10 @@ impl HistorySnapshotCache {
         chat_id: &str,
         expected: &HistoryFingerprint,
     ) -> Option<Snapshot> {
+        // A stale snapshot is told from its first bytes, not a whole read.
+        if self.peek_fingerprint(chat_id).await.as_ref() != Some(expected) {
+            return None;
+        }
         let bytes = tokio::fs::read(self.snapshot_path(chat_id)).await.ok()?;
         let snapshot: Snapshot =
             match tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
@@ -334,3 +333,6 @@ enum SnapshotWriteError {
 
 #[path = "history_cache_load.rs"]
 mod load;
+
+#[path = "history_cache_peek.rs"]
+mod peek;

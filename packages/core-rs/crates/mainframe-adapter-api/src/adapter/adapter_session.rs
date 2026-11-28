@@ -173,6 +173,14 @@ pub trait AdapterSession: Send + Sync {
         let _ = req;
         Box::pin(async { Ok(None) })
     }
+    /// Whether [`load_history_window`](Self::load_history_window) is expected
+    /// to page this session rather than decline at once: the same cheap
+    /// checks the window read starts with (file stats, the target thread),
+    /// nothing read. `false` sends the caller to the whole history up front;
+    /// `true` is no promise, since a read can still decline.
+    fn will_page_history(&self) -> BoxFuture<'_, bool> {
+        Box::pin(async { false })
+    }
     fn load_subagent_history(
         &self,
         _agent_id: String,
