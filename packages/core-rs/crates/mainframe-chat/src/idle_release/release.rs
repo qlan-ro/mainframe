@@ -33,7 +33,11 @@ impl ChatRelease {
     }
 
     async fn try_release(&self, chat_id: &str, idle_before: i64) {
-        if !self.holds_history(chat_id) || self.idle_compaction_open(chat_id).await {
+        if !self.holds_history(chat_id) {
+            return;
+        }
+        if self.idle_compaction_open(chat_id).await {
+            debug!(chat_id, reason = "idle compaction due", "kept chat history");
             return;
         }
         // A delegated task on either side of the chat keeps it; holding the
@@ -44,11 +48,13 @@ impl ChatRelease {
             .reserve_idle_close(chat_id)
             .await
         else {
+            debug!(chat_id, reason = "delegated work", "kept chat history");
             return;
         };
         // Loads, starts, sends, interrupts and history reads exclude the
         // release, and wait for it to finish before they read the cache.
         let Some(claim) = self.lifecycle.try_claim_offload(chat_id) else {
+            debug!(chat_id, reason = "busy", "kept chat history");
             return;
         };
         if let Some(reason) = self.blocker(chat_id, idle_before) {
