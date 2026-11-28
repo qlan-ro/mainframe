@@ -28,7 +28,7 @@ use crate::worktree_offer::WorktreeOfferRegistry;
 mod history;
 mod interrupt;
 mod load_history;
-mod release;
+pub(crate) mod release;
 mod spawn_prep;
 mod transcript_ready;
 
@@ -140,12 +140,12 @@ impl ChatLifecycleManager {
     /// Bump `chat_id`'s in-memory "last used" clock to now, if its registry
     /// cell exists; a no-op otherwise. Called on every path that counts as use
     /// (`load_chat` — including its single-flight `Skip` branch, `start_chat`,
-    /// send begin/end, history completion, and a claim-free config read) so an
-    /// unspawned cell's idle clock (`idle_scanner::idle_since`) tracks real
-    /// activity rather than the persisted chat's own age.
+    /// send begin/end, history completion, a config read) so an unspawned cell's
+    /// idle clock tracks real use; advances the release's activity generation.
     pub(crate) fn touch(&self, chat_id: &str) {
         if let Some(cell) = self.get_active(chat_id) {
             cell.lock_recover().last_used_at = now_ms();
+            self.shared.messages.lock_recover().note_activity(chat_id);
         }
     }
 
@@ -462,12 +462,12 @@ impl ChatLifecycleManager {
         Ok(new_chat.id)
     }
 
-    /// A multi-segment chat's composed history and the index its active
-    /// segment starts at; `None` for a single-segment chat, loaded from its
-    /// one session as before segments existed.
+    /// A multi-segment chat's composed history and its active segment's start
+    /// (`None` for a single-segment chat); notes when a segment is missing.
     async fn compose_history(&self, chat_id: &str) -> Option<(Vec<ChatMessage>, usize)> {
         let composed =
             crate::chat_manager::compose_if_multi(self.shared.deps.as_ref(), chat_id).await?;
+        self.shared.note_partial(chat_id, composed.incomplete);
         Some((composed.messages, composed.active_from))
     }
 

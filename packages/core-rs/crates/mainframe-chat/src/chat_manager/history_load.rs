@@ -9,33 +9,53 @@ impl ChatManager {
     /// `--resume` JSONL). The load remaps the embedded Claude sessionId back to the
     /// Mainframe chatId and restores any pending permission from history.
     pub async fn get_messages(&self, chat_id: &str) -> Vec<ChatMessage> {
-        self.lifecycle.await_restoring(chat_id).await;
-        // Wait out an in-flight offload before reading the cache/registry: an
-        // offload that just cleared the cache must not race a reader that would
-        // otherwise see a half-cleared cache and skip straight to disk
-        // (harmless) or, conversely, read a cache the offload is about to
-        // clear.
-        self.lifecycle.await_offload(chat_id).await;
-        // A released chat comes back through the lifecycle's restore claim, the
-        // one a send takes too, so the two never install over each other.
-        if self.lifecycle.history_released(chat_id)
-            && let Err(err) = self.lifecycle.restore_released_history(chat_id).await
-        {
-            tracing::warn!(chat_id, error = %err, "released history restore failed; reading again");
-        }
+        // A pass ends in a read, a restore or a reason to stop; a chat released
+        // again between passes gets another, and a bounded number of them.
+        for _ in 0..3 {
+            self.lifecycle.await_restoring(chat_id).await;
+            // Wait out an in-flight offload before reading the cache/registry:
+            // an offload that just cleared the cache must not race a reader that
+            // would otherwise see a half-cleared cache.
+            self.lifecycle.await_offload(chat_id).await;
+            // A released chat comes back only through the lifecycle's restore
+            // claim, the one a send takes too. A failed restore installs
+            // nothing, and nothing else reads it in its place.
+            if self.lifecycle.history_released(chat_id)
+                && let Err(err) = self.lifecycle.restore_released_history(chat_id).await
+            {
+                tracing::warn!(chat_id, error = %err, "released history restore failed");
+                return Vec::new();
+            }
 
-        if let Some(cached) = self.cached_messages(chat_id) {
-            // Reading a chat's history is a use of it.
-            self.lifecycle.touch(chat_id);
-            return cached;
-        }
+            if let Some(cached) = self.cached_messages(chat_id) {
+                // Reading a chat's history is a use of it.
+                self.lifecycle.touch(chat_id);
+                return cached;
+            }
 
-        // Single-flight the on-disk read (Established facts: two concurrent
-        // misses used to both hit disk). The follower re-reads the cache the
-        // leader just populated instead of loading a second time.
-        let Some(claim) = self.lifecycle.claim_history(chat_id).await else {
-            return self.cached_messages(chat_id).unwrap_or_default();
-        };
+            // Single-flight the on-disk read (Established facts: two concurrent
+            // misses used to both hit disk). The follower re-reads the cache the
+            // leader just populated instead of loading a second time. A chat
+            // released since the check above goes back to the shared restore.
+            use crate::lifecycle_manager::release::HistoryRead;
+            match self.lifecycle.claim_history_read(chat_id).await {
+                HistoryRead::Released => continue,
+                HistoryRead::Follower => return self.cached_messages(chat_id).unwrap_or_default(),
+                HistoryRead::Lead(claim) => return self.read_history_with(chat_id, claim).await,
+            }
+        }
+        tracing::warn!(
+            chat_id,
+            "history read gave up on a chat released again and again"
+        );
+        Vec::new()
+    }
+
+    async fn read_history_with(
+        &self,
+        chat_id: &str,
+        claim: mainframe_runtime::sync::FlightClaim,
+    ) -> Vec<ChatMessage> {
         let started = std::time::Instant::now();
         let result = self.load_history_into_cache(chat_id).await;
         tracing::info!(
@@ -128,6 +148,10 @@ impl ChatManager {
         let Some(stored) = installed else {
             return self.cached_messages(chat_id).unwrap_or_default();
         };
+        self.shared
+            .messages
+            .lock_recover()
+            .mark_partial(chat_id, composed.incomplete);
         let active_slice = &stored[composed.active_from.min(stored.len())..];
         self.shared
             .permissions

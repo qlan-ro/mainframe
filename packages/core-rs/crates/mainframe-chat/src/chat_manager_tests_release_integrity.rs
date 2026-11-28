@@ -1,6 +1,5 @@
 //! Transcript integrity across a release: one restore path, no install over a
-//! newer write, no silent drop when the history cannot come back, and
-//! autonomous output kept once whichever reaches the history first.
+//! newer write, and no silent drop when the history cannot come back.
 
 use super::*;
 use tokio::sync::Notify;
@@ -14,6 +13,7 @@ async fn released_with_gate(history: Vec<ChatMessage>) -> (Fixture, Arc<(Notify,
     f.deps.set_session_to_return(Arc::new(FakeSession {
         history,
         history_gate: Some(gate.clone()),
+        spawn_ok: true,
         history_loads: Some(f.deps.adapters.history_loads.clone()),
         ..Default::default()
     }));
@@ -91,82 +91,6 @@ async fn an_empty_history_read_successfully_ends_the_release() {
 
     assert!(!f.mgr.shared.messages.lock().unwrap().is_released("c1"));
     assert_eq!(cached_ids(&f.mgr).len(), 1, "the prompt is kept");
-}
-
-fn assistant(id: &str) -> ChatMessage {
-    ChatMessage {
-        r#type: ChatMessageType::Assistant,
-        ..message(id)
-    }
-}
-
-/// A turn the CLI started by itself writes record "x" to disk and delivers it
-/// live; the restore may read the transcript before or after either happens.
-#[tokio::test]
-async fn autonomous_output_around_a_restore_is_kept_once_in_either_write_order() {
-    let on_disk = vec![message("m1"), message("m2"), assistant("x")];
-    let before_disk = vec![message("m1"), message("m2")];
-
-    // Live callback first, restore read after the record reached disk.
-    let f = fixture();
-    scan(&f.mgr).await;
-    f.mgr
-        .shared
-        .messages
-        .lock()
-        .unwrap()
-        .append_live("c1", "s", assistant("x"));
-    *f.deps.adapters.history.lock().unwrap() = Some(on_disk.clone());
-    f.mgr.lifecycle.load_chat("c1").await;
-    assert_eq!(cached_ids(&f.mgr), ["m1", "m2", "x"]);
-
-    // Live callback first, restore read before the record reached disk.
-    let f = fixture();
-    scan(&f.mgr).await;
-    f.mgr
-        .shared
-        .messages
-        .lock()
-        .unwrap()
-        .append_live("c1", "s", assistant("x"));
-    *f.deps.adapters.history.lock().unwrap() = Some(before_disk);
-    f.mgr.lifecycle.load_chat("c1").await;
-    assert_eq!(cached_ids(&f.mgr), ["m1", "m2", "x"]);
-
-    // Restore read after the record reached disk, live callback after that.
-    let f = fixture();
-    scan(&f.mgr).await;
-    *f.deps.adapters.history.lock().unwrap() = Some(on_disk);
-    f.mgr.lifecycle.load_chat("c1").await;
-    f.mgr
-        .shared
-        .messages
-        .lock()
-        .unwrap()
-        .append_live("c1", "s", assistant("x"));
-    assert_eq!(cached_ids(&f.mgr), ["m1", "m2", "x"]);
-}
-
-#[tokio::test]
-async fn a_daemon_notice_written_while_released_survives_the_restore() {
-    let f = fixture();
-    scan(&f.mgr).await;
-    let notice = message("notice");
-    f.mgr.shared.messages.lock().unwrap().append("c1", notice);
-    f.mgr.event_handler.emit_display("c1");
-    assert!(
-        !f.surface
-            .events
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|e| matches!(e, ChatSurfaceEvent::DisplayRevision { .. })),
-        "a released chat projects nothing until it is restored"
-    );
-
-    f.mgr.lifecycle.load_chat("c1").await;
-
-    assert_eq!(cached_ids(&f.mgr), ["m1", "m2", "notice"]);
 }
 
 #[tokio::test]

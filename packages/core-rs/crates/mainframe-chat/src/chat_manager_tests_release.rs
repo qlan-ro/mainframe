@@ -52,11 +52,18 @@ impl ChatSurface for RecordingSurface {
     }
 }
 
+/// Chats on screen; `on_check` runs (once) inside the next viewer check.
 #[derive(Default)]
-struct Viewers(Mutex<HashSet<String>>);
+struct Viewers(
+    Mutex<HashSet<String>>,
+    Mutex<Option<Box<dyn FnOnce() + Send>>>,
+);
 
 impl ChatViewers for Viewers {
     fn is_viewed(&self, chat_id: &str) -> bool {
+        if let Some(on_check) = self.1.lock().unwrap().take() {
+            on_check();
+        }
         self.0.lock().unwrap().contains(chat_id)
     }
 }
@@ -83,8 +90,9 @@ struct Fixture {
     viewers: Arc<Viewers>,
 }
 
-/// "c1": a live CLI and a cell both last active `idle_ms` ago, with a
-/// transcript on disk matching what the cache holds.
+/// "c1": a cell last used `idle_ms` ago whose session never spawned (no
+/// process alive), with a transcript on disk matching what the cache holds.
+/// A send spawns a fresh CLI.
 fn fixture_with(idle_ms: i64, edit: impl FnOnce(&mut Chat)) -> Fixture {
     let mut chat = test_chat("c1");
     chat.vendor_session_id = Some("sess-1".to_string());
@@ -92,12 +100,13 @@ fn fixture_with(idle_ms: i64, edit: impl FnOnce(&mut Chat)) -> Fixture {
     let deps = FakeDeps::with_chats(vec![chat.clone()]);
     let history = vec![message("m1"), message("m2")];
     *deps.adapters.history.lock().unwrap() = Some(history.clone());
+    deps.set_spawn_ok(true);
     let surface = Arc::new(RecordingSurface::default());
     let mgr = ChatManager::new(deps.clone()).with_chat_surface(surface.clone());
     mgr.dispose();
     let viewers = Arc::new(Viewers::default());
     mgr.attach_viewers(viewers.clone());
-    let session = FakeSession::with_activity(true, Some(now_ms() - idle_ms));
+    let session = FakeSession::with_activity(false, Some(now_ms() - idle_ms));
     let mut active = ActiveChat::new(chat, Some(session.clone()));
     active.last_used_at = now_ms() - idle_ms;
     mgr.shared
@@ -161,7 +170,7 @@ fn cached_ids(mgr: &ChatManager) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn an_idle_chat_gives_up_its_history_but_keeps_its_cell_and_cli() {
+async fn an_idle_chat_without_a_process_gives_up_its_history_but_keeps_its_cell() {
     let f = fixture();
     f.mgr.worktree_offers.seed_pending_for_test("c1", "/tmp/wt");
     let cell = f.mgr.shared.active("c1").unwrap();
@@ -172,11 +181,7 @@ async fn an_idle_chat_gives_up_its_history_but_keeps_its_cell_and_cli() {
     assert!(f.mgr.shared.messages.lock().unwrap().is_released("c1"));
     let kept = f.mgr.shared.active("c1").expect("the cell stays");
     assert!(Arc::ptr_eq(&cell, &kept));
-    assert_eq!(f.session.kills(), 0, "the CLI keeps running");
-    assert!(
-        kept.lock().unwrap().session.is_some(),
-        "the next send needs no respawn"
-    );
+    assert_eq!(f.session.kills(), 0, "nothing is stopped");
     assert_eq!(
         f.mgr.worktree_offers_for_chat("c1").len(),
         1,
@@ -271,6 +276,8 @@ async fn finish_real_run(f: &Fixture, ago_ms: i64) {
 
 #[path = "chat_manager_tests_release_integrity.rs"]
 mod integrity;
+#[path = "chat_manager_tests_release_restore.rs"]
+mod restore;
 #[path = "chat_manager_tests_release_return.rs"]
 mod returning;
 #[path = "chat_manager_tests_release_rules.rs"]

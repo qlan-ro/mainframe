@@ -27,7 +27,7 @@ Restoring first would fill the history before the resume arrives, so neither fas
 
 ## Returning to a released chat
 
-A chat whose history the idle release dropped keeps its cell and its idle CLI ([spec](../specs/2026-11-28-todo-522-idle-history-release.md)). It takes the same faster paths as a chat nothing has loaded: its idle CLI writes nothing, so a validating tail or the adapter's pages can answer the first window. Every load path restores the history into the live cell without replacing the cell or its session, and a send restores it before it appends.
+The idle release drops the history only of a chat with no live process ([spec](../specs/2026-11-28-todo-522-idle-history-release.md)), and the chat keeps its cell. It takes the same faster paths as a chat nothing has loaded: a validating tail or the adapter's pages can answer the first window. Every load path restores the history into the cell without replacing it, and only once every transcript it needs has read. A send, a steer or a process start restores it first, and stops when it cannot.
 
 ## Persisted tails after an update
 

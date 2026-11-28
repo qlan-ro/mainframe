@@ -16,7 +16,7 @@ A big chat costs a few hundred MiB this way. Eight open chats took the daemon pa
 
 ### The idle history release
 
-Every minute, the idle scanner looks for chats that nobody has viewed or used for the user's idle time. The default is 10 minutes. For each one, it drops three things:
+Every minute, the idle scanner looks for chats that have no live process and that nobody has viewed or used for the user's idle time. The default is 10 minutes. For each one, it drops three things:
 
 - the raw history;
 - the projection;
@@ -25,14 +25,15 @@ Every minute, the idle scanner looks for chats that nobody has viewed or used fo
 The chat keeps everything else:
 
 - its registry cell;
-- its CLI session, so the next send does not respawn;
 - its permission state;
 - its worktree offers;
 - its tool timings.
 
 The release emits no `chat.offloaded`. Clients keep what they hold.
 
-**What counts as use.** A chat is used when it loads, sends, reads its history, or when its CLI is active. It is viewed when any of these holds:
+**Only chats with no live process.** A chat whose CLI or session process is alive (a Claude CLI child, a Codex app-server, any running turn) keeps its history until the process is gone; the two-hour offload ends it. A released chat therefore has nothing that can write to its history on its own. The memory breakdown found that this is the common case: an idle daemon typically has one CLI child, the chat on screen, and every other open chat has no process.
+
+**What counts as use.** A chat is used when it loads, sends or reads its history. It is viewed when any of these holds:
 
 - a facade connection has a session on it. The desktop attaches only the chat on screen, a workspace tab or a task row. Mobile attaches what it shows.
 - an event socket subscribes to it.
@@ -46,12 +47,14 @@ Viewing counts as use. A chat the user just left therefore waits the whole idle 
 - it has a pending permission or gate;
 - it has a queued prompt, a held maintenance prompt or an agent outbox entry;
 - it has a delegated task on either side, an active child chat, or a live background task;
-- its session reports work in progress (`blocks_idle_offload`);
+- its CLI or session process is alive;
 - idle compaction is on and the chat may still be compacted (its last run has not been claimed, and the provider's cache window has not passed);
 - a client is viewing it;
-- the transcript cannot give its history back: a temporary or ephemeral chat, a missing transcript, a chat with no session to read, or a fork that has not sent yet.
+- the transcript cannot give its history back: a temporary or ephemeral chat, a missing transcript, a chat with no session to read, a fork that has not sent yet, or a composed history that loaded with a segment missing (a restore would refuse it, so releasing it would leave the chat unreadable).
 
 The scanner selects candidates. `ChatRelease` checks each rule again under the offload claim. Loads, starts, sends, interrupts and history reads exclude that claim, so a chat that wakes up between the two checks stays.
+
+Every use advances the chat's activity generation, under the same cache lock the release clears the history with. The release reads the generation before its checks and clears nothing if it moved, so even a view that starts and ends while the checks run keeps the history.
 
 ### The idle offload
 
@@ -66,17 +69,15 @@ Both the release and the offload tell the hub while they still hold the offload 
 
 ### Returning to a released chat
 
-- **A view.** The chat's cell stays, but its history is marked released. Three things follow:
-  - The load path (`claim_load`) restores the history into the live cell, through a stateless history session. It never replaces the cell or the CLI session.
-  - The first window may come from disk, the way a first open does. The persisted tail and the adapter's pages both count, because the chat's idle CLI writes nothing; a chat holding its history in memory never takes these paths.
-  - The windowed resume then completes the history in the background. It resyncs only when the window it served differs.
-- **One restore path.** Every restore of a released chat goes through the lifecycle's load claim: a view, a send, a steer and a history read (`get_messages`) share one read. Every install also checks the chat's history epoch, which advances with every write. A read that began before another write keeps that newer history instead of installing its older list.
-- **A send.** A send or steer restores the history before it appends. If the transcript cannot be read, the chat stays released and the send stops with a retryable error ("This chat's history could not be reloaded. Try again."). It never reaches the CLI and is never dropped silently. A transcript read successfully as empty is installed, which ends the release.
-- **Output that arrives first.** A turn the CLI started by itself, or a daemon notice such as the permission-answer warning, can reach a released chat before anything restores it. It is buffered, never stored as a partial list, and the chat projects nothing meanwhile. The restore adopts the buffer by stable id:
-  - an entry the transcript already holds is dropped;
-  - anything else follows the restored history in arrival order, including notices the transcript never had.
+- **A view.** The chat's cell stays, but its history is marked released. The load path (`claim_load`) restores the history into the cell, through a stateless history session. Because a released chat has no live process, its first window may come from disk the way a first open does: a persisted tail or the adapter's pages. The windowed resume then completes the history in the background, and it resyncs only when the window it served differs.
+- **One restore path.** Every restore of a released chat goes through the lifecycle's load claim, so a view, a send, a steer and a history read (`get_messages`) share one read. `get_messages` takes its own history claim only after rechecking, under the flight guards, that the chat is not released. A failed restore installs nothing, and nothing reads the history in its place. Every install also checks the chat's history epoch, which advances with every write: a read that began before another write keeps that newer history instead of installing its older list.
+- **A restore installs only a complete history.** Every transcript the history needs must read successfully:
+  - for a composed chat, every segment's native session;
+  - for any chat, a read the adapter reports as an empty list must not have failed. Codex reports a failed app-server start or `thread/read` as `Ok([])` to its other callers, and says so through `last_history_read_failed`.
 
-  Right after a restore, a live append whose id the restored history already holds is the same record arriving late, and it is dropped. The first new id ends that check. Nested blocks follow a buffered parent; a parent already on disk comes back with the transcript, as on any cold load.
+  Otherwise the chat stays released. A transcript that reads successfully as empty is installed, which ends the release.
+- **A send, a steer or a process start.** These restore the history first. This covers a send, a resume that restarts a working chat, and an automation, all of which start the CLI through `start_chat`. If the restore fails, the chat stays released. A send or steer then stops with a retryable error ("This chat's history could not be reloaded. Try again."), never reaches the CLI, and is never dropped silently. A start begins no process.
+- **An append that still reaches a released chat** is skipped and logged at warn, never stored as a partial list. Nothing is expected to produce one.
 - **Multi-segment chats.** These skip the snapshot cache and never page. A first view of one, whether a first open or a return, waits for every segment to be composed, as before this change. It took 1.6 s once in the owner's logs. Paging composed chats is follow-up work.
 - **A desktop that still holds the chat.** When the desktop still holds the chat's controller, it reattaches with a cursor. The dropped revision log is an unknown epoch, so the reply replays the chat's window from a full read. The desktop shows the transcript it already holds until that reply arrives.
 
@@ -92,4 +93,4 @@ Both the release and the offload tell the hub while they still hold the offload 
 
 Settings › General › Chats offers 5, 10 and 30 minutes, 1 hour, and Never. The UI shows a stored value it does not offer (one set through the API) as an extra choice.
 
-**Never.** Never is offered for users with memory to spare who switch between large chats and would rather not wait for reloads. It turns off the release only: the two-hour offload still frees the chat, and stops its CLI.
+**Never.** Never is offered for users with memory to spare who switch between large chats and would rather not wait for reloads. It turns off the release only: the two-hour offload still frees the chat, and stops its CLI if one is running.

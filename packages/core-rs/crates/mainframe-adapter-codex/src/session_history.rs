@@ -4,6 +4,10 @@ use mainframe_types::transcript::TranscriptLocation;
 use std::path::PathBuf;
 
 impl CodexSession {
+    pub(super) fn last_history_read_failed_inner(&self) -> bool {
+        self.history_read_failed.load(Ordering::SeqCst)
+    }
+
     pub(super) async fn history_sources_inner(&self) -> Vec<PathBuf> {
         let thread_id = match self.resolve_target(false).await {
             ThreadTarget::Resume(id) => id,
@@ -15,7 +19,11 @@ impl CodexSession {
             _ => Vec::new(),
         }
     }
+    /// A failed app-server start or history read stays `Ok([])` for the
+    /// callers that treat it as an empty history, and sets
+    /// `history_read_failed` for those that must not (`last_history_read_failed`).
     pub(super) async fn load_history_inner(&self) -> Result<Vec<ChatMessage>, AdapterError> {
+        self.history_read_failed.store(false, Ordering::SeqCst);
         *self.history_dependencies.lock_recover() = None;
         *self.history_state.lock_recover() = serde_json::Value::Null;
         let (read_thread_id, turn_cap) = match self.resolve_target(false).await {
@@ -39,6 +47,7 @@ impl CodexSession {
             Ok(c) => c,
             Err(err) => {
                 tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
+                self.history_read_failed.store(true, Ordering::SeqCst);
                 return Ok(Vec::new());
             }
         };
@@ -59,6 +68,7 @@ impl CodexSession {
             }
             Err(err) => {
                 tracing::warn!(error = %err, thread_id = %read_thread_id, "failed to load history");
+                self.history_read_failed.store(true, Ordering::SeqCst);
                 Ok(Vec::new())
             }
         }

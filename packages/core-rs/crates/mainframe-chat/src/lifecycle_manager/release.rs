@@ -29,6 +29,37 @@ impl ChatLifecycleManager {
         Ok(())
     }
 
+    /// The history claim behind `get_messages`' own disk read, decided under
+    /// the flight guards: an offload or release in flight is waited out, and a
+    /// chat that is released (now, not when the caller last looked) is sent
+    /// back to the shared restore instead of a second, unguarded read.
+    pub(crate) async fn claim_history_read(&self, chat_id: &str) -> HistoryRead {
+        loop {
+            let waiting = {
+                let guards = self.guards.lock_recover();
+                if let Some(wait) = guards
+                    .offloading
+                    .get(chat_id)
+                    .or_else(|| guards.maintenance.get(chat_id))
+                {
+                    Err(wait)
+                } else if self.history_released(chat_id) {
+                    return HistoryRead::Released;
+                } else {
+                    Ok(guards.history.claim(chat_id))
+                }
+            };
+            match waiting {
+                Err(wait) => wait.wait().await,
+                Ok(Ok(claim)) => return HistoryRead::Lead(claim),
+                Ok(Err(wait)) => {
+                    wait.wait().await;
+                    return HistoryRead::Follower;
+                }
+            }
+        }
+    }
+
     /// Tell the chat surface that the chat's in-memory history is gone, so it
     /// drops what it derived from it (the facade hub's revision log).
     pub(crate) fn notify_history_released(&self, chat_id: &str) {
@@ -45,3 +76,13 @@ impl ChatLifecycleManager {
 #[derive(Debug, thiserror::Error)]
 #[error("This chat's history could not be reloaded. Try again.")]
 pub(crate) struct HistoryUnavailable;
+
+/// How `get_messages` may read a history that is not in memory.
+pub(crate) enum HistoryRead {
+    /// This caller reads and installs; the claim excludes other readers.
+    Lead(FlightClaim),
+    /// Another reader just finished: read the cache again.
+    Follower,
+    /// The chat is released: restore it through the load claim instead.
+    Released,
+}

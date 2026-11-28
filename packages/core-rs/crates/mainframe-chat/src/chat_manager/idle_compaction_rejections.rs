@@ -267,7 +267,12 @@ async fn idle_compaction_history_reload_waits_for_terminal_release() {
     session.started.notified().await;
     let mut history = {
         let manager = manager.clone();
-        tokio::spawn(async move { manager.lifecycle.claim_history("c").await.map(drop) })
+        tokio::spawn(async move {
+            matches!(
+                manager.lifecycle.claim_history_read("c").await,
+                crate::lifecycle_manager::release::HistoryRead::Lead(_)
+            )
+        })
     };
     assert!(
         tokio::time::timeout(std::time::Duration::from_millis(10), &mut history)
@@ -276,5 +281,5 @@ async fn idle_compaction_history_reload_waits_for_terminal_release() {
     );
     session.finish.notify_one();
     worker.await.unwrap();
-    assert!(history.await.unwrap().is_some());
+    assert!(history.await.unwrap());
 }

@@ -104,6 +104,7 @@ pub struct CodexSession {
     history_executable: Arc<Mutex<String>>,
     history_dependencies: Mutex<Option<Vec<mainframe_adapter_api::HistoryDependency>>>,
     history_state: Mutex<serde_json::Value>,
+    history_read_failed: std::sync::atomic::AtomicBool,
 }
 
 impl CodexSession {
@@ -142,6 +143,7 @@ impl CodexSession {
             history_executable: Arc::new(Mutex::new("codex".to_string())),
             history_dependencies: Mutex::new(None),
             history_state: Mutex::new(serde_json::Value::Null),
+            history_read_failed: std::sync::atomic::AtomicBool::new(false),
         }
     }
     fn touch_activity(&self) {

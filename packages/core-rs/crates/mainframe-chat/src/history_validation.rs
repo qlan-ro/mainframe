@@ -73,6 +73,11 @@ impl HistorySnapshotCache {
 }
 
 impl crate::chat_manager::ChatShared {
+    /// `MessageCache::mark_partial` for a composed history about to install.
+    pub(crate) fn note_partial(&self, chat_id: &str, partial: bool) {
+        self.messages.lock_recover().mark_partial(chat_id, partial);
+    }
+
     pub(crate) fn mark_history_restored(&self, chat_id: &str) {
         let generation = self.messages.lock_recover().generation(chat_id);
         let permission_free = !self.permissions.lock_recover().has_pending(chat_id);

@@ -250,10 +250,33 @@ async fn the_release_rechecks_a_chat_that_woke_up_after_its_selection() {
     assert!(!holds_history(&idle.mgr), "still idle: released");
 }
 
-fn releaser(mgr: &ChatManager) -> ChatRelease {
+trait ReleaseNow {
+    async fn release_now(&self, chat_id: &str);
+}
+
+impl ReleaseNow for ChatRelease {
+    async fn release_now(&self, chat_id: &str) {
+        use crate::idle_scanner::HistoryReleaser as _;
+        self.release(chat_id, now_ms() - 10 * MINUTE).await;
+    }
+}
+
+pub(super) fn releaser(mgr: &ChatManager) -> ChatRelease {
     ChatRelease::new(
         mgr.shared.clone(),
         mgr.lifecycle.clone(),
         mgr.teardown.clone(),
     )
+}
+
+#[tokio::test]
+async fn a_chat_with_a_live_process_keeps_its_history() {
+    let f = fixture();
+    let live = FakeSession::with_activity(true, Some(now_ms() - 60 * MINUTE));
+    f.mgr.shared.active("c1").unwrap().lock().unwrap().session = Some(live);
+
+    scan(&f.mgr).await;
+    assert!(holds_history(&f.mgr), "the scan never selects it");
+    releaser(&f.mgr).release_now("c1").await;
+    assert!(holds_history(&f.mgr), "nor does the re-check release it");
 }

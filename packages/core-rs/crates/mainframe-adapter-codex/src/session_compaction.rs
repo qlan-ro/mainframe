@@ -1,6 +1,17 @@
 use super::*;
 use mainframe_adapter_api::idle_compaction::*;
 impl CodexSession {
+    /// [`Self::compact_idle`], counted as session activity on both sides.
+    pub(super) async fn compact_idle_tracked(
+        &self,
+        request: NativeCompactionRequest,
+    ) -> Result<CompactionMetadata, AdapterError> {
+        self.touch_activity();
+        let result = self.compact_idle(request).await;
+        self.touch_activity();
+        result
+    }
+
     pub(super) async fn compact_idle(
         &self,
         request: NativeCompactionRequest,

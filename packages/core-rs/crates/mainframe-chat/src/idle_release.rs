@@ -85,7 +85,11 @@ pub fn select_release_candidates(
                 seen.insert(chat_id, now);
                 return None;
             }
-            if !releaser.holds_history(&chat_id) {
+            if !releaser.holds_history(&chat_id)
+                || session
+                    .as_ref()
+                    .is_some_and(|s| s.is_spawned() || s.is_closing())
+            {
                 return None;
             }
             let viewed = seen.get(&chat_id).copied().unwrap_or(i64::MIN);

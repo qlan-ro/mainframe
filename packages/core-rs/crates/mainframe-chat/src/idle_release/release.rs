@@ -8,7 +8,7 @@ use tracing::debug;
 
 use super::*;
 use crate::chat_manager::ChatShared;
-use crate::chat_teardown::{ChatTeardown, TeardownMode};
+use crate::chat_teardown::ChatTeardown;
 use crate::lifecycle_manager::ChatLifecycleManager;
 
 /// Releases one chat's history at a time, built from the manager's shared
@@ -33,6 +33,9 @@ impl ChatRelease {
     }
 
     async fn try_release(&self, chat_id: &str, idle_before: i64) {
+        // Read before any check: a use or a view that starts and ends while
+        // the checks run still advances it, and the clear below then refuses.
+        let seen = self.shared.messages.lock_recover().activity(chat_id);
         if !self.holds_history(chat_id) {
             return;
         }
@@ -61,7 +64,14 @@ impl ChatRelease {
             debug!(chat_id, reason, "kept chat history");
             return;
         }
-        self.teardown.clear(chat_id, TeardownMode::ReleaseHistory);
+        if !self.teardown.release_history_if_unused(chat_id, seen) {
+            debug!(
+                chat_id,
+                reason = "used during the release",
+                "kept chat history"
+            );
+            return;
+        }
         // Still under the claim: a resume reads the history only after the
         // claim is gone, by which time the hub has dealt with the release.
         self.lifecycle.notify_history_released(chat_id);
@@ -82,12 +92,14 @@ impl ChatRelease {
         {
             return Some("working");
         }
+        // A live CLI or app-server can produce output at any time, so the
+        // history stays until the process is gone (the idle offload ends it).
         if active
             .session
             .as_ref()
-            .is_some_and(|s| s.is_spawned() && s.blocks_idle_offload())
+            .is_some_and(|s| s.is_spawned() || s.is_closing())
         {
-            return Some("session busy");
+            return Some("process alive");
         }
         let orchestration = &chat.orchestration;
         if orchestration.has_running_delegated_task || !orchestration.active_child_ids.is_empty() {
@@ -135,6 +147,7 @@ impl ChatRelease {
             .and_then(|store| store.layout(&chat.id))
             .is_some_and(|layout| layout.is_multi_segment());
         !chat.temporary
+            && !self.shared.messages.lock_recover().is_partial(&chat.id)
             && !chat.vendor_session_ephemeral
             && chat.transcript_missing != Some(true)
             && (chat.vendor_session_id.is_some() || multi_segment)

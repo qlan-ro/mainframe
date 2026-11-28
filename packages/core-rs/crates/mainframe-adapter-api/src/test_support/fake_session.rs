@@ -46,6 +46,8 @@ pub struct FakeSession {
     /// Configurable history returned by `load_history` (empty by default).
     pub history: Vec<ChatMessage>,
     pub history_gate: Option<Arc<(tokio::sync::Notify, tokio::sync::Notify)>>,
+    /// What `last_history_read_failed` reports after a `load_history`.
+    pub history_read_failed: bool,
     /// What `load_history_page` serves; empty pages mean "cannot page".
     pub pager: super::fake_pages::FakePages,
     /// When set, every `load_history` call bumps it — how a test proves a
@@ -54,10 +56,8 @@ pub struct FakeSession {
     /// When set, every `load_history_background` call bumps it (and also
     /// counts in `history_loads`).
     pub background_loads: Option<Arc<AtomicUsize>>,
-    /// `AdapterSession::history_sources` — empty by default (matching the
-    /// trait's "do not cache" default), so only a test that opts in by
-    /// setting real, stat-able paths here ever exercises the history
-    /// snapshot cache.
+    /// `history_sources`: empty by default (the trait's "do not cache"), so only
+    /// a test that sets real, stat-able paths here exercises the snapshot cache.
     pub history_sources: Vec<PathBuf>,
     /// Collected files reported by `peek_history_files`.
     pub history_files: Mutex<Option<crate::CollectedHistoryFiles>>,
@@ -67,10 +67,8 @@ pub struct FakeSession {
     /// lets a test land a concurrent mutation (e.g. a cancel) "during" the CLI
     /// round-trip an `.await` on this call represents.
     pub on_respond_to_permission: Option<Arc<dyn Fn() + Send + Sync>>,
-    /// When `true`, `spawn` succeeds (and `is_spawned` flips true after it) —
-    /// otherwise `spawn` errors with `"unused"`, today's default for every
-    /// caller that never actually spawns. Lets a resume test observe a real
-    /// post-spawn `send_message` instead of failing at `require_live_session`.
+    /// When `true`, `spawn` succeeds and `is_spawned` flips true after it;
+    /// otherwise `spawn` errors with `"unused"`, the default.
     pub spawn_ok: bool,
     pub spawned_after_spawn: AtomicBool,
     /// The options of the last `spawn` call, recorded before `spawn_ok` is
@@ -261,6 +259,9 @@ impl AdapterSession for FakeSession {
     }
     fn take_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
         self.history_files.lock_recover().take()
+    }
+    fn last_history_read_failed(&self) -> bool {
+        self.history_read_failed
     }
     fn restore_history_files(&self, files: crate::CollectedHistoryFiles) {
         *self.history_files.lock_recover() = Some(files);

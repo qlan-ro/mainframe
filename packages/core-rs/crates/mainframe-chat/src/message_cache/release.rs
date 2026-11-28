@@ -1,34 +1,35 @@
-//! Idle history release: a live chat nobody is viewing gives up its history and
-//! projection while its registry cell, pin and tool timings stay. The chat is
-//! marked released until a full history is stored for it again (`set`, a
-//! restore), or until it leaves the cache altogether (`delete`, `unpin`).
+//! Idle history release: a live chat nobody is viewing, with no CLI or other
+//! process alive, gives up its history and projection while its registry cell,
+//! pin and tool timings stay. The chat is marked released until a full history
+//! is stored for it again (`set`, a restore), or until it leaves the cache
+//! altogether (`delete`, `unpin`).
 //!
-//! A released chat never holds a partial list. Output that reaches it before
-//! the restore (a turn the CLI started by itself, a daemon notice) is buffered,
-//! and the restore adopts the buffer: an entry the transcript already holds
-//! under the same id is dropped, anything else (output not yet on disk, notices
-//! the transcript never had) follows the restored history in arrival order.
-//! Right after that, a live append whose id the restored history already holds
-//! is the same record arriving late and is dropped too; the first new id ends
-//! that check.
+//! A released chat has no producer of output: the release skips any chat with
+//! a live process, and every path that starts one, or appends for the user (a
+//! send, a steer, a resume), restores the history first
+//! (`ChatLifecycleManager::restore_released_history`). An append that still
+//! reaches a released chat is skipped and logged, never stored as a partial
+//! list.
 //!
-//! Every mutation also advances the chat's history epoch, so a history read
-//! that started before another write can tell and does not install its older
-//! list over it (`install_history`).
+//! Two counters keep the boundary honest:
+//! - the history epoch advances with every write, so a history read that began
+//!   before another write never installs its older list over it
+//!   (`install_history`);
+//! - the activity generation advances with every use of the chat, so the
+//!   release clears nothing when the chat was used or viewed after the release
+//!   decided it was idle (`release_history_if_unused`).
 
 use super::*;
 
-/// How far back from the end a late live append is looked for.
-const RECONCILE_WINDOW: usize = 256;
-
 #[derive(Default)]
 pub(crate) struct ReleaseState {
-    /// Released chats, each with what arrived since its release.
-    buffers: HashMap<String, Vec<ChatMessage>>,
-    /// Chats whose restored history may still meet late live appends.
-    reconciling: HashSet<String>,
+    released: HashSet<String>,
     /// Per-chat history epochs (`MessageCache::history_epoch`).
     epochs: HashMap<String, u64>,
+    /// Per-chat activity generations (`MessageCache::activity`).
+    activity: HashMap<String, u64>,
+    /// Chats whose composed history was installed with a segment missing.
+    partial: HashSet<String>,
 }
 
 impl MessageCache {
@@ -40,20 +41,53 @@ impl MessageCache {
         }
         self.order.retain(|k| k != chat_id);
         self.drop_projection(chat_id);
-        self.released.reconciling.remove(chat_id);
-        self.released.buffers.insert(chat_id.to_owned(), Vec::new());
+        self.released.released.insert(chat_id.to_owned());
         true
+    }
+
+    /// [`Self::release_history`], unless the chat was used since its activity
+    /// generation read `seen`. Checked and cleared under the one cache lock
+    /// that every use takes to advance the generation.
+    pub(crate) fn release_history_if_unused(&mut self, chat_id: &str, seen: u64) -> bool {
+        if self.activity(chat_id) != seen {
+            tracing::debug!(chat_id, "kept a history used during the release");
+            return false;
+        }
+        self.release_history(chat_id)
     }
 
     /// Whether the idle release dropped this chat's history and nothing has
     /// restored it since.
     pub(crate) fn is_released(&self, chat_id: &str) -> bool {
-        self.released.buffers.contains_key(chat_id)
+        self.released.released.contains(chat_id)
     }
 
     pub(super) fn forget_release(&mut self, chat_id: &str) {
-        self.released.buffers.remove(chat_id);
-        self.released.reconciling.remove(chat_id);
+        self.released.released.remove(chat_id);
+    }
+
+    /// Record whether the history being installed for `chat_id` misses a
+    /// transcript that failed to load. Such a history cannot be read back
+    /// whole, so the release keeps it (`is_partial`).
+    pub(crate) fn mark_partial(&mut self, chat_id: &str, partial: bool) {
+        if partial {
+            self.released.partial.insert(chat_id.to_owned());
+        } else {
+            self.released.partial.remove(chat_id);
+        }
+    }
+
+    pub(crate) fn is_partial(&self, chat_id: &str) -> bool {
+        self.released.partial.contains(chat_id)
+    }
+
+    /// True when an append to `chat_id` must be skipped (see the module doc).
+    pub(super) fn skips_released_append(&self, chat_id: &str) -> bool {
+        let skip = self.is_released(chat_id);
+        if skip {
+            tracing::warn!(chat_id, "skipped an append to a released history");
+        }
+        skip
     }
 
     /// Advances with every mutation of the chat's history, whether or not the
@@ -66,6 +100,19 @@ impl MessageCache {
         self.released
             .epochs
             .insert(chat_id.to_owned(), self.next_generation);
+    }
+
+    /// Advances with every use of the chat (`ChatLifecycleManager::touch`).
+    pub(crate) fn activity(&self, chat_id: &str) -> u64 {
+        self.released.activity.get(chat_id).copied().unwrap_or(0)
+    }
+
+    pub(crate) fn note_activity(&mut self, chat_id: &str) {
+        *self
+            .released
+            .activity
+            .entry(chat_id.to_owned())
+            .or_default() += 1;
     }
 
     /// Store `messages` as the chat's history unless something changed it
@@ -83,84 +130,6 @@ impl MessageCache {
             return None;
         }
         Some(self.set_and_snapshot(chat_id, messages))
-    }
-
-    /// Fold what arrived while the chat was released into the history being
-    /// restored for it (see the module doc). A no-op for any other chat.
-    pub(super) fn adopt_released(
-        &mut self,
-        chat_id: &str,
-        mut messages: Vec<ChatMessage>,
-    ) -> Vec<ChatMessage> {
-        let Some(buffered) = self.released.buffers.remove(chat_id) else {
-            return messages;
-        };
-        for message in buffered {
-            if !messages.iter().any(|m| m.id == message.id) {
-                messages.push(message);
-            }
-        }
-        self.released.reconciling.insert(chat_id.to_owned());
-        messages
-    }
-
-    /// Route an append around a release: `None` when it was buffered (the
-    /// chat is released) or is a late copy of a restored record; otherwise
-    /// the message, to append as usual.
-    pub(super) fn intercept_append(
-        &mut self,
-        chat_id: &str,
-        message: ChatMessage,
-    ) -> Option<ChatMessage> {
-        if let Some(buffer) = self.released.buffers.get_mut(chat_id) {
-            match buffer.iter_mut().find(|m| m.id == message.id) {
-                Some(slot) => *slot = message,
-                None => buffer.push(message),
-            }
-            return None;
-        }
-        if self.released.reconciling.contains(chat_id) {
-            let restored = self.cache.get(chat_id).is_some_and(|history| {
-                history
-                    .iter()
-                    .rev()
-                    .take(RECONCILE_WINDOW)
-                    .any(|m| m.id == message.id)
-            });
-            if restored {
-                tracing::debug!(chat_id, "dropped a live copy of a restored record");
-                return None;
-            }
-            self.released.reconciling.remove(chat_id);
-        }
-        Some(message)
-    }
-
-    /// Nested blocks for a released chat land in their buffered parent. A
-    /// parent that is already on disk comes back with the transcript, as on
-    /// any cold load. True when the blocks were buffered.
-    pub(super) fn buffer_nested(
-        &mut self,
-        chat_id: &str,
-        parent: &str,
-        blocks: &mut Vec<MessageContent>,
-    ) -> bool {
-        let Some(buffer) = self.released.buffers.get_mut(chat_id) else {
-            return false;
-        };
-        let parent = buffer.iter_mut().rev().find(|m| {
-            m.r#type == ChatMessageType::Assistant
-                && m.content.iter().any(|b| {
-                    matches!(b, MessageContent::Node(mainframe_types::chat::MessageContentNode::ToolUse { id, .. }) if id == parent)
-                })
-        });
-        match parent {
-            Some(message) => {
-                message.content.append(blocks);
-                true
-            }
-            None => false,
-        }
     }
 }
 

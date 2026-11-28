@@ -97,6 +97,19 @@ pub(crate) async fn compose_if_multi(
     Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
+/// [`compose_if_multi`] for a restore: `Some(None)` when a transcript the
+/// layout needs failed to load.
+pub(crate) async fn compose_if_multi_complete(
+    deps: &dyn ChatManagerDeps,
+    chat: &Chat,
+) -> Option<Option<crate::segments::compose::Composed>> {
+    let layout = deps
+        .segment_store()?
+        .layout(&chat.id)
+        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    Some(crate::segments::compose::compose_complete(deps, chat, &layout).await)
+}
+
 // Unsent forks use their persisted source because they have no provider session yet.
 pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,

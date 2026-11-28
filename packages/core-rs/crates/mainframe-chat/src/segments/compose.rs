@@ -19,12 +19,29 @@ use crate::chat_manager::ChatManagerDeps;
 pub struct Composed {
     pub messages: Vec<ChatMessage>,
     pub active_from: usize,
+    /// A transcript the layout needs failed to load and is missing here.
+    pub incomplete: bool,
 }
 
 pub async fn compose(deps: &dyn ChatManagerDeps, chat: &Chat, layout: &SegmentLayout) -> Composed {
-    let loaded = load_natives(deps, chat, layout).await;
+    let (loaded, complete) = load_natives(deps, chat, layout).await;
     let name_of = |adapter_id: &str| deps.adapter_fork_info(adapter_id).name;
-    assemble(&chat.id, layout, loaded, &name_of)
+    Composed {
+        incomplete: !complete,
+        ..assemble(&chat.id, layout, loaded, &name_of)
+    }
+}
+
+/// [`compose`], or `None` when any transcript the layout needs failed to
+/// load: a restore must not install a history with a segment missing.
+pub async fn compose_complete(
+    deps: &dyn ChatManagerDeps,
+    chat: &Chat,
+    layout: &SegmentLayout,
+) -> Option<Composed> {
+    let (loaded, complete) = load_natives(deps, chat, layout).await;
+    let name_of = |adapter_id: &str| deps.adapter_fork_info(adapter_id).name;
+    complete.then(|| assemble(&chat.id, layout, loaded, &name_of))
 }
 
 /// Native rows in first-use order, each once.
@@ -44,12 +61,13 @@ async fn load_natives(
     deps: &dyn ChatManagerDeps,
     chat: &Chat,
     layout: &SegmentLayout,
-) -> HashMap<String, Vec<ChatMessage>> {
+) -> (HashMap<String, Vec<ChatMessage>>, bool) {
     let mut loaded = HashMap::new();
     let Some(cwd) = native_cwd(deps, chat) else {
-        return loaded;
+        return (loaded, false);
     };
     let active_native = layout.active().map(|s| s.native_session_ref.clone());
+    let mut complete = true;
     for native in natives_in_use(layout) {
         let is_active = active_native.as_deref() == Some(native.id.as_str());
         let fork_source = if is_active {
@@ -61,7 +79,7 @@ async fn load_natives(
                         chat_id: Some(chat.id.clone()),
                         error: error.to_string(),
                     });
-                    return loaded;
+                    return (loaded, false);
                 }
             }
         } else {
@@ -77,20 +95,36 @@ async fn load_natives(
             session_file_path: native.session_file_path.clone(),
             fork_source,
         };
-        let Some(session) = deps.create_session(&native.adapter_id, options) else {
-            continue;
-        };
-        match session.load_history().await {
-            Ok(history) => {
-                let remapped = crate::chat_manager::remap_history_for(history, &chat.id);
-                loaded.insert(native.id.clone(), remapped);
+        match load_native(deps, chat, native, options).await {
+            Some(history) => {
+                loaded.insert(native.id.clone(), history);
             }
-            Err(err) => {
-                tracing::warn!(error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed")
-            }
+            None => complete = false,
         }
     }
-    loaded
+    (loaded, complete)
+}
+
+/// One native transcript, remapped; `None` when it could not be read (no
+/// session for it, a failed read, or a failure the adapter reported as empty).
+async fn load_native(
+    deps: &dyn ChatManagerDeps,
+    chat: &Chat,
+    native: &NativeSessionRecord,
+    options: SessionOptions,
+) -> Option<Vec<ChatMessage>> {
+    let session = deps.create_session(&native.adapter_id, options)?;
+    match session.load_history().await {
+        Ok(_) if session.last_history_read_failed() => {
+            tracing::warn!(chat_id = %chat.id, native = %native.id, "segment history read failed");
+            None
+        }
+        Ok(history) => Some(crate::chat_manager::remap_history_for(history, &chat.id)),
+        Err(err) => {
+            tracing::warn!(error = ?err, chat_id = %chat.id, native = %native.id, "segment history load failed");
+            None
+        }
+    }
 }
 
 /// Pure assembly over already-loaded transcripts (keyed by native row id).

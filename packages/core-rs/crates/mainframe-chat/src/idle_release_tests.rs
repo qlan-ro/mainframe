@@ -12,11 +12,15 @@ fn registry() -> Registry {
     Arc::new(dashmap::DashMap::new())
 }
 
-/// A chat whose spawned CLI and cell were both last active `idle_ms` ago.
+/// A chat with no process alive whose cell was last used `idle_ms` ago.
 fn insert(reg: &Registry, id: &str, idle_ms: i64) {
+    insert_with(reg, id, idle_ms, false);
+}
+
+fn insert_with(reg: &Registry, id: &str, idle_ms: i64, spawned: bool) {
     let mut active = ActiveChat::new(
         test_chat(id),
-        Some(FakeSession::with_activity(true, Some(NOW - idle_ms))),
+        Some(FakeSession::with_activity(spawned, Some(NOW - idle_ms))),
     );
     active.last_used_at = NOW - idle_ms;
     reg.insert(id.to_string(), Arc::new(Mutex::new(active)));
@@ -197,4 +201,18 @@ fn use_of_the_cell_counts_even_with_a_spawned_session() {
         None,
         "a session without activity tracking is never idle"
     );
+}
+
+#[tokio::test]
+async fn a_chat_whose_process_is_alive_is_never_selected() {
+    let reg = registry();
+    insert_with(&reg, "live", 60 * MINUTE, true);
+    insert(&reg, "idle", 60 * MINUTE);
+    let releaser = FakeReleaser::after(10);
+
+    scanner(&reg, releaser.clone(), Arc::new(Mutex::new(NOW)))
+        .scan()
+        .await;
+
+    assert_eq!(releaser.calls(), vec!["idle"]);
 }

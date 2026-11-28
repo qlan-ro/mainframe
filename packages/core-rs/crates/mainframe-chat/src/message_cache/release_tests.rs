@@ -86,13 +86,6 @@ fn leaving_the_cache_ends_the_release() {
     assert!(!unpinned.is_released("c1"));
 }
 
-fn assistant(id: &str) -> ChatMessage {
-    ChatMessage {
-        r#type: ChatMessageType::Assistant,
-        ..message(id)
-    }
-}
-
 fn ids(cache: &MessageCache) -> Vec<String> {
     cache
         .get("c1")
@@ -125,75 +118,14 @@ fn a_history_read_never_installs_over_a_write_made_during_it() {
 }
 
 #[test]
-fn output_that_reaches_disk_before_the_restore_reads_it_is_kept_once() {
+fn a_release_clears_nothing_once_the_chat_was_used_after_the_decision() {
     let mut cache = cache_with_history();
-    cache.release_history("c1");
+    let seen = cache.activity("c1");
+    cache.note_activity("c1");
 
-    cache.append_live("c1", "session", assistant("x"));
-    cache.set("c1", vec![message("m1"), message("m2"), assistant("x")]);
-
-    assert_eq!(ids(&cache), ["m1", "m2", "x"]);
-}
-
-#[test]
-fn output_the_restore_read_missed_follows_the_restored_history() {
-    let mut cache = cache_with_history();
-    cache.release_history("c1");
-
-    cache.append_live("c1", "session", assistant("x"));
-    cache.set("c1", vec![message("m1"), message("m2")]);
-
-    assert_eq!(ids(&cache), ["m1", "m2", "x"]);
-}
-
-#[test]
-fn a_live_copy_of_a_restored_record_is_dropped_until_new_output_arrives() {
-    let mut cache = cache_with_history();
-    cache.release_history("c1");
-    cache.set("c1", vec![message("m1"), message("m2"), assistant("x")]);
-
-    cache.append_live("c1", "session", assistant("x"));
-    cache.append_live("c1", "session", assistant("y"));
-    cache.append("c1", message("m1"));
-
-    assert_eq!(
-        ids(&cache),
-        ["m1", "m2", "x", "y", "m1"],
-        "once new output arrived, appends are no longer reconciled"
-    );
-}
-
-#[test]
-fn a_daemon_notice_written_while_released_survives_the_restore() {
-    let mut cache = cache_with_history();
-    cache.release_history("c1");
-
-    cache.append("c1", message("notice"));
-    cache.set("c1", vec![message("m1"), message("m2")]);
-
-    assert_eq!(ids(&cache), ["m1", "m2", "notice"]);
-}
-
-#[test]
-fn nested_blocks_for_a_buffered_parent_wait_with_it() {
-    use mainframe_types::chat::MessageContentNode;
-    let mut cache = cache_with_history();
-    cache.release_history("c1");
-    let mut parent = assistant("x");
-    parent.content = vec![MessageContent::Node(MessageContentNode::ToolUse {
-        timing: None,
-        command_execution: None,
-        id: "tool-1".to_owned(),
-        name: "Task".to_owned(),
-        input: HashMap::new(),
-        parent_tool_use_id: None,
-    })];
-    cache.append_live("c1", "session", parent);
-
-    let child = message("child").content;
-    assert!(cache.append_nested_live("c1", "session", "tool-1", child));
-    assert!(!cache.append_nested_live("c1", "session", "on-disk", Vec::new()));
-    cache.set("c1", vec![message("m1")]);
-
-    assert_eq!(cache.get("c1").unwrap()[1].content.len(), 2);
+    assert!(!cache.release_history_if_unused("c1", seen));
+    assert!(cache.get("c1").is_some());
+    let now = cache.activity("c1");
+    assert!(cache.release_history_if_unused("c1", now));
+    assert!(cache.is_released("c1"));
 }

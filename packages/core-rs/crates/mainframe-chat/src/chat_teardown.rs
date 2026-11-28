@@ -84,4 +84,17 @@ impl ChatTeardown {
         }
         self.event_handler.clear_display_state(chat_id);
     }
+
+    /// [`TeardownMode::ReleaseHistory`], unless the chat was used since its
+    /// activity generation read `seen` (`MessageCache::release_history_if_unused`).
+    pub fn release_history_if_unused(&self, chat_id: &str, seen: u64) -> bool {
+        let released = self
+            .messages
+            .lock_recover()
+            .release_history_if_unused(chat_id, seen);
+        if released {
+            self.event_handler.clear_display_state(chat_id);
+        }
+        released
+    }
 }

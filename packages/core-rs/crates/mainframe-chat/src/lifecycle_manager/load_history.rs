@@ -105,17 +105,26 @@ impl ChatLifecycleManager {
         let read_from = self.shared.messages.lock_recover().history_epoch(chat_id);
         let cell = self.get_active(chat_id).ok_or(RestoreFailure::Gone)?;
         let chat = cell.lock_recover().chat.clone();
-        let composed = self.compose_history(chat_id).await;
+        // Every transcript the history needs must read: a failed read reported
+        // as an empty list, or a skipped segment, keeps the chat released.
+        let composed =
+            crate::chat_manager::compose_if_multi_complete(self.shared.deps.as_ref(), &chat).await;
         let canonical = composed.is_none();
         let (messages, active_from) = match composed {
-            Some(history) => history,
+            Some(Some(composed)) => (composed.messages, composed.active_from),
+            Some(None) => return Err(RestoreFailure::Unreadable),
             None => {
                 let session =
                     crate::chat_manager::build_history_session(&self.shared.deps, &chat, chat_id)
                         .ok_or(RestoreFailure::NoTranscript)?;
-                history::load_session_history(chat_id, session.as_ref(), &self.shared)
-                    .await
-                    .ok_or(RestoreFailure::Unreadable)?
+                let history =
+                    history::load_session_history(chat_id, session.as_ref(), &self.shared)
+                        .await
+                        .ok_or(RestoreFailure::Unreadable)?;
+                if session.last_history_read_failed() {
+                    return Err(RestoreFailure::Unreadable);
+                }
+                history
             }
         };
         if messages.is_empty() {
