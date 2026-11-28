@@ -27,7 +27,8 @@ fn next_delta(reload: bool) -> mainframe_display::DisplayDelta {
     let overlay = message("live", ChatMessageType::Assistant);
     cache.display_snapshot("c", &raw, Some(&overlay), None, || unreachable!());
     if reload {
-        let (restored, changed) = restore_history(&mut cache, "c", raw.clone());
+        let epoch = cache.history_epoch("c");
+        let (restored, changed) = restore_history(&mut cache, "c", raw.clone(), epoch);
         assert_eq!(restored, raw);
         assert!(!changed);
     }
@@ -55,11 +56,32 @@ fn changed_or_missing_history_still_replaces_the_projection() {
     let mut cache = MessageCache::new();
     for id in ["first", "replacement"] {
         let incoming = vec![message(id, ChatMessageType::User)];
-        let (restored, changed) = restore_history(&mut cache, "c", incoming.clone());
+        let epoch = cache.history_epoch("c");
+        let (restored, changed) = restore_history(&mut cache, "c", incoming.clone(), epoch);
         assert!(changed);
         assert_eq!(restored, incoming);
         let delta =
             cache.project_display("c", None, None, || Box::new(IncrementalProjector::new()));
         assert!(delta.full);
     }
+}
+
+#[test]
+fn a_restore_read_never_installs_over_a_write_made_during_it() {
+    let mut cache = MessageCache::new();
+    let read_from = cache.history_epoch("c");
+    cache.set("c", vec![message("first", ChatMessageType::User)]);
+    cache.append("c", message("prompt", ChatMessageType::User));
+
+    let (kept, changed) = restore_history(
+        &mut cache,
+        "c",
+        vec![message("first", ChatMessageType::User)],
+        read_from,
+    );
+
+    assert!(!changed);
+    let ids: Vec<_> = kept.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, ["first", "prompt"]);
+    assert_eq!(cache.get("c").unwrap().len(), 2);
 }

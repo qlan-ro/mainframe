@@ -11,12 +11,22 @@ impl ChatLifecycleManager {
     }
 
     /// Restore a released chat's history into its live cell before anything
-    /// appends to it; a no-op for any other chat. `load_chat` claims the
-    /// restore, so concurrent callers share one read.
-    pub(crate) async fn restore_released_history(&self, chat_id: &str) {
-        if self.history_released(chat_id) {
-            self.load_chat(chat_id).await;
+    /// appends to it; `Ok` at once for any other chat. `load_chat` claims the
+    /// restore, so concurrent callers share one read. `Err` when the chat is
+    /// still released afterwards (its transcript could not be read): the
+    /// caller must not append, and a send reports a retryable error.
+    pub(crate) async fn restore_released_history(
+        &self,
+        chat_id: &str,
+    ) -> Result<(), HistoryUnavailable> {
+        if !self.history_released(chat_id) {
+            return Ok(());
         }
+        self.load_chat(chat_id).await;
+        if self.history_released(chat_id) {
+            return Err(HistoryUnavailable);
+        }
+        Ok(())
     }
 
     /// Tell the chat surface that the chat's in-memory history is gone, so it
@@ -30,3 +40,8 @@ impl ChatLifecycleManager {
         );
     }
 }
+
+/// A released history could not be restored.
+#[derive(Debug, thiserror::Error)]
+#[error("This chat's history could not be reloaded. Try again.")]
+pub(crate) struct HistoryUnavailable;

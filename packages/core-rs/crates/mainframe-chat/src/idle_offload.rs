@@ -111,12 +111,13 @@ impl ChatOffload {
         // possibly-on-screen chat's facade session ended.
         self.teardown.clear(chat_id, TeardownMode::Offload);
 
-        // Step 5: release the slot.
-        drop(claim);
-
-        // Step 6: broadcast. The chat surface drops the facade's revision log,
-        // the one copy of the history the teardown cannot reach.
+        // Step 5: tell the chat surface, which drops the facade's revision
+        // log, the one copy of the history the teardown cannot reach. Still
+        // under the claim, so a resume that follows sees the hub's decision.
         self.lifecycle.notify_history_released(chat_id);
+
+        // Step 6: release the slot, then broadcast.
+        drop(claim);
         info!(chat_id, "released chat");
         self.lifecycle.emit_event(DaemonEvent::ChatOffloaded {
             chat_id: chat_id.to_string(),

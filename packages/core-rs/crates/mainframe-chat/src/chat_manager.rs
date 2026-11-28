@@ -66,6 +66,7 @@ mod fork_sweep;
 mod handoff_resolve;
 mod handoff_send;
 mod history;
+mod history_load;
 mod history_refresh;
 mod idle_maintenance;
 mod initial_history;

@@ -21,6 +21,11 @@ pub(super) fn emit_display_for(
     // the growing block instead of waiting for its completion.
     let overlay = partial_overlays.message_for(chat_id);
     let mut msgs = messages.lock_recover();
+    // A released chat has no history to project; its buffered output shows
+    // once the restore that a viewer's resume runs has adopted it.
+    if msgs.is_released(chat_id) {
+        return;
+    }
     let delta = msgs.project_display(chat_id, overlay.as_ref(), categories, || {
         deps.display_projector(chat_id)
     });

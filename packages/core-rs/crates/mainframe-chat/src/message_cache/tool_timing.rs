@@ -23,18 +23,18 @@ impl MessageCache {
             pinned: HashSet::new(),
             tool_timings: HashMap::new(),
             projections: HashMap::new(),
-            released: HashSet::new(),
+            released: Default::default(),
             now_epoch_ms,
         }
     }
 
     pub(crate) fn append_live(&mut self, chat_id: &str, session: &str, message: ChatMessage) {
-        if self.skips_released_append(chat_id) {
-            return;
-        }
         let now = (self.now_epoch_ms)().min(MAX_EPOCH_MS);
         let store = self.tool_timings.entry(chat_id.to_owned()).or_default();
         store.observe(session, &message.content, now);
+        let Some(message) = self.intercept_append(chat_id, message) else {
+            return;
+        };
         self.track_key(chat_id);
         let messages = self.cache.entry(chat_id.to_owned()).or_default();
         messages.push(message);
@@ -51,8 +51,11 @@ impl MessageCache {
         chat_id: &str,
         session: &str,
         parent: &str,
-        blocks: Vec<MessageContent>,
+        mut blocks: Vec<MessageContent>,
     ) -> bool {
+        if self.buffer_nested(chat_id, parent, &mut blocks) {
+            return true;
+        }
         let Some(messages) = self.cache.get_mut(chat_id) else {
             return false;
         };

@@ -16,8 +16,8 @@ pub struct MessageCache {
     /// Per-chat incremental-display-projection state: a display projector plus
     /// its mutation journal. See `projection.rs`.
     projections: HashMap<String, projection::ProjectionSlot>,
-    /// Pinned chats whose history the idle release dropped (`release.rs`).
-    released: HashSet<String>,
+    /// Released chats, their buffered output and history epochs (`release.rs`).
+    released: release::ReleaseState,
     now_epoch_ms: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
@@ -75,10 +75,10 @@ impl MessageCache {
     /// Appends `message`. No per-chat cap: a registry-pinned chat keeps its
     /// whole transcript, and `evict_if_needed` is the only bound, applied
     /// across chats rather than within one.
-    pub fn append(&mut self, chat_id: &str, mut message: ChatMessage) {
-        if self.skips_released_append(chat_id) {
+    pub fn append(&mut self, chat_id: &str, message: ChatMessage) {
+        let Some(mut message) = self.intercept_append(chat_id, message) else {
             return;
-        }
+        };
         self.tool_timings
             .entry(chat_id.to_owned())
             .or_default()

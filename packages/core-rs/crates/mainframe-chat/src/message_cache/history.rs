@@ -2,6 +2,7 @@ use super::*;
 
 impl MessageCache {
     pub fn set(&mut self, chat_id: &str, messages: Vec<ChatMessage>) {
+        let messages = self.adopt_released(chat_id, messages);
         let messages = self.merge_history(chat_id, messages);
         self.replace_messages(chat_id, messages);
     }
@@ -11,6 +12,7 @@ impl MessageCache {
         chat_id: &str,
         messages: Vec<ChatMessage>,
     ) -> Vec<ChatMessage> {
+        let messages = self.adopt_released(chat_id, messages);
         let messages = self.merge_history(chat_id, messages);
         self.replace_messages(chat_id, messages.clone());
         messages
@@ -25,7 +27,6 @@ impl MessageCache {
     }
 
     fn replace_messages(&mut self, chat_id: &str, messages: Vec<ChatMessage>) {
-        self.forget_release(chat_id);
         self.track_key(chat_id);
         self.cache.insert(chat_id.to_owned(), messages);
         self.drop_projection(chat_id);

@@ -79,6 +79,20 @@ impl RevisionRegistry {
         }
     }
 
+    /// Forget the log unless `keep` says otherwise, deciding under the
+    /// registry lock: a resume takes its log through this lock after it has
+    /// attached, so it either attached before `keep` ran (the log stays) or
+    /// creates a fresh log under a new epoch after the drop.
+    fn drop_unless(&self, chat_id: &str, keep: impl FnOnce() -> bool) -> bool {
+        let mut state = self.locked();
+        if keep() {
+            return false;
+        }
+        state.logs.remove(chat_id);
+        state.order.retain(|id| id != chat_id);
+        true
+    }
+
     /// `ChatEnded`: forget the log entirely.
     fn drop_chat(&self, chat_id: &str) {
         let mut state = self.locked();
@@ -177,8 +191,20 @@ impl FacadeHub {
     /// Dropping it is an unknown epoch to the next resume, which then replays
     /// in full, the same as after a restart. An attached session keeps its
     /// own stream state.
+    ///
+    /// A viewer that attached after the release's last viewer check keeps the
+    /// log: its resume already holds a cursor into it, and the restore its
+    /// resume runs brings the history back.
     pub(super) fn handle_history_released(&self, chat_id: &str) {
-        self.drop_revision_log(chat_id);
+        let dropped = self
+            .revisions
+            .drop_unless(chat_id, || self.is_viewing(chat_id));
+        if !dropped {
+            tracing::debug!(
+                chat_id,
+                "kept the revision log of a chat a viewer reattached to"
+            );
+        }
     }
 
     /// Whether any connection has a session on the chat: a client is showing

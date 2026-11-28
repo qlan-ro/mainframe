@@ -55,11 +55,18 @@ async fn current_history_in_memory(
     Some(cached)
 }
 
+/// Install `incoming` unless the history changed since `read_from` (its epoch
+/// when the read began): the newer history then stays, reported unchanged.
 pub(super) fn restore_history(
     cache: &mut crate::message_cache::MessageCache,
     chat_id: &str,
     incoming: Vec<ChatMessage>,
+    read_from: u64,
 ) -> (Vec<ChatMessage>, bool) {
+    if cache.history_epoch(chat_id) != read_from {
+        tracing::debug!(chat_id, "kept a history written during the read");
+        return (cache.get(chat_id).cloned().unwrap_or_default(), false);
+    }
     if cache.get(chat_id) == Some(&incoming) {
         return (incoming, false);
     }

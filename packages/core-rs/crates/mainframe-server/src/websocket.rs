@@ -163,7 +163,7 @@ async fn handle_socket(mut socket: WebSocket, ctx: Arc<AppCtx>) {
         }
     }
 
-    ctx.infra.ws_clients.remove(&client_id);
+    crate::chat_viewers::forget_client(&ctx, &client_id);
     file_watch.unsubscribe_all(&ctx.services.watcher);
 }
 
@@ -195,7 +195,7 @@ async fn handle_client_event(
 ) {
     match event {
         ClientEvent::Subscribe { chat_id } => {
-            subscriptions.lock_recover().insert(chat_id.clone());
+            crate::chat_viewers::subscribe(ctx, subscriptions, &chat_id);
             // Sent even when empty: this snapshot is the client's only re-seed
             // path for offers, so a reconnect must also clear stale ones.
             let offers = ctx.chat.chat_manager.worktree_offers_for_chat(&chat_id);
@@ -209,7 +209,7 @@ async fn handle_client_event(
             send(out_tx, &DaemonEvent::SubscribeAck { chat_id });
         }
         ClientEvent::Unsubscribe { chat_id } => {
-            subscriptions.lock_recover().remove(&chat_id);
+            crate::chat_viewers::unsubscribe(ctx, subscriptions, &chat_id);
         }
         ClientEvent::SubscribeFile {
             path,

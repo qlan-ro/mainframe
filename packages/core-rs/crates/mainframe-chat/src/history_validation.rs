@@ -90,6 +90,7 @@ impl crate::message_cache::MessageCache {
     }
     pub(super) fn mark_mutated(&mut self, chat_id: &str) {
         self.next_generation = self.next_generation.wrapping_add(1);
+        self.advance_epoch(chat_id);
         if self.get(chat_id).is_some() {
             self.generations
                 .insert(chat_id.to_owned(), self.next_generation);

@@ -56,9 +56,11 @@ impl ChatRelease {
             return;
         }
         self.teardown.clear(chat_id, TeardownMode::ReleaseHistory);
+        // Still under the claim: a resume reads the history only after the
+        // claim is gone, by which time the hub has dealt with the release.
+        self.lifecycle.notify_history_released(chat_id);
         drop(claim);
         drop(delegation);
-        self.lifecycle.notify_history_released(chat_id);
         info!(chat_id, "released chat history");
     }
 

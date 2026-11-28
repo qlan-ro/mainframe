@@ -8,7 +8,7 @@
 //! heartbeat and the throttle flush.
 
 mod dispatch;
-mod facade_conn;
+pub(crate) mod facade_conn;
 mod hub;
 mod ports;
 
@@ -179,5 +179,5 @@ async fn handle_acp_socket(mut socket: WebSocket, ctx: Arc<AppCtx>, profile: Str
         }
     }
 
-    ctx.chat.facade_hub.unregister(&client_id);
+    crate::chat_viewers::close_facade(&ctx, &client_id, &connection);
 }

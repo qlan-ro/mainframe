@@ -20,6 +20,10 @@ const MINUTE: i64 = 60_000;
 #[derive(Default)]
 struct RecordingSurface {
     events: Mutex<Vec<ChatSurfaceEvent>>,
+    /// When set, records whether the offload claim was free as each release
+    /// notice arrived.
+    probe: std::sync::OnceLock<Arc<crate::lifecycle_manager::ChatLifecycleManager>>,
+    claim_free_at_notice: Mutex<Vec<bool>>,
 }
 
 impl RecordingSurface {
@@ -38,6 +42,12 @@ impl RecordingSurface {
 
 impl ChatSurface for RecordingSurface {
     fn on_chat_surface_event(&self, event: ChatSurfaceEvent) {
+        if let (ChatSurfaceEvent::HistoryReleased { chat_id }, Some(lifecycle)) =
+            (&event, self.probe.get())
+        {
+            let free = lifecycle.try_claim_offload(chat_id).is_some();
+            self.claim_free_at_notice.lock().unwrap().push(free);
+        }
         self.events.lock().unwrap().push(event);
     }
 }
@@ -259,6 +269,8 @@ async fn finish_real_run(f: &Fixture, ago_ms: i64) {
         .unwrap();
 }
 
+#[path = "chat_manager_tests_release_integrity.rs"]
+mod integrity;
 #[path = "chat_manager_tests_release_return.rs"]
 mod returning;
 #[path = "chat_manager_tests_release_rules.rs"]
