@@ -26,7 +26,7 @@ import { chatControllerRegistry } from './chat-controller-registry';
 
 /** The longest the app waits for the restore before it shows what it has. A running turn never holds past it. */
 export const BOOT_HOLD_MAX_MS = 1500;
-/** A chat with no rows on screen (nothing to settle) is shown this long after it reports ready. */
+/** An empty chat (its list says it holds no messages) is shown once its transcript has been mounted this long. */
 const SETTLE_MS = 48;
 /** Within this many px of the end counts as the tail. */
 const TAIL_SLOP_PX = 2;
@@ -97,15 +97,25 @@ function atTail(el: HTMLElement): boolean {
 }
 
 /**
- * Whether the transcript has rows and shows them. The default list keeps its rows
- * `visibility:hidden` until it has measured and pinned them; the plain list fills the
- * viewport with its newest rows before its first paint. Layout-free on purpose.
+ * What the transcript's message list shows. Both lists render `chat-message-list` with
+ * `data-loaded-count`. The default list keeps itself `visibility:hidden` until it has measured
+ * and pinned its rows, and commits its first rows a frame after it measures; the plain list
+ * fills the viewport with its newest rows before its first paint and marks `data-rows-pending`
+ * while older rows of the first window are still to mount above them.
+ *
+ * - `empty`: the list says it holds no messages (an empty chat): nothing more will arrive.
+ * - `pending`: messages are loaded but no row is drawn yet, the list is not mounted, or it is
+ *   hidden: what it will show is not on screen yet.
+ * - `underfilled`: rows are shown but do not fill the viewport while more are still to mount.
+ * - `shown`: rows are shown.
  */
-function rowsState(el: HTMLElement): 'none' | 'hidden' | 'shown' {
+function listState(el: HTMLElement): 'empty' | 'pending' | 'underfilled' | 'shown' {
+  const list = el.querySelector<HTMLElement>('[data-testid="chat-message-list"]');
   const row = el.querySelector('[data-message-id]');
-  if (row == null) return 'none';
-  const list = row.closest<HTMLElement>('[data-testid="chat-message-list"]') ?? row;
-  return getComputedStyle(list).visibility === 'hidden' ? 'hidden' : 'shown';
+  if (row == null) return list?.getAttribute('data-loaded-count') === '0' ? 'empty' : 'pending';
+  if (getComputedStyle(list ?? (row as HTMLElement)).visibility === 'hidden') return 'pending';
+  if (list?.hasAttribute('data-rows-pending') && el.scrollHeight <= el.clientHeight) return 'underfilled';
+  return 'shown';
 }
 
 /**
@@ -115,9 +125,10 @@ function rowsState(el: HTMLElement): 'none' | 'hidden' | 'shown' {
  * the tail. The check runs in an animation frame, before that frame paints, so
  * the cover lifts in the very frame the pinned transcript is first drawn: no
  * earlier frame can show it half-scrolled or still hidden, and no later one is
- * spent covering a finished picture. A transcript with no rows (an empty chat)
- * is shown `SETTLE_MS` after the chat is ready. A turn still streaming does not
- * matter: the tail is only checked, never waited to go quiet.
+ * spent covering a finished picture. An empty chat (its list reports no
+ * messages) is shown once its transcript has been mounted `SETTLE_MS`; a list
+ * with messages but no row drawn yet keeps the hold. A turn still streaming
+ * does not matter: the tail is only checked, never waited to go quiet.
  *
  * Until the chat column shows THIS chat's transcript the hold keeps waiting:
  * assistant-ui switches threads asynchronously, and for a moment the column
@@ -133,14 +144,19 @@ export function decideBootRestore(chatId: string | null): void {
   }
   stopWatching();
   let loadedAt = 0;
+  let mountedAt = 0;
   const settled = (): boolean => {
     if (!chatLoaded(chatId)) return false;
-    loadedAt ||= performance.now();
-    const waited = performance.now() - loadedAt >= SETTLE_MS;
+    const now = performance.now();
+    loadedAt ||= now;
     const mine = mainTranscripts().find((el) => el.getAttribute('data-mf-chat-id') === chatId);
-    if (mine == null) return chatColumnUnmounted() && waited;
-    const rows = rowsState(mine);
-    return atTail(mine) && (rows === 'shown' || (rows === 'none' && waited));
+    if (mine == null) return chatColumnUnmounted() && now - loadedAt >= SETTLE_MS;
+    // The settle window starts when THIS transcript is first seen, not when the chat
+    // reported ready: the boot prewarm can be ready long before the thread switch lands.
+    mountedAt ||= now;
+    const state = listState(mine);
+    if (state === 'empty') return now - mountedAt >= SETTLE_MS;
+    return state === 'shown' && atTail(mine);
   };
   const frame = () => {
     watch = undefined;

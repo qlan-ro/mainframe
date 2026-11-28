@@ -64,7 +64,7 @@ const mockGetDaemonPort = vi.fn();
 const mockGetDaemonStatus = vi.fn();
 const mockOnDaemonStatus = vi.fn();
 
-import { BOOT_POLL_INTERVAL_MS, useConnectionState, healthUrl } from '../useConnectionState';
+import { BOOT_POLL_INTERVAL_MS, BOOT_POLL_WINDOW_MS, useConnectionState, healthUrl } from '../useConnectionState';
 
 // ---------------------------------------------------------------------------
 // healthUrl unit tests (no mocks needed — pure function)
@@ -299,6 +299,30 @@ describe('useConnectionState', () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
     expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it('falls back to the liveness interval when the daemon never answers within the boot window', async () => {
+    mockGetDaemonPort.mockResolvedValue(31415);
+    mockGetDaemonStatus.mockResolvedValue('started:pid=1');
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('connection refused'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderHook(() => useConnectionState());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    // Fast while the window lasts: about one ask per boot interval.
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(8);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(BOOT_POLL_WINDOW_MS);
+    });
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+    // Past it, every 2 s: two asks in 4 s, not forty.
+    expect(fetchMock.mock.calls.length - calls).toBeLessThanOrEqual(2);
   });
 
   it('does not ask before the daemon answers', async () => {

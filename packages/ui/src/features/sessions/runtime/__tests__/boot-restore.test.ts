@@ -25,16 +25,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A message list holding one row, as both transcript lists render it. */
-function addRows(el: HTMLElement) {
+/** A message list as both transcript lists render it: `loaded` messages, `drawn` of them as rows. */
+function addList(el: HTMLElement, { loaded = 1, drawn = loaded }: { loaded?: number; drawn?: number } = {}) {
   const list = document.createElement('div');
   list.setAttribute('data-testid', 'chat-message-list');
-  const row = document.createElement('div');
-  row.setAttribute('data-message-id', 'm1');
-  list.append(row);
+  list.setAttribute('data-loaded-count', String(loaded));
+  for (let i = 0; i < drawn; i++) {
+    const row = document.createElement('div');
+    row.setAttribute('data-message-id', `m${i}`);
+    list.append(row);
+  }
   el.append(list);
   return list;
 }
+const addRows = (el: HTMLElement) => addList(el);
 
 /** A transcript in the chat column (`main`) or a workspace tab (a side chat). jsdom has no layout: set the box by hand. */
 function mountTranscript(chatId: string | null, where: 'main' | 'side' = 'main') {
@@ -180,19 +184,85 @@ describe('boot restore hold', () => {
       expect(isBootRestoring()).toBe(false);
     });
 
-    it('shows a transcript with no rows a beat after the chat is ready (an empty chat)', () => {
+    it('keeps holding while messages are loaded but no row is drawn yet (the default list commits a frame late)', () => {
+      const { el } = mountTranscript('chat-1');
+      const list = addList(el, { loaded: 40, drawn: 0 });
+      list.style.visibility = 'hidden';
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(80);
+      expect(isBootRestoring()).toBe(true);
+      // Revealed, still with nothing drawn: not yet.
+      list.style.visibility = '';
+      vi.advanceTimersByTime(400);
+      expect(isBootRestoring()).toBe(true);
+
+      const row = document.createElement('div');
+      row.setAttribute('data-message-id', 'm39');
+      list.append(row);
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('keeps holding while a mounted transcript has no message list yet', () => {
       mountTranscript('chat-1');
       beginBootRestore();
       loadState['chat-1'] = 'ready';
       decideBootRestore('chat-1');
+      vi.advanceTimersByTime(BOOT_HOLD_MAX_MS - 1);
+      expect(isBootRestoring()).toBe(true);
+    });
+
+    it('shows an empty chat once its transcript has been mounted a beat, counted from the mount, not from ready', () => {
+      const draft = mountTranscript(null);
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      // Ready long before the thread switch lands (the boot prewarm): the column still holds the draft.
+      vi.advanceTimersByTime(300);
+      expect(isBootRestoring()).toBe(true);
+      draft.host.remove();
+      const { el } = mountTranscript('chat-1');
+      addList(el, { loaded: 0 });
       vi.advanceTimersByTime(16);
       expect(isBootRestoring()).toBe(true);
       vi.advanceTimersByTime(48);
       expect(isBootRestoring()).toBe(false);
     });
 
+    it('keeps holding while the newest rows do not fill the viewport and more are still to mount', () => {
+      const { el, box } = mountTranscript('chat-1');
+      const list = addList(el, { loaded: 40, drawn: 6 });
+      list.setAttribute('data-rows-pending', '');
+      box.scrollHeight = 100; // clientHeight is 100: the six rows do not overflow
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(200);
+      expect(isBootRestoring()).toBe(true);
+
+      // The next slice overflows the viewport and the owner keeps the tail in view.
+      box.scrollHeight = 2000;
+      box.scrollTop = 1900;
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('does not wait for the rest of the window once the newest rows overflow the viewport', () => {
+      const { el, box } = mountTranscript('chat-1');
+      addList(el, { loaded: 40, drawn: 12 }).setAttribute('data-rows-pending', '');
+      box.scrollHeight = 2000;
+      box.scrollTop = 1900;
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      expect(isBootRestoring()).toBe(false);
+    });
+
     it('counts two px short of the end as the tail', () => {
-      const { box } = mountTranscript('chat-1');
+      const { el, box } = mountTranscript('chat-1');
+      addRows(el);
       beginBootRestore();
       loadState['chat-1'] = 'ready';
       box.scrollHeight = 1000;
@@ -203,7 +273,8 @@ describe('boot restore hold', () => {
     });
 
     it('does not wait for a running turn to go quiet: a streaming transcript that sits at its tail is shown', () => {
-      const { box } = mountTranscript('chat-1');
+      const { el, box } = mountTranscript('chat-1');
+      addRows(el);
       beginBootRestore();
       loadState['chat-1'] = 'ready';
       box.scrollHeight = 5000;
@@ -243,7 +314,7 @@ describe('boot restore hold', () => {
 
       // The switch lands: this chat's transcript mounts, pinned.
       draft.host.remove();
-      mountTranscript('chat-1');
+      addRows(mountTranscript('chat-1').el);
       vi.advanceTimersByTime(100);
       expect(isBootRestoring()).toBe(false);
     });
@@ -251,7 +322,7 @@ describe('boot restore hold', () => {
     it('watches the decided chat’s transcript in the chat column, not a side chat’s', () => {
       const side = mountTranscript('side-1', 'side');
       side.box.scrollHeight = 9000; // never at its tail
-      mountTranscript('chat-1');
+      addRows(mountTranscript('chat-1').el);
       beginBootRestore();
       loadState['chat-1'] = 'ready';
       decideBootRestore('chat-1');
@@ -273,7 +344,7 @@ describe('boot restore hold', () => {
     });
 
     it('does not wait for a side chat’s spinner', () => {
-      mountTranscript('chat-1');
+      addRows(mountTranscript('chat-1').el);
       const spinner = document.createElement('div');
       spinner.setAttribute('data-testid', 'chat-thread-loading');
       document.body.append(spinner);
