@@ -82,6 +82,7 @@ pub fn on_run_event(app: &AppHandle, event: RunEvent) {
         }
         RunEvent::Exit => {
             // An exit that bypasses ExitRequested cannot wait for graceful shutdown here.
+            DAEMON.close();
             if let Some(daemon) = DAEMON.get() {
                 daemon.kill_now();
             }
@@ -145,6 +146,7 @@ fn supervise(
 }
 
 fn emergency_stop() {
+    DAEMON.close();
     if let Some(daemon) = DAEMON.get() {
         daemon.kill_now();
     }
@@ -164,6 +166,8 @@ fn stop_daemon() {
     if let Err(error) = presence::post_state_sync(daemon_port(), presence::Presence::Idle) {
         tracing::warn!(%error, "quit-path idle presence report failed");
     }
+    // A launch still waiting for the login-shell env must not spawn after this.
+    DAEMON.close();
     if let Some(daemon) = DAEMON.get() {
         daemon.stop();
     }

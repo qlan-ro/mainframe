@@ -1,4 +1,6 @@
 mod commands;
+mod daemon_launch;
+mod env_boot;
 mod log_sink;
 #[cfg(feature = "mcp-bridge")]
 mod mcp_bridge;
@@ -13,7 +15,6 @@ mod terminal;
 mod updater;
 
 use std::path::PathBuf;
-use std::sync::OnceLock;
 
 use tauri::{Emitter, Manager};
 
@@ -30,8 +31,9 @@ use preview::{
     preview_set_bounds, preview_set_visible, PreviewManager,
 };
 
-/// Retains ownership of the sidecar for shutdown and memory sampling.
-static DAEMON: OnceLock<sidecar::DaemonHandle> = OnceLock::new();
+/// Retains ownership of the sidecar for shutdown and memory sampling. Filled by the
+/// background launch once the daemon env is ready (see `launch_daemon`).
+static DAEMON: daemon_launch::DaemonSlot = daemon_launch::DaemonSlot::new();
 
 /// Daemon HTTP/WS port for this session. Configurable via the `DAEMON_PORT` env
 /// (the dev launch configs set it, alongside `VITE_DAEMON_HTTP_PORT`); falls back
@@ -114,10 +116,13 @@ pub fn run() {
 
     memory_logger::start_memory_logger();
 
-    // ── C1: Capture the login-shell environment before doing anything else ──
-    // This must happen before window creation so PATH is available when the
-    // renderer asks for connection status.
-    let shell_env = shell_env::resolve_shell_env_with_timeout();
+    // ── C1: Login-shell environment ──
+    // Start capturing it now, on a background thread, so it runs while Tauri
+    // initialises. Nothing here waits for it: the window is created straight
+    // away, and only the daemon launch (which needs PATH) waits — and not even
+    // that when a cached capture is available. Until the daemon is spawned,
+    // `get_daemon_status` answers `starting`.
+    let env_boot = env_boot::EnvBoot::start(env_boot::EnvBootConfig::for_app());
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -209,6 +214,7 @@ pub fn run() {
                 })
                 .build()
                 .expect("failed to create main window");
+            tracing::info!("main window created");
 
             // Manually created windows are not auto-restored by the plugin —
             // reapply the saved geometry explicitly (no-op on first launch).
@@ -238,9 +244,9 @@ pub fn run() {
             #[cfg(feature = "mcp-bridge")]
             mcp_bridge::grant_capability(app.handle());
 
-            // Register the terminal manager (uses the same login-shell env as the
-            // daemon so shells inherit the correct PATH/SHELL).
-            app.manage(TerminalManager::new(shell_env.clone()));
+            // Register the terminal manager. It reads the shared login-shell env at
+            // each spawn, so terminals pick up the fresh capture once it lands.
+            app.manage(TerminalManager::new(env_boot.shared_env()));
 
             // Manage daemon port so the report_activity command can read it.
             app.manage(DaemonPort(daemon_port()));
@@ -248,40 +254,8 @@ pub fn run() {
             // Register the preview child-webview manager.
             app.manage(PreviewManager::new());
 
-            let daemon_result = boot_daemon(&shell_env);
-
-            // Propagate any daemon-boot error to the renderer via the window title
-            // (best-effort — the renderer polls get_daemon_status).
-            if let Err(ref e) = daemon_result {
-                tracing::error!(err = %e, "daemon failed to start");
-            }
-
-            // Emit daemon status to the main window once it's ready.
-            let win = app.get_webview_window("main").expect("main window missing");
-            let status = match &daemon_result {
-                Ok(handle) => format!("started:pid={}", handle.pid().unwrap_or(0)),
-                Err(e) => format!("error:{e}"),
-            };
-            win.emit("daemon:status", &status)
-                .expect("emit daemon:status failed");
-
-            // Store the handle for the lifetime of the app.
-            if let Ok(handle) = daemon_result {
-                let _ = DAEMON.set(handle);
-                // Surface an unexpected daemon death (bind failure, crash) to the
-                // renderer — otherwise the UI keeps polling a port that may be
-                // owned by a stale daemon and everything skews silently.
-                if let Some(h) = DAEMON.get() {
-                    let app_handle = app.handle().clone();
-                    h.watch_exit(move |code| {
-                        let code_label = code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
-                        tracing::error!(code = %code_label, "daemon sidecar exited unexpectedly");
-                        if let Some(win) = app_handle.get_webview_window("main") {
-                            let _ = win.emit("daemon:status", &format!("error:daemon exited (code {code_label})"));
-                        }
-                    });
-                }
-            }
+            // Spawns the daemon off the main thread once its env is ready.
+            launch_daemon(app.handle().clone(), env_boot);
 
             // Start the OS-idle presence reporter (Plan 3, decision 4).
             // Spawns a background thread; mirrors idle-reporter.ts cadence.
@@ -314,21 +288,62 @@ pub fn run() {
         .run(quit::on_run_event);
 }
 
-fn boot_daemon(
-    shell_env: &std::collections::HashMap<String, String>,
-) -> Result<sidecar::DaemonHandle, String> {
-    // External daemon: the user (or a separate process) runs the daemon themselves
-    // (MAINFRAME_EXTERNAL_DAEMON) — don't spawn; the renderer connects to it on
-    // daemon_port(). Mirrors the Electron `MAINFRAME_EXTERNAL_DAEMON` flag.
-    if external_daemon() {
-        tracing::info!(
-            port = daemon_port(),
-            "MAINFRAME_EXTERNAL_DAEMON set — not spawning; assuming an external daemon"
-        );
-        return Ok(sidecar::DaemonHandle::external());
+/// Launch the daemon on a background thread, then report it to the renderer.
+///
+/// With a cached login-shell env this spawns at once; otherwise it waits for the
+/// capture (bounded by `env_boot::DAEMON_ENV_WAIT`, then the fallback env). The
+/// window already exists, so the renderer polls `get_daemon_status` (`starting`
+/// until the spawn) and receives `daemon:status` afterwards.
+fn launch_daemon(app: tauri::AppHandle, env_boot: env_boot::EnvBoot) {
+    let spawned = std::thread::Builder::new()
+        .name("daemon-launch".into())
+        .spawn(move || {
+            // External daemon: the user (or a separate process) runs the daemon
+            // themselves (MAINFRAME_EXTERNAL_DAEMON) — don't spawn and don't wait
+            // for the env; the renderer connects to it on daemon_port().
+            let launched = if external_daemon() {
+                tracing::info!(
+                    port = daemon_port(),
+                    "MAINFRAME_EXTERNAL_DAEMON set — not spawning; assuming an external daemon"
+                );
+                DAEMON.launch(|| Ok(sidecar::DaemonHandle::external()))
+            } else {
+                // `launch_with` logs which env (cached / login_shell / fallback) it used.
+                daemon_launch::launch_with(&DAEMON, &env_boot, |env, _source| boot_rust_daemon(env))
+            };
+            let Some(result) = launched else { return };
+            report_daemon_launch(&app, result);
+        });
+    if let Err(err) = spawned {
+        tracing::error!(error = %err, "could not start the daemon launch thread");
+    }
+}
+
+fn report_daemon_launch(app: &tauri::AppHandle, result: Result<&sidecar::DaemonHandle, String>) {
+    let status = match &result {
+        Ok(handle) => format!("started:pid={}", handle.pid().unwrap_or(0)),
+        Err(err) => {
+            tracing::error!(error = %err, "daemon failed to start");
+            format!("error:{err}")
+        }
+    };
+    if let Err(err) = app.emit("daemon:status", &status) {
+        tracing::warn!(error = %err, "could not emit daemon:status");
     }
 
-    boot_rust_daemon(shell_env)
+    // Surface an unexpected daemon death (bind failure, crash) to the renderer —
+    // otherwise the UI keeps polling a port that may be owned by a stale daemon
+    // and everything skews silently.
+    if let Ok(handle) = result {
+        let app_handle = app.clone();
+        handle.watch_exit(move |code| {
+            let code_label = code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+            tracing::error!(code = %code_label, "daemon sidecar exited unexpectedly");
+            if let Some(win) = app_handle.get_webview_window("main") {
+                let _ = win.emit("daemon:status", &format!("error:daemon exited (code {code_label})"));
+            }
+        });
+    }
 }
 
 /// Boot the Rust `mainframe-daemon` binary directly.
@@ -458,11 +473,5 @@ fn get_daemon_port() -> u16 {
 
 #[tauri::command]
 fn get_daemon_status() -> String {
-    match DAEMON.get() {
-        Some(h) => match h.pid() {
-            Some(pid) => format!("running:{pid}"),
-            None => "exited".to_string(),
-        },
-        None => "not_started".to_string(),
-    }
+    DAEMON.status()
 }

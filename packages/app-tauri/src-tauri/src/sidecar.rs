@@ -130,7 +130,8 @@ pub struct DaemonProgram {
 pub struct SidecarConfig {
     /// The implementation-specific program to spawn.
     pub program: DaemonProgram,
-    /// Login-shell env captured by `shell_env::resolve_shell_env_with_timeout`.
+    /// Login-shell env chosen by `env_boot::EnvBoot::daemon_env` (cached,
+    /// freshly captured, or the fallback).
     /// Becomes the daemon's own env, so the daemon AND its adapter children
     /// (claude/codex) inherit the resolved PATH — closing the packaged-app
     /// "bare PATH → CLI ENOENT" gap for both impls.

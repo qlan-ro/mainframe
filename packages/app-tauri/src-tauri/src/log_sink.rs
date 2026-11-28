@@ -168,14 +168,19 @@ fn data_dir_from(env_data_dir: Option<&str>, default_dir: &Path) -> PathBuf {
     }
 }
 
-/// `<data dir>/logs`, the directory the daemon writes its own `server.*` logs
-/// to, so shell and daemon logs sit side by side.
-pub fn log_dir() -> PathBuf {
+/// The daemon's data directory (`~/.mainframe` unless overridden).
+pub fn data_dir() -> PathBuf {
     let default_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join(".mainframe");
     let env_data_dir = std::env::var("MAINFRAME_DATA_DIR").ok();
-    data_dir_from(env_data_dir.as_deref(), &default_dir).join("logs")
+    data_dir_from(env_data_dir.as_deref(), &default_dir)
+}
+
+/// `<data dir>/logs`, the directory the daemon writes its own `server.*` logs
+/// to, so shell and daemon logs sit side by side.
+pub fn log_dir() -> PathBuf {
+    data_dir().join("logs")
 }
 
 // ── Retention purge ───────────────────────────────────────────────────────────
