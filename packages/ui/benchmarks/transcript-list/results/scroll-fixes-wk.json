@@ -72,6 +72,15 @@
     11.0,
     9.5
    ]
+  },
+  {
+   "build": "fix-round3",
+   "what": "Last round (lowest-height clamp test): P3-fold, P4, R-read near/tail/drag, R-send, S-top-heavy-flick, B-short, one pass",
+   "load": [
+    4.9,
+    5.7,
+    7.1
+   ]
   }
  ],
  "results": [
@@ -7247,6 +7256,1350 @@
     "rowsInDomMs": 166,
     "firstVisibleMs": 166,
     "mountMs": 166,
+    "firstFrameScrollTop": 2506,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "change": "fold",
+    "dir": "up",
+    "above": 150,
+    "maxDrift": 0,
+    "heightChange": -28,
+    "scrollTopChange": 0,
+    "frames": 133,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-up",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 113,
+    "firstVisibleMs": 113,
+    "mountMs": 113,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "change": "fold",
+    "dir": "down",
+    "above": 150,
+    "maxDrift": 0,
+    "heightChange": -28,
+    "scrollTopChange": 0,
+    "frames": 130,
+    "anchorLost": false
+   },
+   "engine": "wk",
+   "case": "P3-fold-down",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 2328,
+    "firstFrameGap": 0,
+    "newestMoved": 0.95
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "framesToLiveEdge": 0,
+    "reachedLiveEdge": true,
+    "worstGapStreaming": 0,
+    "worstGapAfterFold": 0,
+    "foldHeight": 3960,
+    "renderP95": 0,
+    "renderP50": 0,
+    "writeToDomP95": 24,
+    "chunks": 233,
+    "frameP95": 27
+   },
+   "engine": "wk",
+   "case": "P4-follow",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "dy": -120,
+    "stayedReleased": true,
+    "stayedFollowing": false,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-up",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 61,
+    "firstVisibleMs": 61,
+    "mountMs": 61,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "dy": 120,
+    "stayedReleased": false,
+    "stayedFollowing": true,
+    "jumpFrames": 1,
+    "worstGapAfterJump": 0
+   },
+   "engine": "wk",
+   "case": "P4-wheel-down",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app@fix-round3",
+   "case": "B-short",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 50,
+    "firstVisibleMs": 50,
+    "mountMs": 50,
+    "firstFrameScrollTop": 708,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app@fix-round3",
+   "case": "B-short",
+   "rep": 1,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 60,
+    "firstVisibleMs": 60,
+    "mountMs": 60,
+    "firstFrameScrollTop": 708,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app@fix-round3",
+   "case": "B-short",
+   "rep": 2,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 67,
+    "firstVisibleMs": 67,
+    "mountMs": 67,
+    "firstFrameScrollTop": 708,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app@fix-round3",
+   "case": "B-short",
+   "rep": 3,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 46,
+    "firstVisibleMs": 46,
+    "mountMs": 46,
+    "firstFrameScrollTop": 708,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "engine": "wk",
+   "variant": "app@fix-round3",
+   "case": "B-short",
+   "rep": 4,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 708,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 808,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-near",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 64,
+    "firstVisibleMs": 64,
+    "mountMs": 64,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 817,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-tail",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 64,
+    "firstVisibleMs": 64,
+    "mountMs": 64,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 15,
+    "frames": 426,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-drag",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 59,
+    "firstVisibleMs": 59,
+    "mountMs": 59,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 824,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-tail-still",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 58,
+    "firstVisibleMs": 58,
+    "mountMs": 58,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 811,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-near-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 42,
+    "firstVisibleMs": 42,
+    "mountMs": 42,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 789,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-tail-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 38,
+    "firstVisibleMs": 38,
+    "mountMs": 38,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 15,
+    "frames": 411,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-drag-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 47,
+    "firstVisibleMs": 47,
+    "mountMs": 47,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "followingAfterFirstUp": 0,
+    "backToBottom": 0,
+    "worst": 0,
+    "total": 0,
+    "jumps": 0,
+    "followingWhileReading": 0,
+    "anchorLost": false,
+    "stepsWritten": 18,
+    "frames": 791,
+    "events": []
+   },
+   "engine": "wk",
+   "case": "R-read-tail-still-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 39,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 79,
+    "firstVisibleMs": 79,
+    "mountMs": 79,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-prev",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 69,
+    "firstVisibleMs": 69,
+    "mountMs": 69,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 8,
+    "upEvents": [
+     {
+      "i": 14,
+      "step": -29,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68233,
+        "to": 68233,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 124,
+      "step": -52,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68359,
+        "to": 68359,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 127,
+      "step": -7,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 164,
+      "step": -103,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 203,
+      "step": -155,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 227,
+      "step": -35,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68317,
+        "to": 68317,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     }
+    ]
+   },
+   "engine": "wk",
+   "case": "R-send-prev-after",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 76,
+    "firstVisibleMs": 76,
+    "mountMs": 76,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-composer",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 61,
+    "firstVisibleMs": 61,
+    "mountMs": 61,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-composer-prev",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 60,
+    "firstVisibleMs": 60,
+    "mountMs": 60,
+    "firstFrameScrollTop": 2806,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-layout",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 56,
+    "firstVisibleMs": 56,
+    "mountMs": 56,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 8,
+    "upEvents": [
+     {
+      "i": 14,
+      "step": -29,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68233,
+        "to": 68233,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 118,
+      "step": -52,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68359,
+        "to": 68359,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 121,
+      "step": -7,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 157,
+      "step": -103,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 195,
+      "step": -155,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68352,
+        "to": 68352,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 218,
+      "step": -35,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 68317,
+        "to": 68317,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     }
+    ]
+   },
+   "engine": "wk",
+   "case": "R-send-layout-prev",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 57,
+    "firstVisibleMs": 57,
+    "mountMs": 57,
+    "firstFrameScrollTop": 2816,
+    "firstFrameGap": 0,
+    "newestMoved": 0.92
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 39,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-prev-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 38,
+    "firstVisibleMs": 38,
+    "mountMs": 38,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 8,
+    "upEvents": [
+     {
+      "i": 13,
+      "step": -29,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 792,
+        "to": 792,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 109,
+      "step": -52,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 918,
+        "to": 918,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 111,
+      "step": -7,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 144,
+      "step": -103,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 178,
+      "step": -155,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 198,
+      "step": -35,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 876,
+        "to": 876,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     }
+    ]
+   },
+   "engine": "wk",
+   "case": "R-send-prev-after-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 1,
+    "firstVisibleFrame": 1,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 37,
+    "firstVisibleMs": 37,
+    "mountMs": 37,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-composer-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 55,
+    "firstVisibleMs": 55,
+    "mountMs": 55,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-composer-prev-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 39,
+    "firstVisibleMs": 39,
+    "mountMs": 39,
+    "firstFrameScrollTop": 174,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 0,
+    "upEvents": []
+   },
+   "engine": "wk",
+   "case": "R-send-layout-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 36,
+    "firstVisibleMs": 36,
+    "mountMs": 36,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "worstGap": 0,
+    "finalGap": 0,
+    "notFollowing": 0,
+    "firstNotFollowing": -1,
+    "upMoves": 8,
+    "upEvents": [
+     {
+      "i": 14,
+      "step": -29,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 792,
+        "to": 792,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 113,
+      "step": -52,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 918,
+        "to": 918,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 115,
+      "step": -7,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 146,
+      "step": -103,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 179,
+      "step": -155,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 911,
+        "to": 911,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     },
+     {
+      "i": 201,
+      "step": -35,
+      "gap": 0,
+      "following": true,
+      "writes": [
+       {
+        "via": "scrollTop",
+        "from": 876,
+        "to": 876,
+        "caller": "apt@assets/index-crr_Xorz.js:373:91042 < set@assets/index-crr_Xorz.js:374:864 < @assets/index-crr_Xorz.js:373:81868"
+       }
+      ],
+      "marks": []
+     }
+    ]
+   },
+   "engine": "wk",
+   "case": "R-send-layout-prev-real",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 36,
+    "firstVisibleMs": 36,
+    "mountMs": 36,
+    "firstFrameScrollTop": 184,
+    "firstFrameGap": 0,
+    "newestMoved": 0
+   }
+  },
+  {
+   "ok": true,
+   "variant": "app@fix-round3",
+   "result": {
+    "mode": "flick",
+    "park": true,
+    "dy": -900,
+    "opening": {
+     "viewports": 25.11,
+     "scrollTop": 0
+    },
+    "loads": 1,
+    "landed": 1,
+    "pageMessages": [
+     1510
+    ],
+    "requestScrollTops": [
+     0
+    ],
+    "jump": 0,
+    "endResidual": 0,
+    "gapJump": 0,
+    "gapEnd": 0,
+    "lostFrames": 0,
+    "pinned": 0,
+    "pageHeights": [
+     15190
+    ],
+    "endScrollTop": 11645,
+    "endHeight": 30456,
+    "hasMore": true,
+    "wheelEvents": 245,
+    "wheelSum": -4236,
+    "frames": 471,
+    "longestFrameMs": 229
+   },
+   "engine": "wk",
+   "case": "S-top-heavy-flick",
+   "rep": 0,
+   "react": "plain",
+   "boot": {
+    "firstRowsFrame": 2,
+    "firstVisibleFrame": 2,
+    "lastRowOnFirstFrame": true,
+    "hiddenFrames": 0,
+    "wrongFrames": 0,
+    "rowsInDomMs": 123,
+    "firstVisibleMs": 123,
+    "mountMs": 123,
     "firstFrameScrollTop": 2506,
     "firstFrameGap": 0,
     "newestMoved": 0
