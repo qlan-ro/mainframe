@@ -309,7 +309,10 @@ fn launch_daemon(app: tauri::AppHandle, env_boot: env_boot::EnvBoot) {
                 DAEMON.launch(|| Ok(sidecar::DaemonHandle::external()))
             } else {
                 // `launch_with` logs which env (cached / login_shell / fallback) it used.
-                daemon_launch::launch_with(&DAEMON, &env_boot, |env, _source| boot_rust_daemon(env))
+                // Only a real capture lets the daemon skip its own login-shell probe.
+                daemon_launch::launch_with(&DAEMON, &env_boot, |env, source| {
+                    boot_rust_daemon(env, source != env_boot::EnvSource::Fallback)
+                })
             };
             let Some(result) = launched else { return };
             report_daemon_launch(&app, result);
@@ -353,6 +356,7 @@ fn report_daemon_launch(app: &tauri::AppHandle, result: Result<&sidecar::DaemonH
 /// AND its adapter children inherit the resolved PATH.
 fn boot_rust_daemon(
     shell_env: &std::collections::HashMap<String, String>,
+    shell_env_resolved: bool,
 ) -> Result<sidecar::DaemonHandle, String> {
     let daemon_bin = resolve_rust_daemon_bin()?;
 
@@ -365,6 +369,7 @@ fn boot_rust_daemon(
     sidecar::spawn_daemon(sidecar::SidecarConfig {
         program: sidecar::DaemonProgram { daemon_bin },
         shell_env: shell_env.clone(),
+        shell_env_resolved,
         daemon_port: daemon_port(),
         data_dir: daemon_data_dir_override(std::env::var_os("MAINFRAME_DATA_DIR")),
     })

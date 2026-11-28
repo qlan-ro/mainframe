@@ -102,13 +102,29 @@ fn bundled_rust_daemon_scan() {
 
 #[test]
 fn daemon_env_overrides_remove_shell_owned_data_dir_when_not_explicit() {
-    assert!(daemon_env_overrides(31500, None).contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR")));
+    assert!(daemon_env_overrides(31500, None, false).contains(&EnvOverride::Remove("MAINFRAME_DATA_DIR")));
+}
+
+#[test]
+fn daemon_env_overrides_flag_a_resolved_env_so_the_daemon_skips_its_probe() {
+    let overrides = daemon_env_overrides(31500, None, true);
+    assert!(overrides.contains(&EnvOverride::Set(SHELL_ENV_RESOLVED_VAR, "1".to_string())));
+    assert_eq!(SHELL_ENV_RESOLVED_VAR, "MAINFRAME_SHELL_ENV_RESOLVED");
+}
+
+// The fallback env is not a login-shell env, and a flag inherited from the
+// app's own process env must never reach the daemon: it probes for itself.
+#[test]
+fn daemon_env_overrides_strip_the_flag_when_the_env_is_not_resolved() {
+    let overrides = daemon_env_overrides(31500, None, false);
+    assert!(overrides.contains(&EnvOverride::Remove(SHELL_ENV_RESOLVED_VAR)));
+    assert!(!overrides.iter().any(|o| matches!(o, EnvOverride::Set(SHELL_ENV_RESOLVED_VAR, _))));
 }
 
 #[test]
 fn daemon_env_overrides_keep_explicit_data_dir() {
     assert!(
-        daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data"))).contains(
+        daemon_env_overrides(31500, Some(Path::new("/tmp/mainframe-data")), false).contains(
             &EnvOverride::Set("MAINFRAME_DATA_DIR", "/tmp/mainframe-data".to_string())
         )
     );

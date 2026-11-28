@@ -11,6 +11,11 @@
 //!   up to [`DAEMON_ENV_WAIT`] for the capture, then falls back to
 //!   [`build_fallback_env`].
 //!
+//! A cached or fresh capture is handed to the sidecar flagged as resolved
+//! (`MAINFRAME_SHELL_ENV_RESOLVED=1`, see `sidecar.rs`), so the daemon uses its
+//! PATH and skips its own login-shell probe. With the fallback env the flag is
+//! removed and the daemon probes for itself.
+//!
 //! Every successful capture rewrites the cache and replaces the env new
 //! terminals use. A running daemon keeps the env it started with: when a
 //! capture differs from it (or arrives after the daemon took the fallback), the
@@ -184,7 +189,7 @@ impl EnvBoot {
         tracing::info!(
             source = source.as_str(),
             waited_ms = started.elapsed().as_millis() as u64,
-            path = %env.get("PATH").map(String::as_str).unwrap_or(""),
+            path_entries = env.get("PATH").map_or(0, |p| p.split(':').count()),
             "daemon env ready"
         );
         (env, source)
@@ -240,7 +245,7 @@ fn refresh(inner: &Inner, config: &EnvBootConfig) {
     tracing::info!(
         keys = env.len(),
         elapsed_ms = started.elapsed().as_millis() as u64,
-        path = %env.get("PATH").map(String::as_str).unwrap_or(""),
+        path_entries = env.get("PATH").map_or(0, |p| p.split(':').count()),
         "login-shell env captured"
     );
 
