@@ -71,6 +71,7 @@ export function PlainMessages({ components }: { components: MessageComponents })
         data-loaded-count={all.length}
         data-loaded-user-count={userCount}
         data-virtualized={false}
+        data-rows-pending={rows.length < all.length ? '' : undefined}
       >
         {rows.map(({ id, index }) => (
           <MessageRow key={id} index={index} anchor={id === anchorId} components={components} />

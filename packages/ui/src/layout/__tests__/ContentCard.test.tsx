@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { beginBootRestore, decideBootRestore, resetBootRestore } from '@/features/sessions/runtime/boot-restore';
@@ -71,13 +73,31 @@ describe('ContentCard — boot restore hold', () => {
     view.unmount();
   });
 
-  it('shows a spinner on the cover only after the delay', () => {
+  it('brings the spinner in once the hold has lasted the delay, counted from the hold, not the cover', () => {
     beginBootRestore();
+    // The shell mounts the card a while after the hold began (a busy first render).
+    vi.advanceTimersByTime(150);
     renderCard();
-    act(() => void vi.advanceTimersByTime(BOOT_SPINNER_DELAY_MS - 1));
-    expect(screen.queryByTestId('content-card-boot-spinner')).toBeNull();
-    act(() => void vi.advanceTimersByTime(1));
-    expect(screen.getByTestId('content-card-boot-spinner')).toBeInTheDocument();
+    const spinner = screen.getByTestId('content-card-boot-spinner');
+    expect(spinner).toHaveAttribute('data-boot-spinner');
+    expect(spinner.style.getPropertyValue('--mf-boot-spinner-delay')).toBe(`${BOOT_SPINNER_DELAY_MS - 150}ms`);
+  });
+
+  it('shows the spinner at once on a cover that mounts after the delay has passed', () => {
+    beginBootRestore();
+    vi.advanceTimersByTime(BOOT_SPINNER_DELAY_MS + 200);
+    renderCard();
+    expect(screen.getByTestId('content-card-boot-spinner').style.getPropertyValue('--mf-boot-spinner-delay')).toBe(
+      '0ms',
+    );
+  });
+
+  it('keeps the spinner transparent until its delay in CSS, so no timer on a busy main thread decides it', () => {
+    const css = readFileSync(resolve(__dirname, '../../styles/app.css'), 'utf8');
+    const rule = /\[data-boot-spinner\]\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(/opacity:\s*0;/);
+    expect(rule).toMatch(/animation:\s*mf-boot-spinner-in 0s linear var\(--mf-boot-spinner-delay, 400ms\) forwards;/);
+    expect(css).toMatch(/@keyframes mf-boot-spinner-in\s*\{\s*to\s*\{\s*opacity:\s*1;/);
   });
 
   it('is a plain card, and takes no focus, when nothing is being restored', () => {
