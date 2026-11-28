@@ -132,7 +132,6 @@ fn in_place_patches_on_settled_groups_keep_a_single_container_copy() {
         tool_result_msg("m00003", vec![image_result("toolu_1", &shot)]),
     ];
     project(&mut projector, &raw, None, vec![RawChange::Appended]);
-    let shot_baseline = shot.strong_count();
 
     // A later prompt settles the tool group behind it.
     raw.push(user("m00004", "thanks"));
@@ -176,7 +175,8 @@ fn in_place_patches_on_settled_groups_keep_a_single_container_copy() {
     drop((snapshot, images));
 
     assert_eq!(prompt.strong_count(), 3);
-    assert_eq!(shot.strong_count(), shot_baseline);
+    // `shot` itself, the raw tool result, and the tool call's one container.
+    assert_eq!(shot.strong_count(), 3);
 }
 
 #[test]
@@ -198,4 +198,83 @@ fn a_full_rebuild_after_a_category_change_keeps_a_single_copy() {
     assert!(delta.full);
     drop(delta);
     assert_eq!(prompt.strong_count(), 3);
+}
+
+/// Decoders that panic while a user message reading `boom` is converted.
+struct PanicOnBoom(std::sync::atomic::AtomicBool);
+
+impl crate::ToolResultDecoders for PanicOnBoom {
+    fn parse_command(&self, text: &str) -> Option<crate::message_parsing::ParsedCommand> {
+        let armed = self.0.load(std::sync::atomic::Ordering::SeqCst);
+        assert!(!(armed && text == "boom"), "injected projection panic");
+        None
+    }
+}
+
+#[test]
+fn a_panic_after_unparking_leaves_real_containers_and_forces_a_rebuild() {
+    let prompt = SharedStr::from("P".repeat(16 * 1024));
+    let shot = SharedStr::from("S".repeat(16 * 1024));
+    let decoders = std::sync::Arc::new(PanicOnBoom(std::sync::atomic::AtomicBool::new(true)));
+    let mut projector = IncrementalProjector::with_decoders(decoders.clone());
+    let mut raw = vec![
+        image_message("m00001", &prompt),
+        assistant("m00002", vec![tool_use("toolu_1", "mcp__shot")]),
+        tool_result_msg("m00003", vec![image_result("toolu_1", &shot)]),
+        user("m00004", "thanks"),
+    ];
+    let first = projector.project(ProjectionInput {
+        raw: &raw,
+        overlay: None,
+        categories: None,
+        changes: [RawChange::Appended].into_iter().collect(),
+    });
+    let snapshot = first.snapshot.clone();
+    let settled_ids: Vec<String> =
+        snapshot.read(|list| list.iter().map(|m| m.id.clone()).collect());
+    drop(first);
+
+    // The timing entry unparks the settled tool group; folding the appended
+    // `boom` prompt then panics with that container moved out.
+    raw.push(user("m00005", "boom"));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        projector.project(ProjectionInput {
+            raw: &raw,
+            overlay: None,
+            categories: None,
+            changes: [
+                RawChange::Timing("toolu_1".to_string(), Some(timing())),
+                RawChange::Appended,
+            ]
+            .into_iter()
+            .collect(),
+        })
+    }));
+    assert!(outcome.is_err(), "the injected panic fired");
+
+    // A reader recovering the poisoned lock sees the settled containers, not
+    // placeholders, with the images still shared.
+    let ids_after: Vec<String> = snapshot.read(|list| list.iter().map(|m| m.id.clone()).collect());
+    assert_eq!(ids_after, settled_ids);
+    let images = snapshot.read(display_images);
+    assert!(images.iter().any(|image| image.ptr_eq(&prompt)));
+    assert!(images.iter().any(|image| image.ptr_eq(&shot)));
+    drop(images);
+
+    // The next call rebuilds in full and matches the full pipeline.
+    decoders.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    let delta = projector.project(ProjectionInput {
+        raw: &raw,
+        overlay: None,
+        categories: None,
+        changes: [RawChange::Appended].into_iter().collect(),
+    });
+    assert!(delta.full);
+    assert_eq!(
+        delta.snapshot.materialize(),
+        prepare_messages_for_client(&raw, None)
+    );
+    drop(delta);
+    assert_eq!(prompt.strong_count(), 3);
+    assert_eq!(shot.strong_count(), 3);
 }

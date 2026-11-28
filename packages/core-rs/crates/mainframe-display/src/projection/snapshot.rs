@@ -8,6 +8,13 @@
 //! behind its own mutex, never the `MessageCache` lock, so a consumer can
 //! call it while `emit_display_for` still holds the cache lock (lock order:
 //! cache lock, then this mutex — never the reverse).
+//!
+//! `IncrementalProjector` holds this mutex for its whole `project` call, so a
+//! panic during projection poisons it. Readers recover the poisoned lock and
+//! still see real containers: the projector's unwind guard
+//! (`incremental/projector/park.rs`) puts back any container it had moved
+//! out before the lock is released, and forces the next call to rebuild in
+//! full. Only this crate's projectors write the list.
 
 use mainframe_types::sync::LockExt as _;
 use std::sync::{Arc, Mutex};
@@ -33,20 +40,21 @@ impl DisplaySnapshot {
     }
 
     /// Replace the whole list (a full rebuild).
-    pub fn replace(&self, list: Vec<DisplayMessage>) {
+    pub(crate) fn replace(&self, list: Vec<DisplayMessage>) {
         *self.lock_inner() = list;
     }
 
     /// Mutate the list in place, returning the closure's result.
-    pub fn with_mut<R>(&self, f: impl FnOnce(&mut Vec<DisplayMessage>) -> R) -> R {
+    pub(crate) fn with_mut<R>(&self, f: impl FnOnce(&mut Vec<DisplayMessage>) -> R) -> R {
         f(&mut self.lock_inner())
     }
 
     fn lock_inner(&self) -> std::sync::MutexGuard<'_, Vec<DisplayMessage>> {
         // Recover from poisoning instead of `.unwrap()`/`.expect()` (both
-        // denied by workspace lint): no panic ever runs while this mutex is
-        // held, so poisoning should not occur, but a stale snapshot beats a
-        // crash in the display path.
+        // denied by workspace lint). Projection runs under this mutex
+        // (`IncrementalProjector::project`), so a panic there poisons it; the
+        // projector's unwind guard leaves the list holding real containers,
+        // and a stale snapshot beats a crash in the display path.
         self.0.lock_recover()
     }
 }

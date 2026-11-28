@@ -105,17 +105,7 @@ impl DisplayProjector for IncrementalProjector {
         };
         self.decoders.prepare(input.raw, rewind);
         let categories_changed = input.categories != self.categories.as_ref();
-        // The settled containers live in the snapshot list, so the whole call
-        // runs with it borrowed. Lock order is unchanged: the caller's cache
-        // lock, then this one.
-        let snapshot = self.snapshot.clone();
-        snapshot.with_mut(|parked| {
-            if !self.initialized || categories_changed {
-                return self.full_rebuild(&input, parked);
-            }
-            let entries = input.changes.drain();
-            self.incremental(input.raw, &entries, input.overlay, input.categories, parked)
-        })
+        self.project_parked(&mut input, categories_changed)
     }
 }
 
@@ -210,6 +200,7 @@ impl IncrementalProjector {
         for id in display_ids_owned_by_discarded(&self.groups, r, parked) {
             self.display_owner.remove(&id);
         }
+        self.repark_discarded(r, parked);
         self.groups.truncate(r);
         self.unpark_duration_target(&combined, parked);
 

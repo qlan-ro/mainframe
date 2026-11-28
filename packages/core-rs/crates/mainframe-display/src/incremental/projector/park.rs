@@ -15,6 +15,11 @@
 //! it. Moving out leaves an empty placeholder, which nothing reads: the group
 //! owns the real container until `settle` puts it back.
 //!
+//! The whole call runs with the list's mutex held. If it panics,
+//! [`SettleOnUnwind`] puts every moved-out container back before the lock is
+//! released, so a reader that recovers the poisoned lock never sees a
+//! placeholder, and forces the next call to rebuild in full.
+//!
 //! [`settle`]: IncrementalProjector::settle
 
 use super::*;
@@ -32,7 +37,88 @@ fn placeholder() -> DisplayMessage {
     }
 }
 
+/// Owns the projector and the borrowed list for one `project` call; on
+/// unwind, returns every moved-out container to the list.
+struct SettleOnUnwind<'a> {
+    projector: &'a mut IncrementalProjector,
+    parked: &'a mut Vec<DisplayMessage>,
+}
+
+impl Drop for SettleOnUnwind<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.projector.restore_unparked(self.parked);
+        }
+    }
+}
+
 impl IncrementalProjector {
+    /// Run one `project` call with the snapshot list, the store of settled
+    /// containers, borrowed for its whole length. Lock order is unchanged:
+    /// the caller's cache lock, then this one.
+    pub(super) fn project_parked(
+        &mut self,
+        input: &mut ProjectionInput<'_>,
+        categories_changed: bool,
+    ) -> DisplayDelta {
+        let snapshot = self.snapshot.clone();
+        snapshot.with_mut(|parked| {
+            let guard = SettleOnUnwind {
+                projector: self,
+                parked,
+            };
+            if !guard.projector.initialized || categories_changed {
+                return guard.projector.full_rebuild(input, guard.parked);
+            }
+            let entries = input.changes.drain();
+            let (raw, overlay, categories) = (input.raw, input.overlay, input.categories);
+            guard
+                .projector
+                .incremental(raw, &entries, overlay, categories, guard.parked)
+        })
+    }
+
+    /// The unwind path: put every container this call moved out back into
+    /// its slot, and mark the projector uninitialized so the next call
+    /// rebuilds instead of trusting half-updated fold state. Every index in
+    /// `unparked` still names the group it moved out of: groups at or above
+    /// the rewind point are reparked before the truncation that drops them.
+    fn restore_unparked(&mut self, parked: &mut [DisplayMessage]) {
+        self.initialized = false;
+        for gi in std::mem::take(&mut self.unparked) {
+            let Some(group) = self.groups.get_mut(gi) else {
+                continue;
+            };
+            let Some(slot) = group.ordinal.and_then(|ordinal| parked.get_mut(ordinal)) else {
+                continue;
+            };
+            if let Some(display) = group.display.take_owned() {
+                *slot = display;
+                group.display = DisplaySlot::Parked;
+            }
+        }
+    }
+
+    /// Before groups from `r` are truncated for a refold, return any of them
+    /// this call moved out. `settle` overwrites those slots anyway; doing it
+    /// now keeps every `unparked` index valid for [`Self::restore_unparked`].
+    pub(super) fn repark_discarded(&mut self, r: usize, parked: &mut [DisplayMessage]) {
+        let groups = &mut self.groups;
+        self.unparked.retain(|&gi| {
+            if gi < r {
+                return true;
+            }
+            if let Some(group) = groups.get_mut(gi)
+                && let Some(slot) = group.ordinal.and_then(|ordinal| parked.get_mut(ordinal))
+                && let Some(display) = group.display.take_owned()
+            {
+                *slot = display;
+                group.display = DisplaySlot::Parked;
+            }
+            false
+        });
+    }
+
     /// Move group `gi`'s settled container out of `parked` so this call can
     /// patch it in place. No-op unless the group is parked.
     fn unpark(&mut self, gi: usize, parked: &mut [DisplayMessage]) {
@@ -42,7 +128,9 @@ impl IncrementalProjector {
         if !matches!(group.display, DisplaySlot::Parked) {
             return;
         }
-        let Some(slot) = group.ordinal.and_then(|ordinal| parked.get_mut(ordinal)) else {
+        let slot = group.ordinal.and_then(|ordinal| parked.get_mut(ordinal));
+        debug_assert!(slot.is_some(), "a parked group's slot exists");
+        let Some(slot) = slot else {
             return;
         };
         group.display = DisplaySlot::Owned(std::mem::replace(slot, placeholder()));
@@ -126,6 +214,7 @@ impl IncrementalProjector {
             if ordinal < parked.len() {
                 parked[ordinal] = display;
             } else {
+                debug_assert_eq!(ordinal, parked.len(), "ordinals are contiguous");
                 parked.push(display);
             }
             group.display = DisplaySlot::Parked;

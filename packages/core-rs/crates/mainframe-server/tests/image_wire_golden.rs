@@ -6,15 +6,19 @@
 //! A synthetic Claude transcript with prompt images, tool-result images and a
 //! repeated image goes through the real cold-load parser, then the
 //! incremental projector one append at a time (each preceded by a streaming
-//! overlay of the next message), the encoder, the live diff engine, the
-//! revision log, `session/resume`, and history pages in every delivery form
-//! (plain, lazy image references, compressed batches, binary frames). Each
-//! output's SHA-256 and length must match `fixtures/image_wire.golden.json`.
+//! overlay of the next message), then live-only events: a timing completion
+//! on a settled tool call and turn-duration markers, one of which patches a
+//! settled group in place. The outputs are the encoder, the live diff engine,
+//! the revision log, `session/resume`, and history pages in every delivery
+//! form (plain, lazy image references, compressed batches, binary frames).
+//! Each output's SHA-256 and length must match
+//! `fixtures/image_wire.golden.json`.
 //!
-//! The golden was captured from the code before images were shared, so a
-//! match proves the representation change is invisible on the wire. To
-//! re-capture (only for an intended wire change), run with
-//! `IMAGE_WIRE_GOLDEN_UPDATE=1`.
+//! The golden was captured on `main` at `874cdfd0e`, before images were
+//! shared, so a match proves the representation change is invisible on the
+//! wire. To re-capture (only for an intended wire change), run with
+//! `IMAGE_WIRE_GOLDEN_UPDATE=1`; to diff a mismatch, set
+//! `IMAGE_WIRE_GOLDEN_DUMP=<dir>` to write each output there.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -22,22 +26,25 @@
     reason = "Test assertions and scenarios"
 )]
 
+#[path = "image_wire/live.rs"]
+mod live;
+#[path = "image_wire/recorder.rs"]
+mod recorder;
 #[path = "image_wire/transcript.rs"]
 mod transcript;
 
 use std::collections::BTreeMap;
 
+use live::{complete_tool_timing, prompt, system_duration};
 use mainframe_acp::history_page::{self, PageOptions};
-use mainframe_acp::{
-    ReplayPlan, ResumePort, RevisionLog, SessionState, binary_frame, dispatch_resume, encode,
-};
-use mainframe_display::incremental::IncrementalProjector;
-use mainframe_display::{DisplayProjector, ProjectionInput, RawChanges};
+use mainframe_acp::{ReplayPlan, ResumePort, binary_frame, dispatch_resume, encode};
+use mainframe_display::RawChanges;
 use mainframe_types::BoxFuture;
 use mainframe_types::acp::extensions::HistoryPageParams;
 use mainframe_types::acp::jsonrpc::{JsonRpcRequest, RequestId};
 use mainframe_types::display::DisplayMessage;
 use mainframe_types::resume::ResumeSnapshot;
+use recorder::Recorder;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use transcript::{CHAT_ID, PROJECT_PATH, appended, load_raw};
@@ -73,8 +80,12 @@ fn resume_request(replay_from: Option<Value>) -> JsonRpcRequest {
     }
 }
 
+/// JSON with object keys sorted. `DisplayMessage`/`ChatMessage` metadata is
+/// a `HashMap`, whose serialized key order varies between runs (on `main`
+/// too), so outputs are compared in a canonical order. The compressed batches
+/// and binary frames inside the page outputs are still compared byte for byte.
 fn json_bytes(value: &impl serde::Serialize) -> Vec<u8> {
-    serde_json::to_vec(value).unwrap()
+    serde_json::to_vec(&serde_json::to_value(value).unwrap()).unwrap()
 }
 
 /// Every client-visible output for the synthetic chat, by name.
@@ -84,39 +95,33 @@ async fn wire_outputs() -> BTreeMap<String, Vec<u8>> {
     // The history snapshot and tail caches persist `Vec<ChatMessage>` as JSON.
     out.insert("raw_cache_json".to_string(), json_bytes(&raw));
 
-    let mut projector = IncrementalProjector::new();
-    let mut state = SessionState::new();
-    let mut log = RevisionLog::new("epoch-golden".to_string());
-    let mut deltas = Vec::new();
-    let mut live = Vec::new();
-    let mut cursors = Vec::new();
-    let mut display = Vec::new();
+    let mut rec = Recorder::new();
     for end in 1..=raw.len() {
-        let overlays = [raw.get(end).cloned(), None];
-        for overlay in overlays {
-            let changes = if overlay.is_some() {
-                RawChanges::default()
-            } else {
-                appended()
-            };
-            let delta = projector.project(ProjectionInput {
-                raw: &raw[..end],
-                overlay: overlay.as_ref(),
-                categories: None,
-                changes,
-            });
-            display = delta.snapshot.materialize();
-            deltas.push(json!({
-                "full": delta.full,
-                "len": delta.len,
-                "changes": delta.changes,
-            }));
-            let items = encode(&display);
-            live.push(state.diff(&items));
-            log.record(&items);
-            cursors.push(log.boundary());
-        }
+        rec.step(&raw[..end], raw.get(end), RawChanges::default());
+        rec.step(&raw[..end], None, appended());
     }
+    // Live-only events on top of the transcript: a timing completion on the
+    // settled screenshot call, a turn-duration marker, then another prompt
+    // and a marker that patches the settled assistant group in place.
+    let mut raw = raw;
+    let timing = complete_tool_timing(&mut raw, "toolu_shot");
+    rec.step(&raw, None, [timing].into_iter().collect());
+    for message in [
+        system_duration("live-duration-1", 4_200),
+        prompt("live-prompt", "Thanks."),
+        system_duration("live-duration-2", 900),
+    ] {
+        raw.push(message);
+        rec.step(&raw, None, appended());
+    }
+    let Recorder {
+        log,
+        deltas,
+        live,
+        cursors,
+        display,
+        ..
+    } = rec;
     out.insert("projector_deltas".to_string(), json_bytes(&deltas));
     out.insert("display_snapshot".to_string(), json_bytes(&display));
     out.insert("live_updates".to_string(), json_bytes(&live));
@@ -220,6 +225,11 @@ fn digest(bytes: &[u8]) -> Value {
 #[tokio::test]
 async fn client_visible_output_for_a_chat_with_images_is_unchanged() {
     let outputs = wire_outputs().await;
+    if let Some(dir) = std::env::var_os("IMAGE_WIRE_GOLDEN_DUMP") {
+        for (name, bytes) in &outputs {
+            std::fs::write(std::path::Path::new(&dir).join(name), bytes).unwrap();
+        }
+    }
     let actual: BTreeMap<String, Value> = outputs
         .iter()
         .map(|(name, bytes)| (name.clone(), digest(bytes)))
