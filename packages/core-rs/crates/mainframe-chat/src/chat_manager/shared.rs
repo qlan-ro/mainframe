@@ -103,10 +103,13 @@ pub(crate) async fn compose_if_multi_complete(
     deps: &dyn ChatManagerDeps,
     chat: &Chat,
 ) -> Option<Option<crate::segments::compose::Composed>> {
-    let layout = deps
-        .segment_store()?
-        .layout(&chat.id)
-        .filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?;
+    let layout = match deps.segment_store()?.try_layout(&chat.id) {
+        Ok(layout) => layout.filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?,
+        Err(error) => {
+            tracing::warn!(%error, chat_id = %chat.id, "segment layout read failed");
+            return Some(None);
+        }
+    };
     Some(crate::segments::compose::compose_complete(deps, chat, &layout).await)
 }
 
@@ -137,7 +140,7 @@ pub(crate) fn build_history_session(
         chat.scratch_path.as_deref(),
         deps.projects_get_path(&chat.project_id),
     )?;
-    deps.create_session(
+    deps.create_history_session(
         &chat.adapter_id,
         SessionOptions {
             project_path: cwd,

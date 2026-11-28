@@ -4,11 +4,13 @@
 //!
 //! Every wait registers the chats it watches for as long as it runs
 //! ([`is_watched`]): the idle history release keeps a watched chat's history,
-//! which the waiting agent is about to read.
+//! which the waiting agent is about to read. Starting and ending a watch,
+//! cancellation included, also counts as use of each chat ([`on_watch_activity`]),
+//! so a wait shorter than one release scan still restarts the idle wait.
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::Duration;
 
 use mainframe_types::events::DaemonEvent;
@@ -29,6 +31,25 @@ pub fn is_watched(chat_id: &str) -> bool {
     watched().contains_key(chat_id)
 }
 
+type ActivityHook = Box<dyn Fn(&str) + Send + Sync>;
+
+static ON_ACTIVITY: OnceLock<ActivityHook> = OnceLock::new();
+
+/// Set once at boot (the first call wins): called with each chat a wait starts
+/// or stops watching, outside the registry lock.
+pub fn on_watch_activity(hook: impl Fn(&str) + Send + Sync + 'static) {
+    /* expected */
+    let _ = ON_ACTIVITY.set(Box::new(hook)); // First attachment wins.
+}
+
+fn note_activity(chat_ids: &[String]) {
+    if let Some(hook) = ON_ACTIVITY.get() {
+        for id in chat_ids {
+            hook(id);
+        }
+    }
+}
+
 fn watched() -> std::sync::MutexGuard<'static, HashMap<String, usize>> {
     WATCHED
         .lock()
@@ -40,25 +61,31 @@ struct Watching(Vec<String>);
 
 impl Watching {
     fn new(chat_ids: &[String]) -> Self {
-        let mut watched = watched();
-        for id in chat_ids {
-            *watched.entry(id.clone()).or_default() += 1;
+        {
+            let mut watched = watched();
+            for id in chat_ids {
+                *watched.entry(id.clone()).or_default() += 1;
+            }
         }
+        note_activity(chat_ids);
         Self(chat_ids.to_vec())
     }
 }
 
 impl Drop for Watching {
     fn drop(&mut self) {
-        let mut watched = watched();
-        for id in &self.0 {
-            if let Some(count) = watched.get_mut(id) {
-                *count -= 1;
-                if *count == 0 {
-                    watched.remove(id);
+        {
+            let mut watched = watched();
+            for id in &self.0 {
+                if let Some(count) = watched.get_mut(id) {
+                    *count -= 1;
+                    if *count == 0 {
+                        watched.remove(id);
+                    }
                 }
             }
         }
+        note_activity(&self.0);
     }
 }
 

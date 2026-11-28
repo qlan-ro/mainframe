@@ -54,6 +54,7 @@ pub struct ClaudeSession {
     weak_self: OnceLock<Weak<ClaudeSession>>,
     resolved_path: ResolvedPath,
     history_files: Mutex<Option<mainframe_adapter_api::CollectedHistoryFiles>>,
+    history_read_failed: std::sync::atomic::AtomicBool,
     history_index: Option<Arc<crate::history_source_index::HistorySourceIndex>>,
 }
 
@@ -117,6 +118,7 @@ impl ClaudeSession {
             weak_self: OnceLock::new(),
             resolved_path,
             history_files: Mutex::default(),
+            history_read_failed: std::sync::atomic::AtomicBool::new(false),
             history_index: None,
         }
     }

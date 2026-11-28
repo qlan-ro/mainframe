@@ -111,7 +111,11 @@ pub(super) async fn load_with_reader<R: std::io::BufRead + Send>(
     mainframe_adapter_api::AdapterError,
 > {
     if discovered.all_files.is_empty() {
-        return Ok(Default::default());
+        let missing = mainframe_adapter_api::CollectedHistoryFiles {
+            read_failed: true,
+            ..Default::default()
+        };
+        return Ok((Vec::new(), missing));
     }
     let mut paths = PathCollector::default();
     let mut load = HistoryLoad::default();
@@ -143,6 +147,7 @@ pub(super) async fn load_with_reader<R: std::io::BufRead + Send>(
             });
             if result.is_err() {
                 paths.files.sources = None;
+                paths.files.read_failed = true;
             }
         }
         let agent_ids = std::mem::take(&mut load.agent_id_to_parent_tool_use_id);
@@ -251,6 +256,10 @@ mod tests {
                 .unwrap();
         assert_eq!(rows.len(), usize::from(mid_read));
         assert!(carried.sources.is_none());
+        assert!(
+            carried.read_failed,
+            "records parsed before the failure do not make it whole"
+        );
         assert!(carried.plans.is_empty());
         let session = crate::adapter::ClaudeAdapter::default().create_session(SessionOptions {
             project_path: base.into(),
@@ -267,5 +276,69 @@ mod tests {
                 .plans,
             ["/recovered.md"]
         );
+    }
+
+    fn create(
+        base: &str,
+        transcript: &Path,
+    ) -> std::sync::Arc<dyn mainframe_adapter_api::AdapterSession> {
+        crate::adapter::ClaudeAdapter::default().create_session(SessionOptions {
+            project_path: base.into(),
+            chat_id: Some("session".into()),
+            session_file_path: Some(transcript.to_str().unwrap().into()),
+            mainframe_chat_id: "chat".into(),
+            fork_source: None,
+        })
+    }
+
+    #[tokio::test]
+    async fn an_empty_transcript_is_a_whole_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let primary = dir.path().join("session.jsonl");
+        std::fs::write(&primary, "").unwrap();
+        let session = create(dir.path().to_str().unwrap(), &primary);
+
+        assert!(session.load_history().await.unwrap().is_empty());
+        assert!(!session.last_history_read_failed());
+    }
+
+    #[tokio::test]
+    async fn a_missing_transcript_reads_as_empty_but_reports_the_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let primary = dir.path().join("session.jsonl");
+        std::fs::write(&primary, message("first")).unwrap();
+        let session = create(dir.path().to_str().unwrap(), &primary);
+        assert_eq!(session.load_history().await.unwrap().len(), 1);
+        assert!(!session.last_history_read_failed());
+
+        std::fs::remove_file(&primary).unwrap();
+
+        assert!(
+            session.load_history().await.unwrap().is_empty(),
+            "other callers still see an empty history"
+        );
+        assert!(session.last_history_read_failed());
+    }
+
+    #[tokio::test]
+    async fn no_discovered_files_is_a_failed_read() {
+        let files = DiscoveredFiles {
+            primary_path: "/missing/session.jsonl".into(),
+            all_files: Vec::new(),
+            subagent_files: Default::default(),
+            complete: false,
+        };
+        let (rows, carried) = load_with_reader(
+            "session",
+            &files,
+            "",
+            true,
+            ParseMode::detect(),
+            reader::open_reader,
+        )
+        .await
+        .unwrap();
+        assert!(rows.is_empty());
+        assert!(carried.read_failed);
     }
 }

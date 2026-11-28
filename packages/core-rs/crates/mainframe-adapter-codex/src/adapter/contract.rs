@@ -189,12 +189,7 @@ impl Adapter for CodexAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(CodexSession::new(
-            options,
-            None,
-            self.resolved_path.clone(),
-            Arc::clone(&self.background_tasks),
-        ));
+        let session = self.new_session(options);
         let sessions = self.sessions.clone();
         let id = session.id().to_string();
         session.set_on_exit(Box::new(move || {
@@ -202,6 +197,10 @@ impl Adapter for CodexAdapter {
         }));
         self.sessions.lock_recover().push(session.clone());
         session
+    }
+
+    fn create_history_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
+        self.new_session(options)
     }
 
     fn kill_all(&self) {
@@ -213,5 +212,51 @@ impl Adapter for CodexAdapter {
                 }
             });
         }
+    }
+}
+
+impl CodexAdapter {
+    /// A session not yet tracked in `sessions`; `create_session` registers it.
+    fn new_session(&self, options: SessionOptions) -> Arc<CodexSession> {
+        Arc::new(CodexSession::new(
+            options,
+            None,
+            self.resolved_path.clone(),
+            Arc::clone(&self.background_tasks),
+        ))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tracked_sessions(&self) -> usize {
+        self.sessions.lock_recover().len()
+    }
+}
+
+#[cfg(test)]
+mod history_session_tests {
+    use super::*;
+
+    fn options() -> SessionOptions {
+        SessionOptions {
+            project_path: "/tmp".into(),
+            chat_id: Some("session".into()),
+            session_file_path: None,
+            mainframe_chat_id: "chat".into(),
+            fork_source: None,
+        }
+    }
+
+    /// A history-only session never spawns, so nothing would ever remove it
+    /// from the registry: repeated release and restore cycles must not add it.
+    #[test]
+    fn history_sessions_are_not_tracked_but_spawnable_ones_are() {
+        let adapter = CodexAdapter::default();
+        for _ in 0..5 {
+            drop(adapter.create_history_session(options()));
+        }
+        assert_eq!(adapter.tracked_sessions(), 0);
+
+        let _live = adapter.create_session(options());
+        assert_eq!(adapter.tracked_sessions(), 1);
     }
 }

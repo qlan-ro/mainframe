@@ -62,6 +62,15 @@ impl AdapterPort for DaemonChatDeps {
             .get(adapter_id)
             .map(|adapter| adapter.create_session(options))
     }
+    fn create_history_session(
+        &self,
+        adapter_id: &str,
+        options: SessionOptions,
+    ) -> Option<Arc<dyn AdapterSession>> {
+        self.adapters
+            .get(adapter_id)
+            .map(|adapter| adapter.create_history_session(options))
+    }
     fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>> {
         self.adapters
             .get(adapter_id)

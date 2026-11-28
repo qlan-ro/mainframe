@@ -35,9 +35,8 @@ pub struct ImageInput {
     pub media_type: String,
     pub data: String,
     /// Daemon-local file holding the decoded bytes, when the attachment store
-    /// materialized one. Adapters that deliver images inline (Claude) ignore it;
-    /// adapters whose CLI takes a filesystem path (Codex) need it. `None` for any
-    /// call site with no materialized file.
+    /// materialized one: Claude delivers images inline and ignores it, Codex's
+    /// CLI takes the path. `None` when no file was materialized.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
 }
@@ -108,15 +107,13 @@ pub const FORK_CUT_NOT_FOUND_REASON: &str = "Couldn't find this message in the c
 /// Failure modes for `Adapter::pin_fork_point`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForkPinError {
-    /// This adapter has no fork mechanism (its `capabilities().fork` is `false`,
-    /// or it simply never overrides the default).
+    /// This adapter has no fork mechanism (`capabilities().fork` is `false`).
     Unsupported,
     /// The parent's transcript could not be located on disk.
     TranscriptMissing,
     /// Pinning was attempted but failed (I/O error, malformed transcript, etc).
     Failed(String),
-    /// The requested cut can't be placed in the provider transcript. The
-    /// string is user-facing and becomes the 409 body verbatim.
+    /// The cut can't be placed in the transcript; the user-facing 409 body.
     PointNotFound(String),
 }
 
@@ -189,6 +186,11 @@ pub trait Adapter: Send + Sync {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession>;
+    /// A history-only session that never spawns; adapters tracking sessions
+    /// until process exit leave it out, so repeated reads do not pile up.
+    fn create_history_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
+        self.create_session(options)
+    }
     fn kill_all(&self);
 
     /// Initial transcript path when this adapter has a predictable file layout.
@@ -206,14 +208,12 @@ pub trait Adapter: Send + Sync {
         None
     }
 
-    /// `generateTitle?(content, binary)` — a cheap one-shot title from the first
+    /// `generateTitle?(content, binary)`: a cheap one-shot title from the first
     /// user message via the resolved `<adapterId>.titleBinary` CLI. Adapters
-    /// without a cheap, side-effect-free title model omit it (default `Ok(None)`);
-    /// callers then keep the deterministic truncated title. Owned `String` args to
-    /// match this trait's async-method convention (`send_message`/`set_model`).
-    /// The default fires a `debug` log once per attempt — expected today for Codex,
-    /// which has no title model — so it reads as "no title model" in the log
-    /// instead of being indistinguishable from an adapter that tried and failed.
+    /// without a side-effect-free title model omit it (default `Ok(None)`), and
+    /// callers keep the truncated title. The default logs once at debug per
+    /// attempt (expected for Codex), so "no title model" reads apart from a
+    /// failed attempt. Owned `String` args, per this trait's async convention.
     fn generate_title(
         &self,
         content: String,

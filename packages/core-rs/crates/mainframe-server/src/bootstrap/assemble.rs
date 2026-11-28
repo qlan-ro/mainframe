@@ -14,11 +14,7 @@ pub(super) async fn assemble(
     );
     let chats = chats(&bound, &resources, &quota, &facade);
     facade.attach_history_refresh(&chats);
-    let ws_clients: crate::websocket::WsClients = Arc::new(dashmap::DashMap::new());
-    chats.attach_viewers(Arc::new(crate::chat_viewers::DaemonChatViewers::new(
-        facade.clone(),
-        ws_clients.clone(),
-    )));
+    let ws_clients = attach_viewers(&chats, &facade);
     chats.recover_stale_working_state();
     chats.sweep_unreferenced_fork_snapshots().await;
     let orchestration = build_orchestration(
@@ -52,6 +48,27 @@ pub(super) async fn assemble(
             keepalive: resources._keepalive_rx,
         },
     })
+}
+
+/// The idle history release's view of who is looking at a chat: facade
+/// sessions, event-socket subscriptions and orchestration waits (whose start
+/// and end also count as use). Returns the socket registry the context shares.
+fn attach_viewers(
+    chats: &Arc<ChatManager>,
+    facade: &Arc<crate::FacadeHub>,
+) -> crate::websocket::WsClients {
+    let ws_clients: crate::websocket::WsClients = Arc::new(dashmap::DashMap::new());
+    chats.attach_viewers(Arc::new(crate::chat_viewers::DaemonChatViewers::new(
+        facade.clone(),
+        ws_clients.clone(),
+    )));
+    let watched_chats = Arc::downgrade(chats);
+    mainframe_orchestration::waiter::on_watch_activity(move |chat_id| {
+        if let Some(chats) = watched_chats.upgrade() {
+            chats.note_viewing(chat_id);
+        }
+    });
+    ws_clients
 }
 
 async fn quota(bound: &BoundBootstrap, resources: &Resources) -> Arc<QuotaManager> {

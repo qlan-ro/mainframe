@@ -30,6 +30,12 @@ use mainframe_types::segment::{
 pub trait SegmentStore: Send + Sync {
     /// Segments in ordinal order, their native rows, and live handoffs.
     fn layout(&self, chat_id: &str) -> Option<SegmentLayout>;
+    /// [`Self::layout`] with a failed read reported instead of read as "no
+    /// layout", for callers that must not take a multi-segment chat for a
+    /// single-segment one (the restore of a released chat).
+    fn try_layout(&self, chat_id: &str) -> Result<Option<SegmentLayout>, SeamError> {
+        Ok(self.layout(chat_id))
+    }
     /// Applies a planned switch in one transaction (mirror included).
     fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError>;
     /// Moves the active segment onto a fresh native row (delta fallback).

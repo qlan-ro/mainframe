@@ -24,6 +24,16 @@ impl ChatPermissionHandler {
         response: ControlResponse,
         active: Option<Arc<Mutex<ActiveChat>>>,
     ) -> Result<(), PermissionError> {
+        // A released chat gets its history back before anything here runs:
+        // the start below needs it, and the answer and any notice it writes
+        // must land in the whole history. When it cannot come back, the
+        // answer fails as retryable and nothing is cleared or appended.
+        self.lifecycle
+            .restore_released_history(chat_id)
+            .await
+            .map_err(|err| {
+                mainframe_adapter_api::AdapterError::DeliveryRejected(err.to_string())
+            })?;
         self.shared.permissions.lock_recover().clear(chat_id);
 
         if response.behavior == ControlBehavior::Allow

@@ -3,7 +3,7 @@
 
 use mainframe_types::sync::LockExt as _;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use mainframe_adapter_api::{
@@ -15,8 +15,8 @@ use mainframe_types::chat::{ChatMessage, ResolvedTuning};
 use mainframe_types::display::{DisplayMessage, ToolCategories};
 use mainframe_types::transcript::TranscriptLocation;
 
+use super::FakeDeps;
 use super::fake_projection::ProjectorFn;
-use super::{FakeDeps, FakeSession};
 use crate::chat_manager::{AdapterForkInfo, AdapterPort};
 
 /// `pin_fork_point`'s configurable failure, for fork_chat's status-mapping tests.
@@ -43,6 +43,8 @@ pub(crate) struct FakeAdapterPort {
     pub(crate) history: Mutex<Option<Vec<ChatMessage>>>,
     /// Counts `load_history` across every session this fake hands out.
     pub(crate) history_loads: Arc<AtomicUsize>,
+    /// How many `create_session` calls came through `create_history_session`.
+    pub(crate) history_sessions: AtomicUsize,
     /// `AdapterSession::history_sources()` for every `FakeSession` handed out.
     pub(crate) history_sources: Mutex<Vec<std::path::PathBuf>>,
     /// The files each read collects, and what every scan was handed.
@@ -152,20 +154,17 @@ impl AdapterPort for FakeDeps {
         _adapter_id: &str,
         options: SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>> {
-        self.adapters.created_sessions.lock_recover().push(options);
-        if let Some(session) = self.adapters.session_to_return.lock_recover().clone() {
-            return Some(session);
-        }
-        self.adapters.history.lock_recover().clone().map(|history| {
-            Arc::new(FakeSession {
-                history,
-                history_loads: Some(Arc::clone(&self.adapters.history_loads)),
-                history_sources: self.adapters.history_sources.lock_recover().clone(),
-                collects_files: self.adapters.scan.collects.lock_recover().clone(),
-                spawn_ok: *self.adapters.spawn_ok.lock_recover(),
-                ..Default::default()
-            }) as Arc<dyn AdapterSession>
-        })
+        super::fake_sessions::session_for(&self.adapters, options)
+    }
+    fn create_history_session(
+        &self,
+        adapter_id: &str,
+        options: SessionOptions,
+    ) -> Option<Arc<dyn AdapterSession>> {
+        self.adapters
+            .history_sessions
+            .fetch_add(1, Ordering::SeqCst);
+        self.create_session(adapter_id, options)
     }
     fn create_plan_mode_handler(
         &self,

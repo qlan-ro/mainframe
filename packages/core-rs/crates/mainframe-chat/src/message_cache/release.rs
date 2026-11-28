@@ -7,9 +7,11 @@
 //! A released chat has no producer of output: the release skips any chat with
 //! a live process, and every path that starts one, or appends for the user (a
 //! send, a steer, a resume), restores the history first
-//! (`ChatLifecycleManager::restore_released_history`). An append that still
-//! reaches a released chat is skipped and logged, never stored as a partial
-//! list.
+//! (`ChatLifecycleManager::restore_released_history`). So does every path
+//! that writes a daemon-only entry (a permission answer, a notice): those
+//! cannot be read back from the transcript. An append that still reaches a
+//! released chat is a bug; it is skipped and logged as an error, never stored
+//! as a partial list.
 //!
 //! Two counters keep the boundary honest:
 //! - the history epoch advances with every write, so a history read that began
@@ -85,7 +87,7 @@ impl MessageCache {
     pub(super) fn skips_released_append(&self, chat_id: &str) -> bool {
         let skip = self.is_released(chat_id);
         if skip {
-            tracing::warn!(chat_id, "skipped an append to a released history");
+            tracing::error!(chat_id, "skipped an append to a released history");
         }
         skip
     }

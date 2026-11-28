@@ -140,12 +140,15 @@ impl ChatRelease {
     /// disk (its own session, or segments to compose), it is not temporary or
     /// ephemeral, and it is not a fork still waiting for its first send.
     fn reloadable(&self, chat: &mainframe_types::chat::Chat) -> bool {
-        let multi_segment = self
-            .shared
-            .deps
-            .segment_store()
-            .and_then(|store| store.layout(&chat.id))
-            .is_some_and(|layout| layout.is_multi_segment());
+        // A layout that cannot be read now cannot be restored either.
+        let layout = match self.shared.deps.segment_store() {
+            Some(store) => match store.try_layout(&chat.id) {
+                Ok(layout) => layout,
+                Err(_) => return false,
+            },
+            None => None,
+        };
+        let multi_segment = layout.is_some_and(|layout| layout.is_multi_segment());
         !chat.temporary
             && !self.shared.messages.lock_recover().is_partial(&chat.id)
             && !chat.vendor_session_ephemeral

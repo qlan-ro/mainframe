@@ -113,7 +113,7 @@ async fn load_native(
     native: &NativeSessionRecord,
     options: SessionOptions,
 ) -> Option<Vec<ChatMessage>> {
-    let session = deps.create_session(&native.adapter_id, options)?;
+    let session = deps.create_history_session(&native.adapter_id, options)?;
     match session.load_history().await {
         Ok(_) if session.last_history_read_failed() => {
             tracing::warn!(chat_id = %chat.id, native = %native.id, "segment history read failed");

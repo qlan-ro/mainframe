@@ -206,6 +206,9 @@ impl AdapterSession for ClaudeSession {
     fn take_history_files(&self) -> Option<mainframe_adapter_api::CollectedHistoryFiles> {
         self.history_files.lock_recover().take()
     }
+    fn last_history_read_failed(&self) -> bool {
+        ClaudeSession::last_history_read_failed(self)
+    }
     fn peek_history_files(&self) -> Option<mainframe_adapter_api::CollectedHistoryFiles> {
         self.history_files.lock_recover().clone()
     }

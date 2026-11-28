@@ -267,6 +267,7 @@ async fn a_snapshot_hit_hands_the_session_the_files_its_miss_collected() {
         plans: vec!["/plan.md".into()],
         skill_names: vec!["example".into()],
         sources: Some(Vec::new()),
+        read_failed: false,
     };
     let cache = Arc::new(HistorySnapshotCache::new(dir.path().join("cache")));
     let miss = FakeSession {

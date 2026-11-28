@@ -18,6 +18,9 @@ pub(crate) async fn project() -> (Arc<AppCtx>, String, tempfile::TempDir) {
             "user.name=Test",
             "-c",
             "user.email=test@example.invalid",
+            // Hermetic against a global `commit.gpgsign`, which shells out to gpg.
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "--allow-empty",
             "-m",

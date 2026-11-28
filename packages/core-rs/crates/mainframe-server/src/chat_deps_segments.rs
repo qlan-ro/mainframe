@@ -22,6 +22,14 @@ impl SegmentStore for DaemonChatDeps {
         }
     }
 
+    fn try_layout(&self, chat_id: &str) -> Result<Option<SegmentLayout>, SeamError> {
+        let id = chat_id.to_string();
+        self.db
+            .call_blocking(move |d| d.segments.layout(&id))
+            .map(Some)
+            .map_err(SeamError::new)
+    }
+
     fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError> {
         let commit = commit.clone();
         self.db

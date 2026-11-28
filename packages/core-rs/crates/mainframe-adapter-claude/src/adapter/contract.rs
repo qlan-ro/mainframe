@@ -148,17 +148,7 @@ impl Adapter for ClaudeAdapter {
     }
 
     fn create_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
-        let session = Arc::new(
-            ClaudeSession::new(
-                options,
-                None,
-                self.background_tasks.clone(),
-                self.workflow_store.clone(),
-                self.resolved_path.clone(),
-            )
-            .with_history_index(self.history_index.clone()),
-        );
-        session.init_weak();
+        let session = self.new_session(options);
         let id = session.id.clone();
         let sessions = self.sessions.clone();
         session.set_on_exit(Box::new(move || {
@@ -168,6 +158,10 @@ impl Adapter for ClaudeAdapter {
             .lock_recover()
             .insert(session.id.clone(), session.clone());
         session
+    }
+
+    fn create_history_session(&self, options: SessionOptions) -> Arc<dyn AdapterSession> {
+        self.new_session(options)
     }
 
     fn kill_all(&self) {
@@ -240,5 +234,57 @@ impl Adapter for ClaudeAdapter {
         Result<mainframe_types::adapter::ForkSource, mainframe_adapter_api::ForkPinError>,
     > {
         Box::pin(crate::fork::pin_fork_point(request))
+    }
+}
+
+impl ClaudeAdapter {
+    /// A session not yet tracked in `sessions`; `create_session` registers it.
+    fn new_session(&self, options: SessionOptions) -> Arc<ClaudeSession> {
+        let session = Arc::new(
+            ClaudeSession::new(
+                options,
+                None,
+                self.background_tasks.clone(),
+                self.workflow_store.clone(),
+                self.resolved_path.clone(),
+            )
+            .with_history_index(self.history_index.clone()),
+        );
+        session.init_weak();
+        session
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tracked_sessions(&self) -> usize {
+        self.sessions.lock_recover().len()
+    }
+}
+
+#[cfg(test)]
+mod history_session_tests {
+    use super::*;
+
+    fn options() -> SessionOptions {
+        SessionOptions {
+            project_path: "/tmp".into(),
+            chat_id: Some("session".into()),
+            session_file_path: None,
+            mainframe_chat_id: "chat".into(),
+            fork_source: None,
+        }
+    }
+
+    /// A history-only session never spawns, so nothing would ever remove it
+    /// from the registry: repeated release and restore cycles must not add it.
+    #[test]
+    fn history_sessions_are_not_tracked_but_spawnable_ones_are() {
+        let adapter = ClaudeAdapter::default();
+        for _ in 0..5 {
+            drop(adapter.create_history_session(options()));
+        }
+        assert_eq!(adapter.tracked_sessions(), 0);
+
+        let _live = adapter.create_session(options());
+        assert_eq!(adapter.tracked_sessions(), 1);
     }
 }

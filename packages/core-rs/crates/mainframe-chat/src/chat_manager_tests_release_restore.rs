@@ -8,7 +8,7 @@ use crate::idle_scanner::HistoryReleaser as _;
 use crate::lifecycle_manager::release::HistoryRead;
 
 /// A released "c1" whose history reads come through `session`.
-async fn released_reading_through(session: FakeSession) -> (Fixture, Arc<FakeSession>) {
+pub(super) async fn released_reading_through(session: FakeSession) -> (Fixture, Arc<FakeSession>) {
     let f = fixture();
     scan(&f.mgr).await;
     assert!(f.mgr.shared.messages.lock().unwrap().is_released("c1"));
@@ -17,7 +17,7 @@ async fn released_reading_through(session: FakeSession) -> (Fixture, Arc<FakeSes
     (f, session)
 }
 
-fn started(f: &Fixture) -> bool {
+pub(super) fn started(f: &Fixture) -> bool {
     f.deps
         .events()
         .iter()
@@ -77,7 +77,7 @@ async fn no_process_starts_before_the_history_is_back() {
     );
 }
 
-fn two_segment_layout() -> mainframe_types::segment::SegmentLayout {
+pub(super) fn two_segment_layout() -> mainframe_types::segment::SegmentLayout {
     use crate::chat_manager::tests::segment_fake::{native, segment};
     use mainframe_types::segment::{SegmentKind, SegmentLayout};
     let mut layout = SegmentLayout {
@@ -95,7 +95,7 @@ fn two_segment_layout() -> mainframe_types::segment::SegmentLayout {
     layout
 }
 
-fn failing_reads() -> Arc<FakeSession> {
+pub(super) fn failing_reads() -> Arc<FakeSession> {
     Arc::new(FakeSession {
         history: vec![message("m1")],
         history_read_failed: true,

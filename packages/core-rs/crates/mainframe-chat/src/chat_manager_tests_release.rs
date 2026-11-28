@@ -274,6 +274,8 @@ async fn finish_real_run(f: &Fixture, ago_ms: i64) {
         .unwrap();
 }
 
+#[path = "chat_manager_tests_release_complete.rs"]
+mod complete;
 #[path = "chat_manager_tests_release_integrity.rs"]
 mod integrity;
 #[path = "chat_manager_tests_release_restore.rs"]
