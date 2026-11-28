@@ -165,3 +165,30 @@ async fn a_declined_chat_after_the_full_warm_up_reads_its_history_once() {
     );
     manager.dispose();
 }
+
+#[tokio::test]
+async fn a_resume_without_windowed_history_still_completes_the_lifecycle_load() {
+    // A warm-up that returned early leaves the lifecycle load (active chat,
+    // worktree baseline, scans) to the resume, windowed or not.
+    let fixture = fixture(false).await;
+    let manager = &fixture.ctx.chat.chat_manager;
+    let (_id, connection, mut rx) = fixture.ctx.chat.facade_hub.register("codex".into());
+    let ports = Arc::new(ManagerPorts::new(Some(Arc::clone(manager))));
+
+    start_resume(
+        resume_request(1, &fixture.chat_id),
+        &fixture.ctx,
+        &connection,
+        ports,
+    );
+    assert!(replied(&drain(&mut rx).await));
+
+    let loaded = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        while !manager.is_chat_loaded(&fixture.chat_id) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await;
+    assert!(loaded.is_ok(), "the chat was loaded behind the reply");
+    manager.dispose();
+}
