@@ -89,6 +89,15 @@ describe('sendChatMessage — Steer (C9)', () => {
     expect(sendPrompt).toHaveBeenCalledExactlyOnceWith('use the other file', { steer: true });
   });
 
+  it('re-pins the transcript for a message that queues behind the running turn (#519)', async () => {
+    const { host, sendPrompt } = makeHost({ running: true });
+    sendPrompt.mockResolvedValue({ queued: true, queuedMessageId: 'q-1' });
+
+    await sendChatMessage(host, userMessage('after this turn', { runConfig: undefined }));
+
+    expect(host.announceUserSend).toHaveBeenCalledOnce();
+  });
+
   it('does not steer while idle: the message is an ordinary prompt', async () => {
     const { host, sendPrompt } = makeHost({ running: false });
 

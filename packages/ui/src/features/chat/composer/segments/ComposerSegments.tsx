@@ -11,6 +11,7 @@
  * it, and never a second composer (edit mode renders its own input testid).
  */
 import { Suspense, useEffect, useRef } from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
 import { useUiPrefs } from '@/store/ui-prefs';
 import { LazyChipTextEditor } from '../lexical/lazy-fields';
 import { useComposerSegments } from './segment-store';
@@ -37,15 +38,7 @@ function ComposerSegmentTextarea({
   placeholder: string;
   onChange: (text: string) => void;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
   const chips = useUiPrefs((s) => s.chipComposer);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 21)}px`;
-  }, [value]);
 
   if (chips) {
     return (
@@ -61,16 +54,17 @@ function ComposerSegmentTextarea({
     );
   }
 
+  // Sized from a hidden copy, as the composer's own field is: shrinking this one to measure it (height `auto`,
+  // read, set) shortens the footer for a forced layout, which clamps the transcript under a reader it follows (#519).
   return (
-    <textarea
-      ref={ref}
+    <TextareaAutosize
       data-testid="composer-segment-input"
       data-segment-id={segmentId}
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      rows={1}
-      className="w-full resize-none overflow-hidden bg-transparent font-sans text-composer-input text-foreground outline-none placeholder:text-muted-foreground"
+      minRows={1}
+      className="min-h-[21px] w-full resize-none overflow-hidden bg-transparent font-sans text-composer-input text-foreground outline-none placeholder:text-muted-foreground"
     />
   );
 }

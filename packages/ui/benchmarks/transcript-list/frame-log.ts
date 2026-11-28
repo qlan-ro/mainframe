@@ -30,6 +30,8 @@ export interface FrameRecord {
   removed: number;
   rows: number;
   marks: string[];
+  /** What the scenario samples beside the position (`FrameLog`'s `extra`): the footer's parts, say. */
+  extra?: Record<string, number | boolean | null>;
 }
 
 const BLOCKS = 'p, pre, table, li, h2, h3, img, [data-message-id]';
@@ -51,7 +53,10 @@ export class FrameLog {
   private stopFns: (() => void)[] = [];
   private rowsDirty = true;
   private rowCount = 0;
-  constructor(readonly el: HTMLElement = rigViewport()) {}
+  constructor(
+    readonly el: HTMLElement = rigViewport(),
+    private readonly extra?: () => Record<string, number | boolean | null>,
+  ) {}
 
   mark(label: string) {
     this.pending.marks.push(label);
@@ -144,6 +149,7 @@ export class FrameLog {
       removed: this.pending.removed,
       rows: this.rowCount,
       marks: this.pending.marks.splice(0),
+      ...(this.extra ? { extra: this.extra() } : {}),
     };
     this.pending.wheel = 0;
     this.pending.added = 0;

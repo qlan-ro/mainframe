@@ -4,7 +4,7 @@
  */
 import { AT_BOTTOM_PX, isAtBottom } from './bottom-pin';
 import { listenForScrollInput } from './scroll-owner-input';
-import { layoutExplains, sampleHeight, seen, wantsDown, type OwnerState } from './scroll-owner-state';
+import { layoutExplains, sampleLayout, seen, wantsDown, type OwnerState } from './scroll-owner-state';
 
 interface Actions {
   publish: () => void;
@@ -73,15 +73,32 @@ function staleHandler(current: OwnerState) {
   };
 }
 
-export function observeScrollOwner(viewport: HTMLElement, content: HTMLElement, current: OwnerState, actions: Actions) {
+/** What below the viewport can change its height: rows, text, and the styles an autosizing field sets. */
+const FOOTER_CHANGES: MutationObserverInit = {
+  childList: true,
+  subtree: true,
+  characterData: true,
+  attributeFilter: ['style', 'class', 'hidden'],
+};
+
+export function observeScrollOwner(
+  viewport: HTMLElement,
+  content: HTMLElement,
+  current: OwnerState,
+  actions: Actions,
+  footer: HTMLElement | null = null,
+) {
   seen(current, viewport);
   const onScroll = scrollHandler(viewport, current, actions);
   const stale = staleHandler(current);
   const mutations = new MutationObserver(() => {
-    sampleHeight(current, viewport);
+    sampleLayout(current, viewport);
     stale();
   });
   mutations.observe(content, { childList: true, subtree: true });
+  // The footer resizes the viewport: the composer clearing, a queued row, the activity strip (#519).
+  const footerMutations = new MutationObserver(() => sampleLayout(current, viewport));
+  if (footer) footerMutations.observe(footer, FOOTER_CHANGES);
   const observer = new ResizeObserver(resizeHandler(viewport, content, current, actions));
   observer.observe(content);
   observer.observe(viewport);
@@ -97,6 +114,7 @@ export function observeScrollOwner(viewport: HTMLElement, content: HTMLElement, 
   return () => {
     observer.disconnect();
     mutations.disconnect();
+    footerMutations.disconnect();
     viewport.removeEventListener('scroll', onScroll);
     stopInput();
   };
