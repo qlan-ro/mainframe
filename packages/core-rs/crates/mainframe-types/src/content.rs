@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::shared_str::SharedStr;
+
 /// Leaf content variants shared between `MessageContent` and `DisplayContent`.
 ///
 /// Internally tagged on `type`; every variant carries an optional
@@ -29,7 +31,9 @@ pub enum LeafContent {
     },
     Image {
         media_type: String,
-        data: String,
+        /// Base64 payload, shared by every copy of the block (see
+        /// [`crate::shared_str`]).
+        data: SharedStr,
         #[serde(skip_serializing_if = "Option::is_none")]
         parent_tool_use_id: Option<String>,
     },
@@ -50,7 +54,8 @@ pub enum LeafContent {
 #[serde(rename_all = "camelCase")]
 pub struct ToolResultImage {
     pub media_type: String,
-    pub data: String,
+    /// Base64 payload, shared by every copy of the block.
+    pub data: SharedStr,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
 }

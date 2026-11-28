@@ -1,7 +1,11 @@
 use super::*;
 
 impl IncrementalProjector {
-    pub(super) fn full_rebuild(&mut self, input: &ProjectionInput<'_>) -> DisplayDelta {
+    pub(super) fn full_rebuild(
+        &mut self,
+        input: &ProjectionInput<'_>,
+        parked: &mut Vec<DisplayMessage>,
+    ) -> DisplayDelta {
         self.groups.clear();
         self.tool_owner.clear();
         self.display_owner.clear();
@@ -24,7 +28,7 @@ impl IncrementalProjector {
         apply_timing_tail(&mut self.groups, input.raw, 0);
         renumber_from(&mut self.groups, 0);
         rebuild_tool_owner(&mut self.tool_owner, &self.groups, 0);
-        rebuild_display_owner(&mut self.display_owner, &self.groups, 0);
+        rebuild_display_owner(&mut self.display_owner, &self.groups, 0, parked);
 
         self.categories = input.categories.cloned();
         self.had_overlay = input.overlay.is_some();
@@ -33,12 +37,7 @@ impl IncrementalProjector {
         self.initialized = true;
 
         let len = total_len(&self.groups);
-        let materialized: Vec<_> = self
-            .groups
-            .iter()
-            .filter_map(|g| g.display.clone())
-            .collect();
-        self.snapshot.replace(materialized);
+        self.park_all(parked);
         self.stats = ProjectionStats {
             raw_folded: input.raw.len(),
             full_rebuilds: 1,

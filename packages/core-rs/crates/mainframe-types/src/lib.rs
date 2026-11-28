@@ -51,6 +51,7 @@ pub mod serde_util;
 pub mod settings;
 pub mod settings_kv;
 pub mod setup_advisor;
+pub mod shared_str;
 pub mod skill;
 pub mod suggestion;
 pub mod tags;

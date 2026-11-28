@@ -62,7 +62,7 @@ fn thinking(s: &str) -> DisplayContent {
 fn image(data: &str, media_type: &str) -> DisplayContent {
     DisplayContent::Leaf(LeafContent::Image {
         media_type: media_type.to_string(),
-        data: data.to_string(),
+        data: data.into(),
         parent_tool_use_id: None,
     })
 }
@@ -85,7 +85,7 @@ fn text_block(s: &str) -> ContentBlock {
 
 fn image_block(data: &str, mime_type: &str) -> ContentBlock {
     ContentBlock::Image {
-        data: data.to_string(),
+        data: data.into(),
         mime_type: mime_type.to_string(),
         uri: None,
         meta: None,

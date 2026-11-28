@@ -23,7 +23,7 @@ pub(crate) fn backfill_tail(
     scope_before.truncate(from);
     for group in &mut groups[from..] {
         scope_before.push(scope.clone());
-        let Some(display) = group.display.as_mut() else {
+        let Some(display) = group.display.owned_mut() else {
             continue;
         };
         backfill_in_place(std::slice::from_mut(display), scope);
@@ -35,7 +35,7 @@ pub(crate) fn backfill_tail(
 /// that group's own raw `ToolUse` blocks, never the rest of history.
 pub(crate) fn apply_timing_tail(groups: &mut [Group], raw: &[ChatMessage], from: usize) {
     for group in &mut groups[from..] {
-        let Some(display) = group.display.as_mut() else {
+        let Some(display) = group.display.owned_mut() else {
             continue;
         };
         let end = group.raw_range.end.min(raw.len());

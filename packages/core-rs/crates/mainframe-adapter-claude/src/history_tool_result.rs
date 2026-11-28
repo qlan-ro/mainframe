@@ -103,7 +103,8 @@ pub(crate) fn extract_tool_result_images(content: Option<&Value>) -> Vec<ToolRes
                 .get("media_type")
                 .and_then(Value::as_str)?
                 .to_string();
-            let data = source.get("data").and_then(Value::as_str)?.to_string();
+            // One shared allocation for every later copy of this image.
+            let data = source.get("data").and_then(Value::as_str)?.into();
             Some(ToolResultImage {
                 media_type,
                 data,

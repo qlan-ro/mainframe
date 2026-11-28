@@ -126,7 +126,7 @@ pub(crate) fn thinking_block(text: &str) -> MessageContent {
 pub(crate) fn image_block(media_type: &str, data: &str) -> MessageContent {
     MessageContent::Leaf(LeafContent::Image {
         media_type: media_type.to_string(),
-        data: data.to_string(),
+        data: data.into(),
         parent_tool_use_id: None,
     })
 }

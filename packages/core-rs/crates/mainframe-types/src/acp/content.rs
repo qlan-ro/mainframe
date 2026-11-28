@@ -22,8 +22,9 @@ pub enum ContentBlock {
     },
     #[serde(rename_all = "camelCase")]
     Image {
-        /// Base64-encoded media payload (schema `ImageContent.data`).
-        data: String,
+        /// Base64-encoded media payload (schema `ImageContent.data`), shared
+        /// with the display and transcript copies of the same image.
+        data: crate::shared_str::SharedStr,
         mime_type: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         uri: Option<String>,

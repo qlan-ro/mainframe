@@ -146,7 +146,7 @@ impl Walker<'_, '_> {
         self.new_groups.push(Group {
             raw_range: self.pending_start..idx + 1,
             mergeable: false,
-            display,
+            display: display.into(),
             ordinal: None,
             claimed_tool_ids: Vec::new(),
             late_results: Default::default(),
@@ -171,7 +171,7 @@ impl Walker<'_, '_> {
         self.new_groups.push(Group {
             raw_range: self.pending_start..end,
             mergeable: true,
-            display,
+            display: display.into(),
             ordinal: None,
             late_results: claimed
                 .iter()
@@ -214,9 +214,11 @@ impl Walker<'_, '_> {
     }
 }
 
+/// An existing group must already be unparked (`projector/park.rs`
+/// `unpark_duration_target`), so its container is owned here.
 fn patch_duration_in_place(group: &mut Group, duration: Value) {
     group.duration_override = Some(duration.clone());
-    if let Some(display) = group.display.as_mut() {
+    if let Some(display) = group.display.owned_mut() {
         let mut meta = display.metadata.take().unwrap_or_default();
         meta.insert("turnDurationMs".to_string(), duration);
         display.metadata = Some(meta);

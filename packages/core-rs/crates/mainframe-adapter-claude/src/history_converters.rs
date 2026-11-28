@@ -132,11 +132,13 @@ pub(crate) fn extract_user_content_blocks(
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_string(),
+                // Copied once, straight into the allocation every later copy
+                // of this image (display, encoded items) shares.
                 data: source
                     .get("data")
                     .and_then(Value::as_str)
                     .unwrap_or_default()
-                    .to_string(),
+                    .into(),
                 parent_tool_use_id: None,
             }));
         }

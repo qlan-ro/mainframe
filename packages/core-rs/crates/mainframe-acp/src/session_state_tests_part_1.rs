@@ -12,7 +12,7 @@ fn text_block(text: &str) -> ContentBlock {
 
 fn image_block(data: &str) -> ContentBlock {
     ContentBlock::Image {
-        data: data.to_string(),
+        data: data.into(),
         mime_type: "image/png".to_string(),
         uri: None,
         meta: None,

@@ -119,7 +119,7 @@ fn preview_item_keeps_an_existing_truncation_markers_full_bytes() {
 fn preview_item_leaves_fitting_text_images_diffs_and_other_items_alone() {
     let image = ToolCallContent::Content {
         content: ContentBlock::Image {
-            data: "c".repeat(PREVIEW_BYTES * 2),
+            data: "c".repeat(PREVIEW_BYTES * 2).into(),
             mime_type: "image/png".to_string(),
             uri: None,
             meta: None,

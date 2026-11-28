@@ -29,6 +29,17 @@ fn turn_duration(msg: &ChatMessage) -> Option<serde_json::Value> {
         .cloned()
 }
 
+/// Whether `msg` is a `turnDurationMs` marker, the message
+/// [`classify_message`] reports as [`GroupingDecision::DurationMarker`].
+pub(crate) fn is_duration_marker(msg: &ChatMessage) -> bool {
+    msg.r#type == ChatMessageType::System
+        && msg
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("turnDurationMs"))
+            .is_some_and(serde_json::Value::is_number)
+}
+
 /// The per-message grouping decision: shared so `group_messages`
 /// and the incremental projector's chunked fold apply one definition instead
 /// of two copies that can drift. `prev_mergeable` is whether the group

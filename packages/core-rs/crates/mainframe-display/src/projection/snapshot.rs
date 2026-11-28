@@ -1,4 +1,6 @@
-//! A cheap `Arc` handle onto a projector's materialized container list.
+//! A cheap `Arc` handle onto a projector's materialized container list. For
+//! `IncrementalProjector` this list is the only copy of the containers: its
+//! fold state refers to them by ordinal rather than holding its own.
 //!
 //! `materialize()` is only valid during the synchronous `notify` call that
 //! carries the [`super::DisplayDelta`] referencing it — the projector may

@@ -45,7 +45,7 @@ fn passthrough_image() -> PartEntry {
     PartEntry::Passthrough {
         content: DisplayContent::Leaf(LeafContent::Image {
             media_type: "image/png".to_string(),
-            data: "...".to_string(),
+            data: "...".into(),
             parent_tool_use_id: None,
         }),
         parent_tool_use_id: None,

@@ -112,11 +112,16 @@ pub(crate) fn ids_owned_by_discarded(groups: &[Group], r: usize) -> Vec<String> 
 }
 
 /// Display ids owned by the groups about to be discarded — the
-/// `display_owner` equivalent of [`ids_owned_by_discarded`].
-pub(crate) fn display_ids_owned_by_discarded(groups: &[Group], r: usize) -> Vec<String> {
+/// `display_owner` equivalent of [`ids_owned_by_discarded`]. A settled
+/// group's container is read from `parked`, the snapshot list.
+pub(crate) fn display_ids_owned_by_discarded(
+    groups: &[Group],
+    r: usize,
+    parked: &[mainframe_types::display::DisplayMessage],
+) -> Vec<String> {
     groups[r..]
         .iter()
-        .filter_map(|g| g.display.as_ref().map(|d| d.id.clone()))
+        .filter_map(|g| g.display.id(g.ordinal, parked).map(str::to_string))
         .collect()
 }
 
@@ -128,7 +133,7 @@ mod tests {
         Group {
             raw_range: 0..1,
             mergeable,
-            display: None,
+            display: super::super::group::DisplaySlot::None,
             ordinal: None,
             claimed_tool_ids: Vec::new(),
             late_results: Default::default(),

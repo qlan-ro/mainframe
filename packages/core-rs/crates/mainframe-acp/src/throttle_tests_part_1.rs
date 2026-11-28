@@ -24,7 +24,7 @@ fn image_chunk(data: &str) -> SessionUpdate {
     SessionUpdate::AgentMessageChunk(ContentChunk {
         message_id: "msg_1".to_string(),
         content: ContentBlock::Image {
-            data: data.to_string(),
+            data: data.into(),
             mime_type: "image/png".to_string(),
             uri: None,
             meta: None,

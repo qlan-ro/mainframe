@@ -20,7 +20,7 @@ fn image_only_content_yields_one_image_and_empty_text() {
         vec![ToolResultImage {
             uri: None,
             media_type: "image/png".to_string(),
-            data: "AAAA".to_string(),
+            data: "AAAA".into(),
         }]
     );
 }
@@ -42,12 +42,12 @@ fn mixed_text_and_images_keeps_text_and_collects_both_images_in_order() {
             ToolResultImage {
                 uri: None,
                 media_type: "image/png".to_string(),
-                data: "FIRST".to_string(),
+                data: "FIRST".into(),
             },
             ToolResultImage {
                 uri: None,
                 media_type: "image/jpeg".to_string(),
-                data: "SECOND".to_string(),
+                data: "SECOND".into(),
             },
         ]
     );
