@@ -9,6 +9,8 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
 use tauri::{ipc::{Channel, InvokeResponseBody}, State};
 
+use crate::env_boot::SharedEnv;
+
 /// Sent on the typed exit channel when the child process ends.
 #[derive(Serialize, Clone)]
 pub struct ExitEvent {
@@ -29,7 +31,9 @@ struct Session {
 /// lifecycle deterministic regardless of insert-vs-EOF timing.
 pub struct TerminalManager {
     sessions: Mutex<HashMap<String, Session>>,
-    shell_env: HashMap<String, String>,
+    /// What the login shell adds to the app's env, overlaid on the inherited
+    /// process env at each spawn so a refreshed capture applies to new terminals.
+    shell_env: SharedEnv,
     reap_tx: Sender<String>,
     reap_rx: Mutex<Receiver<String>>,
 }
@@ -48,19 +52,23 @@ pub fn validate_cwd(cwd: &str) -> Result<std::path::PathBuf, String> {
     Ok(canonical)
 }
 
+/// The shell to run: `SHELL` from the shell env (rarely set, since it holds only
+/// what the login shell adds), else the process `$SHELL`, else `/bin/zsh`.
 fn resolve_shell(env: &HashMap<String, String>) -> String {
     if cfg!(windows) {
         return "powershell.exe".to_string();
     }
-    env.get("SHELL").cloned().unwrap_or_else(|| "/bin/zsh".to_string())
+    env.get("SHELL")
+        .cloned()
+        .unwrap_or_else(crate::shell_env::login_shell)
 }
 
 impl TerminalManager {
-    pub fn new(shell_env: HashMap<String, String>) -> Self {
+    pub fn new(shell_env: impl Into<SharedEnv>) -> Self {
         let (reap_tx, reap_rx) = channel();
         Self {
             sessions: Mutex::new(HashMap::new()),
-            shell_env,
+            shell_env: shell_env.into(),
             reap_tx,
             reap_rx: Mutex::new(reap_rx),
         }
@@ -116,10 +124,11 @@ impl TerminalManager {
             .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
             .map_err(|e| format!("openpty failed: {e}"))?;
 
-        let shell = resolve_shell(&self.shell_env);
+        let shell_env = self.shell_env.snapshot();
+        let shell = resolve_shell(&shell_env);
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(&canonical_cwd);
-        for (k, v) in &self.shell_env {
+        for (k, v) in &shell_env {
             cmd.env(k, v);
         }
         cmd.env("TERM", "xterm-256color");

@@ -169,3 +169,14 @@ fn test_env() -> HashMap<String, String> {
     if let Ok(p) = std::env::var("PATH") { e.insert("PATH".to_string(), p); }
     e
 }
+
+/// The shell env holds only what the login shell adds, so it usually has no
+/// `SHELL`; a terminal then uses the app's login shell, not a hard-coded zsh.
+#[cfg(unix)]
+#[test]
+fn resolve_shell_falls_back_to_the_login_shell() {
+    assert_eq!(resolve_shell(&HashMap::new()), crate::shell_env::login_shell());
+    let mut env = HashMap::new();
+    env.insert("SHELL".to_string(), "/opt/homebrew/bin/fish".to_string());
+    assert_eq!(resolve_shell(&env), "/opt/homebrew/bin/fish");
+}
