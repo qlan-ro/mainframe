@@ -79,7 +79,7 @@ pub async fn handle_inbound(
             None
         }
         InboundFrame::Notification(note) if note.method == "_mainframe.dev/session_detach" => {
-            handle_session_detach(note.params, connection);
+            handle_session_detach(note.params, ctx, connection);
             None
         }
         InboundFrame::Request(request) if request.method == "session/prompt" => {
@@ -269,12 +269,17 @@ pub(super) fn params_session_id(params: Option<&serde_json::Value>) -> Option<St
 /// and pending gates for the session, the same teardown `ChatEnded` already
 /// does — a malformed or missing `sessionId` is silently ignored, matching
 /// every other extension notification's tolerance for a stale client.
-fn handle_session_detach(params: Option<serde_json::Value>, connection: &Arc<FacadeConnection>) {
+fn handle_session_detach(
+    params: Option<serde_json::Value>,
+    ctx: &AppCtx,
+    connection: &Arc<FacadeConnection>,
+) {
     let Some(params) = params.and_then(|p| serde_json::from_value::<SessionDetachParams>(p).ok())
     else {
         return;
     };
     connection.forget_chat(&params.session_id);
+    crate::chat_viewers::note_view(ctx, &params.session_id);
 }
 
 pub(super) fn wire(response: &JsonRpcResponse) -> String {

@@ -66,8 +66,14 @@ impl ChatManager {
                 collab.lifecycle.clone(),
                 teardown.clone(),
             ));
+        let releaser = Arc::new(crate::idle_release::ChatRelease::new(
+            shared.clone(),
+            collab.lifecycle.clone(),
+            teardown.clone(),
+        ));
         let mut idle_scanner =
-            crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader);
+            crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader)
+                .with_releaser(releaser);
         idle_scanner.start();
 
         Self {
@@ -168,6 +174,33 @@ impl ChatManager {
         self.idle_scanner.lock_recover().stop();
         if let Some(handle) = self.compaction_scanner.lock_recover().take() {
             handle.abort();
+        }
+    }
+
+    /// Attach the viewer seam the idle history release consults
+    /// (`chat_viewers.rs`). First attachment wins.
+    pub fn attach_viewers(&self, viewers: Arc<dyn crate::chat_viewers::ChatViewers>) {
+        /* expected */
+        let _ = self.shared.viewers.set(viewers); // First attachment wins.
+    }
+
+    /// A client started or stopped showing the chat: the idle history
+    /// release counts it as use.
+    pub fn note_viewing(&self, chat_id: &str) {
+        self.lifecycle.touch(chat_id);
+    }
+
+    /// The chat's in-memory "last used" clock, if it has a live cell.
+    pub fn last_used_at(&self, chat_id: &str) -> Option<i64> {
+        self.get_active(chat_id)
+            .map(|cell| cell.lock_recover().last_used_at)
+    }
+
+    /// Test seam: age the chat's "last used" clock.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_last_used_at_for_test(&self, chat_id: &str, at: i64) {
+        if let Some(cell) = self.get_active(chat_id) {
+            cell.lock_recover().last_used_at = at;
         }
     }
 

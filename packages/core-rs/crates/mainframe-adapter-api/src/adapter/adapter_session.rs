@@ -9,6 +9,10 @@ pub struct CollectedHistoryFiles {
     pub plans: Vec<String>,
     pub skill_names: Vec<String>,
     pub sources: Option<Vec<crate::HistoryDependency>>,
+    /// The read that collected these failed: the transcript was missing, or a
+    /// file could not be opened or read to its end. Never stored.
+    #[serde(skip)]
+    pub read_failed: bool,
 }
 
 /// The newest part of an adapter's paginated history, oldest first. `older` is
@@ -202,6 +206,12 @@ pub trait AdapterSession: Send + Sync {
     }
     fn take_history_files(&self) -> Option<crate::CollectedHistoryFiles> {
         None
+    }
+    /// True when the last `load_history` returned an empty list because the
+    /// read failed: an adapter that reports a failed read to its other callers
+    /// as an empty history says so here for callers that must tell them apart.
+    fn last_history_read_failed(&self) -> bool {
+        false
     }
     /// The files the last `load_history` collected, left in place for
     /// `take_history_files`; the history snapshot stores a copy.

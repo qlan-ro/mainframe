@@ -29,6 +29,11 @@ impl ChatManager {
         if !working {
             return Err(SendError::NoActiveTurn(chat_id.to_string()));
         }
+        // A turn the CLI started by itself can run on a released history.
+        self.lifecycle
+            .restore_released_history(chat_id)
+            .await
+            .map_err(|err| AdapterError::DeliveryRejected(err.to_string()))?;
         info!(chat_id, "steer message sent");
         self.send_plain_text(&post, &session, chat_id, content, None, Delivery::Steer)
             .await

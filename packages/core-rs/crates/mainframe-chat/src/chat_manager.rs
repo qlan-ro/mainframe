@@ -66,6 +66,7 @@ mod fork_sweep;
 mod handoff_resolve;
 mod handoff_send;
 mod history;
+mod history_load;
 mod history_refresh;
 mod idle_maintenance;
 mod initial_history;
@@ -105,7 +106,9 @@ pub use history::ResumeSnapshot;
 pub use history_refresh::RefreshedHistory;
 pub use idle_maintenance::validate_idle_compaction_config;
 pub(crate) use shared::remap_history as remap_history_for;
-pub(crate) use shared::{build_history_session, compose_if_multi, is_working};
+pub(crate) use shared::{
+    build_history_session, compose_if_multi, compose_if_multi_complete, is_working,
+};
 pub use side_chat::OpenSideChatError;
 pub use unarchive::UnarchiveNativeSessionError;
 pub use update::ProcessedAttachments;

@@ -13,9 +13,17 @@ impl ChatLifecycleManager {
         Ok(())
     }
 
+    /// A released chat gets its history back before any process starts for
+    /// it; when that fails, nothing starts (the process would write output
+    /// into a history the daemon does not hold).
     pub(super) async fn load_chat_for_start(&self, chat_id: &str) -> Result<(), AdapterError> {
         self.finish_closing_session(chat_id).await?;
         self.load_chat(chat_id).await;
+        if self.history_released(chat_id) {
+            return Err(AdapterError::DeliveryRejected(
+                super::release::HistoryUnavailable.to_string(),
+            ));
+        }
         Ok(())
     }
 

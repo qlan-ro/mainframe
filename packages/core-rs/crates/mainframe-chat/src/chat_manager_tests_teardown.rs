@@ -1,5 +1,5 @@
-//! Per-chat teardown (`ChatTeardown`): what discard, archive, end and idle
-//! offload each drop and what each keeps. Every mode preserves what its path
+//! Per-chat teardown (`ChatTeardown`): what discard, archive, end, idle
+//! offload and the idle history release each drop and what each keeps. Every mode preserves what its path
 //! kept before the paths shared one helper; the only change is that discard
 //! now forgets the chat's worktree offers.
 
@@ -109,6 +109,16 @@ fn expected(mode: TeardownMode) -> Left {
             offers: 1,
             other_chat_offers: 1,
         },
+        TeardownMode::ReleaseHistory => Left {
+            active: true,
+            cached: false,
+            pinned: true,
+            pending_prompt: true,
+            cancelled_tombstone: true,
+            interrupted: true,
+            offers: 1,
+            other_chat_offers: 1,
+        },
     }
 }
 
@@ -119,6 +129,7 @@ async fn each_mode_keeps_only_its_own_slice_of_chat_state() {
         TeardownMode::Archive,
         TeardownMode::End,
         TeardownMode::Offload,
+        TeardownMode::ReleaseHistory,
     ] {
         let mgr = ChatManager::new(FakeDeps::with_chats(vec![test_chat("c1")]));
         seed_state(&mgr, test_chat("c1"));

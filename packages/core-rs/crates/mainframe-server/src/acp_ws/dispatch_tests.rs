@@ -210,3 +210,24 @@ async fn binary_history_frames_are_opt_in_per_connection() {
     .await;
     assert!(!connection.is_binary_history_frames_opted_in());
 }
+
+/// A `session_detach` ends a view, which the idle history release counts as
+/// use, so a chat left between two scans waits out the whole idle time.
+#[tokio::test]
+async fn a_session_detach_restarts_the_idle_clock() {
+    let ctx = AppCtx::test_ctx();
+    let chat_id = crate::chat_viewers::tests::chat_with_a_cell(&ctx).await;
+    let (_id, connection, _rx) = ctx.chat.facade_hub.register("claude".to_string());
+    ctx.chat.facade_hub.attach(&connection, &chat_id);
+    ctx.chat.chat_manager.set_last_used_at_for_test(&chat_id, 1);
+
+    let detach = json!({
+        "jsonrpc": "2.0",
+        "method": "_mainframe.dev/session_detach",
+        "params": { "sessionId": chat_id },
+    });
+    handle_inbound(&detach.to_string(), &daemon(), &ctx, &connection).await;
+
+    assert!(!connection.is_attached(&chat_id));
+    assert!(ctx.chat.chat_manager.last_used_at(&chat_id).unwrap() > 1);
+}

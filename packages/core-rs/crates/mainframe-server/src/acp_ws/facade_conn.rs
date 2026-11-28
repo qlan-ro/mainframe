@@ -171,6 +171,11 @@ impl FacadeConnection {
     /// lifetime.
     ///
     /// Pruning weak entries never replaces a lock held by an active prompt.
+    /// The chats this connection holds a session on.
+    pub(crate) fn attached_chats(&self) -> Vec<String> {
+        self.locked_sessions().keys().cloned().collect()
+    }
+
     pub fn forget_chat(&self, chat_id: &str) {
         self.locked_sessions().remove(chat_id);
         self.locked_gates()

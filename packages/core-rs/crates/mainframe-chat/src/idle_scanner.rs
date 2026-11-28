@@ -1,4 +1,5 @@
-//! Scans for idle chats and triggers whole-chat offload (`idle_offload.rs`).
+//! Scans for idle chats: whole-chat offload after two hours (`idle_offload.rs`),
+//! and the history release after the user's idle setting (`idle_release.rs`).
 
 use mainframe_types::sync::LockExt as _;
 use std::sync::Arc;
@@ -16,10 +17,12 @@ use crate::types::ActiveChat;
 
 /// 2 hours.
 pub const IDLE_THRESHOLD_MS: i64 = 2 * 60 * 60 * 1000;
-/// 5 minutes.
-pub const IDLE_SCAN_INTERVAL_MS: u64 = 5 * 60 * 1000;
+/// 1 minute: the history release's setting is counted in minutes.
+pub const IDLE_SCAN_INTERVAL_MS: u64 = 60 * 1000;
 
 use crate::chat_manager::Registry;
+pub use crate::idle_release::HistoryReleaser;
+use crate::idle_release::{SeenViewed, release_registry};
 
 type NowFn = Arc<dyn Fn() -> i64 + Send + Sync>;
 
@@ -37,6 +40,8 @@ pub trait IdleOffloader: Send + Sync {
 pub struct IdleSessionScanner {
     active_chats: Registry,
     offloader: Arc<dyn IdleOffloader>,
+    releaser: Option<Arc<dyn HistoryReleaser>>,
+    seen_viewed: SeenViewed,
     threshold_ms: i64,
     interval_ms: u64,
     now: NowFn,
@@ -64,6 +69,8 @@ impl IdleSessionScanner {
         Self {
             active_chats,
             offloader,
+            releaser: None,
+            seen_viewed: SeenViewed::default(),
             threshold_ms,
             interval_ms,
             now,
@@ -71,14 +78,17 @@ impl IdleSessionScanner {
         }
     }
 
+    /// Also release idle chats' histories on every scan.
+    pub fn with_releaser(mut self, releaser: Arc<dyn HistoryReleaser>) -> Self {
+        self.releaser = Some(releaser);
+        self
+    }
+
     pub fn start(&mut self) {
         if self.handle.is_some() {
             return;
         }
-        let active_chats = self.active_chats.clone();
-        let offloader = self.offloader.clone();
-        let threshold_ms = self.threshold_ms;
-        let now = self.now.clone();
+        let pass = self.pass();
         let period = std::time::Duration::from_millis(self.interval_ms);
         self.handle = Some(tokio::spawn(async move {
             let mut ticker = tokio::time::interval(period);
@@ -88,7 +98,7 @@ impl IdleSessionScanner {
             ticker.tick().await;
             loop {
                 ticker.tick().await;
-                scan_registry(&active_chats, offloader.as_ref(), threshold_ms, &now).await;
+                pass.run().await;
             }
         }));
     }
@@ -100,6 +110,34 @@ impl IdleSessionScanner {
     }
 
     pub async fn scan(&self) {
+        self.pass().run().await;
+    }
+
+    fn pass(&self) -> ScanPass {
+        ScanPass {
+            active_chats: self.active_chats.clone(),
+            offloader: self.offloader.clone(),
+            releaser: self.releaser.clone(),
+            seen_viewed: self.seen_viewed.clone(),
+            threshold_ms: self.threshold_ms,
+            now: self.now.clone(),
+        }
+    }
+}
+
+/// One scan: offload first (it drops everything), then release the histories
+/// of the chats that stay.
+struct ScanPass {
+    active_chats: Registry,
+    offloader: Arc<dyn IdleOffloader>,
+    releaser: Option<Arc<dyn HistoryReleaser>>,
+    seen_viewed: SeenViewed,
+    threshold_ms: i64,
+    now: NowFn,
+}
+
+impl ScanPass {
+    async fn run(&self) {
         scan_registry(
             &self.active_chats,
             self.offloader.as_ref(),
@@ -107,6 +145,15 @@ impl IdleSessionScanner {
             &self.now,
         )
         .await;
+        if let Some(releaser) = &self.releaser {
+            release_registry(
+                &self.active_chats,
+                releaser.as_ref(),
+                &self.seen_viewed,
+                &self.now,
+            )
+            .await;
+        }
     }
 }
 

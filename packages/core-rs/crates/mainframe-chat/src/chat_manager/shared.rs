@@ -97,6 +97,22 @@ pub(crate) async fn compose_if_multi(
     Some(crate::segments::compose::compose(deps, &chat, &layout).await)
 }
 
+/// [`compose_if_multi`] for a restore: `Some(None)` when a transcript the
+/// layout needs failed to load.
+pub(crate) async fn compose_if_multi_complete(
+    deps: &dyn ChatManagerDeps,
+    chat: &Chat,
+) -> Option<Option<crate::segments::compose::Composed>> {
+    let layout = match deps.segment_store()?.try_layout(&chat.id) {
+        Ok(layout) => layout.filter(mainframe_types::segment::SegmentLayout::is_multi_segment)?,
+        Err(error) => {
+            tracing::warn!(%error, chat_id = %chat.id, "segment layout read failed");
+            return Some(None);
+        }
+    };
+    Some(crate::segments::compose::compose_complete(deps, chat, &layout).await)
+}
+
 // Unsent forks use their persisted source because they have no provider session yet.
 pub(crate) fn build_history_session(
     deps: &Arc<dyn ChatManagerDeps>,
@@ -124,7 +140,7 @@ pub(crate) fn build_history_session(
         chat.scratch_path.as_deref(),
         deps.projects_get_path(&chat.project_id),
     )?;
-    deps.create_session(
+    deps.create_history_session(
         &chat.adapter_id,
         SessionOptions {
             project_path: cwd,

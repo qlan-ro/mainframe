@@ -16,6 +16,8 @@ pub(super) struct FakeStore {
     pub(super) layout: Mutex<SegmentLayout>,
     pub(super) commits: Mutex<Vec<SwitchCommit>>,
     pub(super) results: Mutex<Vec<SegmentResultDelta>>,
+    /// Fail layout reads the way the daemon's store does on a DB error.
+    pub(super) fail_layout: std::sync::atomic::AtomicBool,
 }
 
 impl FakeStore {
@@ -62,7 +64,14 @@ impl FakeStore {
 
 impl SegmentStore for FakeStore {
     fn layout(&self, _chat_id: &str) -> Option<SegmentLayout> {
-        Some(self.layout.lock().unwrap().clone())
+        let failing = self.fail_layout.load(std::sync::atomic::Ordering::SeqCst);
+        (!failing).then(|| self.layout.lock().unwrap().clone())
+    }
+    fn try_layout(&self, chat_id: &str) -> Result<Option<SegmentLayout>, SeamError> {
+        if self.fail_layout.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(SeamError::msg("segment layout read failed"));
+        }
+        Ok(self.layout(chat_id))
     }
     fn commit_switch(&self, commit: &SwitchCommit) -> Result<SegmentLayout, SeamError> {
         self.commits.lock().unwrap().push(commit.clone());

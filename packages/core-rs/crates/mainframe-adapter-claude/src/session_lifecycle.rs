@@ -116,10 +116,31 @@ impl ClaudeSession {
             self.fork_source.as_ref(),
         )
     }
+    /// A missing transcript or a failed read still returns what was read, as
+    /// before, and sets `last_history_read_failed` for callers that need the
+    /// whole history (the restore of a released chat).
     pub async fn load_history(&self) -> Result<Vec<ChatMessage>, AdapterError> {
-        let (messages, files) = self.read_history(true).await?;
+        // No resume target and no fork: a new session, nothing to read.
+        let Some((id, base, discovered)) = self.discover_history().await else {
+            self.note_history_read(false);
+            *self.history_files.lock_recover() = Some(Default::default());
+            return Ok(Vec::new());
+        };
+        let read = crate::history::load_discovered_history(&id, &discovered, &base, true).await;
+        let (messages, files) = read.inspect_err(|_| self.note_history_read(true))?;
+        self.note_history_read(files.read_failed);
         *self.history_files.lock_recover() = Some(files);
         Ok(messages)
+    }
+
+    fn note_history_read(&self, failed: bool) {
+        self.history_read_failed
+            .store(failed, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn last_history_read_failed(&self) -> bool {
+        self.history_read_failed
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
     /// The newest whole turns of the history, read from the end of the main
     /// transcript, or `None` when the cut cannot be settled from the tail.

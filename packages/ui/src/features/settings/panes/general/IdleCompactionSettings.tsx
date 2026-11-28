@@ -26,8 +26,7 @@ export function IdleCompactionSettings({ port }: { port: number }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 border-t border-border py-5">
-      <h3 className="text-sm font-semibold text-foreground">Chats</h3>
+    <div className="flex flex-col">
       <ToggleRow
         label="Compact idle chats"
         description="Summarize long idle chats before the provider's prompt cache expires, so returning is cheaper."
@@ -41,6 +40,6 @@ export function IdleCompactionSettings({ port }: { port: number }) {
           {saveError}
         </p>
       )}
-    </section>
+    </div>
   );
 }

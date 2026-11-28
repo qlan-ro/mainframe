@@ -6,6 +6,8 @@ mod awaiting_seed_tests;
 mod gate_tests;
 #[path = "hub_tests_notification_tests.rs"]
 mod notification_tests;
+#[path = "hub_tests_release_tests.rs"]
+mod release_tests;
 #[path = "hub_tests_resume_race_tests.rs"]
 mod resume_race_tests;
 #[path = "hub_tests_revision_cursor_tests.rs"]

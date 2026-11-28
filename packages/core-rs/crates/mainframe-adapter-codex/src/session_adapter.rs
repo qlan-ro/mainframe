@@ -21,12 +21,7 @@ impl AdapterSession for CodexSession {
         '_,
         Result<mainframe_adapter_api::idle_compaction::CompactionMetadata, AdapterError>,
     > {
-        Box::pin(async move {
-            self.touch_activity();
-            let result = self.compact_idle(request).await;
-            self.touch_activity();
-            result
-        })
+        Box::pin(self.compact_idle_tracked(request))
     }
     fn id(&self) -> &str {
         &self.id
@@ -267,6 +262,9 @@ impl AdapterSession for CodexSession {
 
     fn history_sources(&self) -> BoxFuture<'_, Vec<std::path::PathBuf>> {
         Box::pin((self.history_sources_inner()).instrument(self.span.clone()))
+    }
+    fn last_history_read_failed(&self) -> bool {
+        self.last_history_read_failed_inner()
     }
 
     fn load_scan_records<'a>(

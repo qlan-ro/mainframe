@@ -6,9 +6,15 @@ pub(super) struct RestorationClaim {
     chat_id: String,
     cell: Option<Arc<Mutex<ActiveChat>>>,
     ready: bool,
+    /// Restores a released history into the chat's live cell, which it never
+    /// replaces or removes (`load_history.rs`).
+    released: bool,
 }
 
 impl RestorationClaim {
+    pub(super) fn restores_released(&self) -> bool {
+        self.released
+    }
     pub(super) fn track(&mut self, cell: Option<Arc<Mutex<ActiveChat>>>) {
         self.cell = cell;
     }
@@ -61,7 +67,11 @@ impl ChatLifecycleManager {
                 restored: guards.restoring.get(chat_id),
             };
         }
-        if self.shared.active_chats.contains_key(chat_id) {
+        // Read under the guards: a release holds the offloading claim while it
+        // marks the history released, so this read cannot see half of one.
+        let released = self.shared.active_chats.contains_key(chat_id)
+            && self.shared.messages.lock_recover().is_released(chat_id);
+        if self.shared.active_chats.contains_key(chat_id) && !released {
             return LoadAction::Loaded;
         }
         let complete = match guards.loading.claim(chat_id) {
@@ -76,6 +86,7 @@ impl ChatLifecycleManager {
                     chat_id: chat_id.to_owned(),
                     cell: None,
                     ready: false,
+                    released,
                 },
                 complete,
             },

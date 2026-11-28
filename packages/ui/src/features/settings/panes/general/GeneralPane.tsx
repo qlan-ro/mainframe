@@ -1,6 +1,7 @@
 import type { UpdateChannel } from '@qlan-ro/mainframe-types';
 import { useSettingsStore } from '../../../../store/settings';
 import { updateGeneralSettings } from '../../../../lib/api/settings';
+import { HistoryReleaseSettings } from './HistoryReleaseSettings';
 import { IdleCompactionSettings } from './IdleCompactionSettings';
 import { AppearanceControls, PickerRow } from './AppearanceControls';
 import { LinkSettings } from './LinkSettings';
@@ -32,7 +33,11 @@ export function GeneralPane({ port }: { port: number }) {
 
       <WorktreeDirectorySettings port={port} />
 
-      <IdleCompactionSettings port={port} />
+      <section className="flex flex-col gap-3 border-t border-border py-5">
+        <h3 className="text-sm font-semibold text-foreground">Chats</h3>
+        <IdleCompactionSettings port={port} />
+        <HistoryReleaseSettings port={port} />
+      </section>
 
       <section className="flex flex-col gap-3 border-t border-border py-5 first:border-t-0 first:pt-0">
         <h3 className="text-sm font-semibold text-foreground">Updates</h3>

@@ -118,6 +118,7 @@ impl PartialEq for ChatSurfaceEvent {
                 },
             ) => a == b && ua == ub,
             (Self::ChatEnded { chat_id: a }, Self::ChatEnded { chat_id: b }) => a == b,
+            (Self::HistoryReleased { chat_id: a }, Self::HistoryReleased { chat_id: b }) => a == b,
             _ => false,
         }
     }
@@ -209,6 +210,10 @@ impl std::fmt::Debug for ChatSurfaceEvent {
                 .debug_struct("Usage")
                 .field("chat_id", chat_id)
                 .field("usage", usage)
+                .finish(),
+            Self::HistoryReleased { chat_id } => f
+                .debug_struct("HistoryReleased")
+                .field("chat_id", chat_id)
                 .finish(),
             Self::ChatEnded { chat_id } => f
                 .debug_struct("ChatEnded")

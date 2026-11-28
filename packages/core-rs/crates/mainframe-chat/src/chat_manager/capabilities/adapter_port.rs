@@ -27,6 +27,16 @@ pub trait AdapterPort: Send + Sync {
         options: mainframe_types::adapter::SessionOptions,
     ) -> Option<Arc<dyn AdapterSession>>;
 
+    /// [`Self::create_session`] for a session that only reads history and never
+    /// spawns, which the adapter does not track (`Adapter::create_history_session`).
+    fn create_history_session(
+        &self,
+        adapter_id: &str,
+        options: mainframe_types::adapter::SessionOptions,
+    ) -> Option<Arc<dyn AdapterSession>> {
+        self.create_session(adapter_id, options)
+    }
+
     fn create_plan_mode_handler(&self, adapter_id: &str) -> Option<Arc<dyn PlanModeActionHandler>>;
 
     fn scan_loaded_history<'a>(

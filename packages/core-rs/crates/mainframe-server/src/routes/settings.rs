@@ -69,6 +69,9 @@ fn general_body(mut raw: HashMap<String, String>) -> Result<Value, serde_json::E
         idle_compaction: mainframe_types::settings::IdleCompactionConfig {
             enabled: raw.remove("idleCompaction.enabled").as_deref() == Some("true"),
         },
+        history_release: mainframe_types::settings::HistoryReleaseConfig::from_stored(
+            raw.remove("historyRelease.idleMinutes").as_deref(),
+        ),
         update_channel,
         default_adapter_id: raw.remove("defaultAdapterId"),
     };
@@ -88,6 +91,11 @@ fn parse_update_channel(value: &str) -> Option<UpdateChannel> {
 struct GeneralPatch {
     #[serde(default, deserialize_with = "idle_settings::deserialize_patch")]
     idle_compaction: Option<mainframe_types::settings::IdleCompactionConfig>,
+    #[serde(
+        default,
+        deserialize_with = "idle_settings::deserialize_history_release"
+    )]
+    history_release: Option<mainframe_types::settings::HistoryReleaseConfig>,
     worktree_dir: Option<String>,
     notifications: Option<NotificationConfigPatch>,
     update_channel: Option<String>,
@@ -131,6 +139,12 @@ fn general_patch_error(patch: &GeneralPatch) -> Option<&'static str> {
         && !mainframe_types::ids::is_safe_identifier(id)
     {
         return Some("Invalid adapter id");
+    }
+    if patch
+        .history_release
+        .is_some_and(|config| !config.is_valid())
+    {
+        return Some("historyRelease.idleMinutes must be null or 1 to 1440");
     }
     None
 }
@@ -178,6 +192,17 @@ fn write_general(settings: &SettingsRepository, patch: GeneralPatch) -> Result<(
             GENERAL,
             "idleCompaction.enabled",
             if config.enabled { "true" } else { "false" },
+        )?;
+    }
+    if let Some(config) = patch.history_release {
+        let is_default = config == defaults.history_release;
+        let value = config.stored_value();
+        set_or_delete(
+            settings,
+            GENERAL,
+            "historyRelease.idleMinutes",
+            &value,
+            is_default,
         )?;
     }
     if let Some(wd) = patch.worktree_dir {

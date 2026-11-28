@@ -145,31 +145,6 @@ impl ChatLifecycleManager {
         }
     }
 
-    /// The owner holds the claim through the disk read; followers recheck cache.
-    pub(crate) async fn claim_history(&self, chat_id: &str) -> Option<FlightClaim> {
-        loop {
-            let (maintenance, claim) = {
-                let g = self.guards.lock_recover();
-                match g.maintenance.get(chat_id) {
-                    Some(waiter) => (Some(waiter), None),
-                    None => (None, Some(g.history.claim(chat_id))),
-                }
-            };
-            if let Some(waiter) = maintenance {
-                waiter.wait().await;
-                continue;
-            }
-            match claim {
-                Some(Ok(claim)) => return Some(claim),
-                Some(Err(waiter)) => {
-                    waiter.wait().await;
-                    return None;
-                }
-                None => continue,
-            }
-        }
-    }
-
     /// Pass-through to the shared emit (enrich-on-emit for
     /// `ChatUpdated`/`ChatCreated`; a no-op enrichment for anything else,
     /// including `ChatOffloaded`) — lets `idle_offload` broadcast without

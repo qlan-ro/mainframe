@@ -95,17 +95,20 @@ async fn send_guard_drop_unblocks_a_later_offload_claim() {
 
 #[tokio::test]
 async fn claim_history_single_flights_concurrent_readers() {
+    use crate::lifecycle_manager::release::HistoryRead;
     let mgr = claims_manager();
-    let claim = mgr.claim_history("c1").await.unwrap();
+    let HistoryRead::Lead(claim) = mgr.claim_history_read("c1").await else {
+        panic!("the first caller leads");
+    };
 
     let follower = {
         let mgr = mgr.clone();
-        tokio::spawn(async move { mgr.claim_history("c1").await })
+        tokio::spawn(async move { mgr.claim_history_read("c1").await })
     };
     tokio::task::yield_now().await;
     drop(claim);
     assert!(
-        follower.await.unwrap().is_none(),
+        matches!(follower.await.unwrap(), HistoryRead::Follower),
         "second caller follows, not leads"
     );
 }

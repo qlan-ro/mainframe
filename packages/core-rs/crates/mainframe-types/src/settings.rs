@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+mod history_release;
 mod provider_update;
+pub use history_release::{
+    HISTORY_RELEASE_DEFAULT_MINUTES, HISTORY_RELEASE_MAX_MINUTES, HISTORY_RELEASE_NEVER,
+    HistoryReleaseConfig,
+};
 pub use provider_update::{PROVIDER_CONFIG_FIELDS, ProviderConfigUpdate};
 
 pub const EXECUTION_MODES: [ExecutionMode; 4] = [
@@ -164,6 +169,8 @@ pub struct IdleCompactionConfig {
 pub struct GeneralConfig {
     #[serde(default)]
     pub idle_compaction: IdleCompactionConfig,
+    #[serde(default)]
+    pub history_release: HistoryReleaseConfig,
     pub worktree_dir: String,
     pub notifications: NotificationConfig,
     pub update_channel: UpdateChannel,
@@ -198,6 +205,7 @@ impl Default for GeneralConfig {
         Self {
             worktree_dir: ".worktrees".to_string(),
             idle_compaction: IdleCompactionConfig::default(),
+            history_release: HistoryReleaseConfig::default(),
             notifications: NotificationConfig::default(),
             update_channel: UpdateChannel::Stable,
             default_adapter_id: None,

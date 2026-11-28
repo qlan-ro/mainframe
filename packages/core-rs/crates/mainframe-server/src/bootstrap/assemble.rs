@@ -14,6 +14,7 @@ pub(super) async fn assemble(
     );
     let chats = chats(&bound, &resources, &quota, &facade);
     facade.attach_history_refresh(&chats);
+    let ws_clients = attach_viewers(&chats, &facade);
     chats.recover_stale_working_state();
     chats.sweep_unreferenced_fork_snapshots().await;
     let orchestration = build_orchestration(
@@ -28,6 +29,7 @@ pub(super) async fn assemble(
     let automations = automations(&bound, &resources, &chats).await;
     let plugins = plugins(&bound, &resources, &automations).await;
     let builder = context_builder(&bound, &resources)
+        .ws_clients(ws_clients)
         .facade_hub(facade)
         .chat_manager(chats)
         .orchestration(orchestration)
@@ -46,6 +48,27 @@ pub(super) async fn assemble(
             keepalive: resources._keepalive_rx,
         },
     })
+}
+
+/// The idle history release's view of who is looking at a chat: facade
+/// sessions, event-socket subscriptions and orchestration waits (whose start
+/// and end also count as use). Returns the socket registry the context shares.
+fn attach_viewers(
+    chats: &Arc<ChatManager>,
+    facade: &Arc<crate::FacadeHub>,
+) -> crate::websocket::WsClients {
+    let ws_clients: crate::websocket::WsClients = Arc::new(dashmap::DashMap::new());
+    chats.attach_viewers(Arc::new(crate::chat_viewers::DaemonChatViewers::new(
+        facade.clone(),
+        ws_clients.clone(),
+    )));
+    let watched_chats = Arc::downgrade(chats);
+    mainframe_orchestration::waiter::on_watch_activity(move |chat_id| {
+        if let Some(chats) = watched_chats.upgrade() {
+            chats.note_viewing(chat_id);
+        }
+    });
+    ws_clients
 }
 
 async fn quota(bound: &BoundBootstrap, resources: &Resources) -> Arc<QuotaManager> {
@@ -158,7 +181,6 @@ fn context_builder(bound: &BoundBootstrap, r: &Resources) -> crate::ctx::AppCtxB
         .auth_secret(input.auth_secret.clone())
         .resolved_path(input.resolved_path.clone())
         .tunnel_url(Arc::new(RwLock::new(None)))
-        .ws_clients(Arc::new(dashmap::DashMap::new()))
         .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
         .adapter_registry(r.adapters.clone())
         .background_tasks(r.background_tasks.clone())

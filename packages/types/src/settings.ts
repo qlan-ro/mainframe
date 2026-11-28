@@ -57,8 +57,23 @@ export interface NotificationConfig {
 export const UPDATE_CHANNELS = ['stable', 'prerelease'] as const;
 export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
 
+/** Minutes the UI offers for the idle history release; `null` is never. */
+export const HISTORY_RELEASE_MINUTE_OPTIONS = [5, 10, 30, 60] as const;
+export const HISTORY_RELEASE_DEFAULT_MINUTES = 10;
+/** The largest idle time the daemon accepts (one day). */
+export const HISTORY_RELEASE_MAX_MINUTES = 1440;
+
+/**
+ * How long a chat nobody views or uses keeps its history in the daemon's
+ * memory. `idleMinutes: null` keeps it until the two-hour idle offload.
+ */
+export interface HistoryReleaseConfig {
+  idleMinutes: number | null;
+}
+
 export interface GeneralConfig {
   idleCompaction: { enabled: boolean };
+  historyRelease: HistoryReleaseConfig;
   worktreeDir: string;
   notifications: NotificationConfig;
   updateChannel: UpdateChannel;
@@ -74,6 +89,7 @@ export const NOTIFICATION_DEFAULTS: NotificationConfig = {
 
 export const GENERAL_DEFAULTS: GeneralConfig = {
   idleCompaction: { enabled: false },
+  historyRelease: { idleMinutes: HISTORY_RELEASE_DEFAULT_MINUTES },
   worktreeDir: '.worktrees',
   notifications: NOTIFICATION_DEFAULTS,
   updateChannel: 'stable',
@@ -98,6 +114,11 @@ const notificationPatchSchema = z.object({
   other: z.object({ plugin: z.boolean().optional() }).optional(),
 });
 export const IdleCompactionConfigSchema = z.object({ enabled: z.boolean() });
+export const HistoryReleaseConfigSchema = z
+  .object({
+    idleMinutes: z.number().int().min(1).max(HISTORY_RELEASE_MAX_MINUTES).nullable(),
+  })
+  .strict();
 export const GeneralConfigSchema = z
   .object({
     worktreeDir: z.string(),
@@ -109,6 +130,7 @@ export const GeneralConfigSchema = z
     updateChannel: z.enum(UPDATE_CHANNELS),
     defaultAdapterId: z.string().nullable(),
     idleCompaction: IdleCompactionConfigSchema.default({ enabled: false }),
+    historyRelease: HistoryReleaseConfigSchema.default({ idleMinutes: HISTORY_RELEASE_DEFAULT_MINUTES }),
   })
   .passthrough();
 export const GeneralConfigPatchSchema = z.object({
@@ -121,5 +143,6 @@ export const GeneralConfigPatchSchema = z.object({
   updateChannel: z.enum(UPDATE_CHANNELS).optional(),
   defaultAdapterId: z.string().nullable().optional(),
   idleCompaction: IdleCompactionConfigSchema.optional(),
+  historyRelease: HistoryReleaseConfigSchema.optional(),
 });
 export type GeneralConfigPatch = z.infer<typeof GeneralConfigPatchSchema>;

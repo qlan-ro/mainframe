@@ -251,3 +251,6 @@ mod storage_failures;
 
 #[path = "chat_manager_tests_flow_golden.rs"]
 mod flow_golden;
+
+#[path = "chat_manager_tests_release.rs"]
+mod release;

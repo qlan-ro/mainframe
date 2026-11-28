@@ -1,6 +1,17 @@
 use super::transcript_ready::RestorationClaim;
 use super::*;
 
+/// Why a released history could not come back.
+#[derive(Debug)]
+enum RestoreFailure {
+    /// The chat left the registry meanwhile (offloaded or ended).
+    Gone,
+    /// The chat has no session whose transcript could be read.
+    NoTranscript,
+    /// Reading the transcript failed.
+    Unreadable,
+}
+
 struct RestoredHistory {
     canonical: Option<Vec<ChatMessage>>,
     changed: bool,
@@ -9,6 +20,19 @@ struct RestoredHistory {
 
 impl ChatLifecycleManager {
     pub(super) async fn do_load_chat(&self, chat_id: &str, mut ready: RestorationClaim) -> bool {
+        if ready.restores_released() {
+            // The cell, its worktree baseline and its history scan all
+            // outlived the release; only the history comes back.
+            let restored = self.restore_released(chat_id).await;
+            ready.finish();
+            return match restored {
+                Ok(restored) => restored.changed,
+                Err(failure) => {
+                    warn!(chat_id, reason = ?failure, "released history restore failed");
+                    false
+                }
+            };
+        }
         let restored = self.restore_chat(chat_id, &mut ready).await;
         ready.finish();
         self.seed_worktree_baseline(chat_id).await;
@@ -41,6 +65,7 @@ impl ChatLifecycleManager {
         chat_id: &str,
         ready: &mut RestorationClaim,
     ) -> Option<RestoredHistory> {
+        let read_from = self.shared.messages.lock_recover().history_epoch(chat_id);
         let prepared = self.prepare_load(chat_id).await;
         ready.track(self.get_active(chat_id));
         let (chat, effective_path) = prepared?;
@@ -56,7 +81,8 @@ impl ChatLifecycleManager {
         )
         .map(|pending| pending.fork_source);
         if own_id.is_none() && fork_source.is_none() {
-            return composed.map(|history| self.restore_snapshot(chat_id, Some(history), false));
+            return composed
+                .map(|history| self.restore_snapshot(chat_id, Some(history), false, read_from));
         }
 
         let session = self.create_restore_session(&chat, effective_path, fork_source)?;
@@ -65,9 +91,52 @@ impl ChatLifecycleManager {
             Some(history) => Some(history),
             None => history::load_session_history(chat_id, session.as_ref(), &self.shared).await,
         };
-        let mut restored = self.restore_snapshot(chat_id, history, canonical);
+        let mut restored = self.restore_snapshot(chat_id, history, canonical, read_from);
         restored.files = session.take_history_files();
         Some(restored)
+    }
+
+    /// [`Self::restore_chat`] for a chat whose history the idle release
+    /// dropped: the live cell and its CLI session stay, so the history is read
+    /// through a stateless session that never replaces the live one. An empty
+    /// history read successfully is installed too, so the chat is no longer
+    /// released; a failed read leaves it released for the caller to report.
+    async fn restore_released(&self, chat_id: &str) -> Result<RestoredHistory, RestoreFailure> {
+        let read_from = self.shared.messages.lock_recover().history_epoch(chat_id);
+        let cell = self.get_active(chat_id).ok_or(RestoreFailure::Gone)?;
+        let chat = cell.lock_recover().chat.clone();
+        // Every transcript the history needs must read: a failed read reported
+        // as an empty list, or a skipped segment, keeps the chat released.
+        let composed =
+            crate::chat_manager::compose_if_multi_complete(self.shared.deps.as_ref(), &chat).await;
+        let canonical = composed.is_none();
+        let (messages, active_from) = match composed {
+            Some(Some(composed)) => (composed.messages, composed.active_from),
+            Some(None) => return Err(RestoreFailure::Unreadable),
+            None => {
+                let session =
+                    crate::chat_manager::build_history_session(&self.shared.deps, &chat, chat_id)
+                        .ok_or(RestoreFailure::NoTranscript)?;
+                let history =
+                    history::load_session_history(chat_id, session.as_ref(), &self.shared)
+                        .await
+                        .ok_or(RestoreFailure::Unreadable)?;
+                if session.last_history_read_failed() {
+                    return Err(RestoreFailure::Unreadable);
+                }
+                history
+            }
+        };
+        if messages.is_empty() {
+            let mut cache = self.shared.messages.lock_recover();
+            cache.install_history(chat_id, read_from, messages);
+            return Ok(RestoredHistory {
+                canonical: None,
+                changed: false,
+                files: None,
+            });
+        }
+        Ok(self.restore_snapshot(chat_id, Some((messages, active_from)), canonical, read_from))
     }
 
     fn create_restore_session(
@@ -97,6 +166,7 @@ impl ChatLifecycleManager {
         chat_id: &str,
         history: Option<(Vec<ChatMessage>, usize)>,
         canonical: bool,
+        read_from: u64,
     ) -> RestoredHistory {
         let cold = self.shared.messages.lock_recover().get(chat_id).is_none();
         let window = self.shared.history_cache.take_window(chat_id);
@@ -104,7 +174,7 @@ impl ChatLifecycleManager {
         let (scan_history, cache_reloaded) = match history {
             Some((messages, active_from)) => {
                 let (messages, changed) =
-                    self.restore_loaded_history(chat_id, messages, active_from);
+                    self.restore_loaded_history(chat_id, messages, active_from, read_from);
                 // A window read from pages carries no permission gate. When the
                 // full history restores one, the client must replay to see it.
                 let gated = self.shared.permissions.lock_recover().has_pending(chat_id);
@@ -152,12 +222,17 @@ impl ChatLifecycleManager {
         chat_id: &str,
         messages: Vec<ChatMessage>,
         active_from: usize,
+        read_from: u64,
     ) -> (Vec<ChatMessage>, bool) {
         if messages.is_empty() {
             return (messages, false);
         }
-        let (messages, changed) =
-            history::restore_history(&mut self.shared.messages.lock_recover(), chat_id, messages);
+        let (messages, changed) = history::restore_history(
+            &mut self.shared.messages.lock_recover(),
+            chat_id,
+            messages,
+            read_from,
+        );
         self.shared
             .permissions
             .lock_recover()

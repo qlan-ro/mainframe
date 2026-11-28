@@ -122,6 +122,13 @@ pub enum ChatSurfaceEvent {
     ChatEnded {
         chat_id: String,
     },
+    /// The chat's in-memory history was dropped while the chat stayed (the
+    /// idle history release, or the idle offload). Observers drop what they
+    /// derived from it (the facade hub's revision log); a later resume
+    /// rebuilds it from the transcript.
+    HistoryReleased {
+        chat_id: String,
+    },
 }
 
 /// The observer trait itself. `Send + Sync` so it can be stored behind an
