@@ -21,7 +21,7 @@ With `initialWindow=true` the request does not restore the history first when th
 - a persisted transcript tail that still validates, or
 - the adapter's newest pages (Claude reads the end of the transcript, Codex asks `thread/turns/list`): the chat is idle, nothing of it is in memory and no current history snapshot exists. A stale snapshot (left by an update or by a turn the daemon never saw) counts as none; its fingerprint is read from the start of the file.
 
-The windowed `session/resume` then answers from the tail or the pages and completes the history in the background (`complete_history`). The full load compares its tail with the window it served and sends a resync only when they differ, or when it restores a pending permission, which a window read from pages never carries. When the adapter declines to page (a short Claude transcript, for one), the resume reads the whole history itself, as before.
+The windowed `session/resume` then answers from the tail or the pages and completes the history in the background (`complete_history`). The full load compares its tail with the window it served and sends a resync only when they differ, or when it restores a pending permission, which a window read from pages never carries. After a reply from pages, the loaded history is stored as the chat's persisted tail, so the next start hits it. When the adapter declines to page (a short Claude transcript, for one), the resume reads the whole history itself, as before.
 
 Restoring first would fill the history before the resume arrives, so neither faster path could answer. The provider resume that the full warm-up runs in the background does nothing for these chats: it restarts only a chat left working, and a working chat never takes these paths.
 

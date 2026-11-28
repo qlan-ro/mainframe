@@ -113,6 +113,40 @@ impl FacadeHub {
         });
     }
 
+    /// Stores the first window a cold resume would send, built from the
+    /// history the chat now holds in full. A reply answered from adapter pages
+    /// is never stored (its list was partial), so without this the restart
+    /// after a first-ever open would find no tail. Skipped when the chat holds
+    /// a pending permission or no current validation.
+    pub(crate) async fn persist_loaded_tail(
+        &self,
+        manager: &ChatManager,
+        request: &JsonRpcRequest,
+        options: ResumeOptions,
+    ) {
+        let Some((chat_id, window)) = first_window(request, options) else {
+            return;
+        };
+        let (Some(store), Some(validation)) =
+            (&self.history_tails, manager.history_validation(&chat_id))
+        else {
+            return;
+        };
+        let snapshot = manager.get_resume_snapshot(&chat_id).await;
+        if snapshot.pending.is_some() || snapshot.streaming.is_some() {
+            return;
+        }
+        let window = TailWindow {
+            window,
+            previews: options.result_previews,
+        };
+        let loaded = mainframe_chat::chat_manager::RefreshedHistory {
+            messages: snapshot.messages,
+            validation,
+        };
+        super::history_refresh::write_tail(manager, store, &chat_id, window, loaded).await;
+    }
+
     fn remember_window(&self, chat_id: &str, window: &Value, options: ResumeOptions) {
         self.remember_tail_window(
             chat_id,

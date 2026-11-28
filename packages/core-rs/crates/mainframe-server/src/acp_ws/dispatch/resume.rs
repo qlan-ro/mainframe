@@ -203,6 +203,7 @@ async fn deliver_resume(
         cache_request,
         cache_validation,
         from_cache,
+        tail_request,
         response,
         mut replay,
     } = prepare_resume(
@@ -234,7 +235,7 @@ async fn deliver_resume(
     );
     connection.clear_resume_failures(&session_id);
     if options.windowed_history {
-        prepare::complete_history(Arc::clone(&ctx.chat.chat_manager), session_id.clone());
+        prepare::complete_history(Arc::clone(ctx), session_id.clone(), tail_request);
     }
     // A cache hit leaves the log unseeded on purpose; only a resume that read
     // the transcript has the work to do.

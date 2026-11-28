@@ -13,7 +13,7 @@ use crate::acp_ws::hub::history_tail::{Manifest, TailStore, store};
 
 /// Builds the first window a cold resume would send for `refreshed`, through
 /// the same encoder a live resume uses, and stores it as the chat's tail.
-pub(super) async fn write_tail(
+pub(in crate::acp_ws::hub) async fn write_tail(
     manager: &ChatManager,
     store: &TailStore,
     chat_id: &str,
