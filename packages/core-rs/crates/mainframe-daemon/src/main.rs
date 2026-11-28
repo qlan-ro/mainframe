@@ -21,7 +21,12 @@ async fn main() {
 }
 
 async fn run_daemon() {
-    let parent_exit = watch_sidecar_parent(std::env::args().nth(1).as_deref());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let parent_exit = watch_sidecar_parent(
+        args.iter()
+            .map(String::as_str)
+            .find(|arg| arg.starts_with("--sidecar-parent-pid=")),
+    );
     let (config, paths) = match mainframe_runtime::config::get_data_dir().and_then(|config_dir| {
         let config = mainframe_runtime::config::get_config()?;
         let paths = mainframe_runtime::config::boot_paths(&config, &config_dir);
@@ -40,7 +45,11 @@ async fn run_daemon() {
     // spawn (adapters, title generation, LSP, launch, background-task probes).
     // Mutating the process env is `unsafe` under edition 2024 and this crate is
     // `#![forbid(unsafe_code)]`, so the value is passed explicitly instead.
-    let resolved_path = mainframe_runtime::ResolvedPath::resolve().await;
+    // The desktop app passes `--shell-env-resolved` when it hands over its own
+    // login-shell capture as this process's env; the probe is then skipped.
+    let shell_env_resolved =
+        mainframe_runtime::spawn_env::shell_env_resolved_arg(args.iter().map(String::as_str));
+    let resolved_path = mainframe_runtime::ResolvedPath::resolve(shell_env_resolved).await;
 
     // ensure_auth_secret(): generates + persists a secret if none exists. Env
     // mutation is `unsafe` under edition 2024, so the secret is threaded through

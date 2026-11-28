@@ -18,6 +18,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 pub mod cache;
+pub mod delta;
 
 pub type Env = HashMap<String, String>;
 
@@ -67,11 +68,15 @@ pub fn capture_login_env(shell: &str, kill_after: Duration) -> Result<Env, Strin
 }
 
 fn capture_shell_env(shell: &str, kill_after: Duration) -> Result<Env, String> {
-    let mut child = Command::new(shell)
+    let mut command = Command::new(shell);
+    command
         .args(["-lic", "env"])
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .stdin(Stdio::null())
+        .stdin(Stdio::null());
+    #[cfg(unix)]
+    own_session(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|e| format!("failed to spawn shell: {e}"))?;
 
@@ -94,7 +99,7 @@ fn capture_shell_env(shell: &str, kill_after: Duration) -> Result<Env, String> {
             Ok(Some(status)) => break status,
             Ok(None) if started.elapsed() < kill_after => std::thread::sleep(CAPTURE_POLL),
             Ok(None) => {
-                let _ = child.kill();
+                kill_tree(&mut child);
                 let _ = child.wait();
                 return Err(format!(
                     "shell still running after {}s, killed",
@@ -114,6 +119,37 @@ fn capture_shell_env(shell: &str, kill_after: Duration) -> Result<Env, String> {
     }
 
     parse_env_output(&stdout)
+}
+
+/// Start the shell as the leader of a new session, with no controlling
+/// terminal. A timeout can then kill everything its start-up files launched,
+/// and an interactive shell started from a terminal (`tauri dev`) cannot take
+/// over that terminal, matching a launch from Finder.
+#[cfg(unix)]
+fn own_session(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: the closure runs in the forked child before exec and only calls
+    // `setsid`, which is async-signal-safe and touches no shared state.
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
+/// Kill the shell and its process group (the session it leads).
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    if let Ok(pid) = libc::pid_t::try_from(child.id()) {
+        // SAFETY: plain syscall; a negative pid targets the group the child leads.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+    let _ = child.kill();
 }
 
 fn parse_env_output(raw: &[u8]) -> Result<Env, String> {
@@ -207,6 +243,45 @@ mod tests {
             started.elapsed() < Duration::from_secs(5),
             "capture outlived its kill deadline"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The group kill also takes what the shell's start-up files launched.
+    #[cfg(unix)]
+    #[test]
+    fn capture_timeout_kills_the_shells_children_too() {
+        let dir = crate::env_boot::test_support::scratch_dir("killtree");
+        let shell = dir.join("spawning-shell");
+        let pid_file = dir.join("child.pid");
+        std::fs::write(
+            &shell,
+            format!(
+                "#!/bin/sh\nsleep 30 &\necho $! > '{}'\nwait\n",
+                pid_file.display()
+            ),
+        )
+        .unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let err =
+            capture_login_env(shell.to_str().unwrap(), Duration::from_millis(500)).unwrap_err();
+        assert!(err.contains("killed"), "unexpected error: {err}");
+
+        let pid: libc::pid_t = std::fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only checks that the pid exists.
+        while unsafe { libc::kill(pid, 0) } == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "the shell's child outlived the kill"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

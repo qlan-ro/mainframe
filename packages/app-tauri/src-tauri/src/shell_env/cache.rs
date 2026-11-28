@@ -6,24 +6,25 @@
 //! changed since the capture began — editing `.zshrc` (or `/etc/paths`, …)
 //! makes the next launch wait for a fresh capture instead.
 //!
-//! The file holds the full captured env, which can include tokens the user
-//! exports from their shell profile, so it is written owner-only (0600).
+//! The file holds only what the shell adds to the app's own env (see
+//! [`super::delta`]), never session-scoped keys such as `SSH_AUTH_SOCK`, so a
+//! reboot or a launch from another terminal cannot replay stale values. That
+//! delta can still include tokens the user exports from their shell profile, so
+//! the file is written owner-only (0600).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use super::delta::{is_session_scoped, without_session_keys};
 use super::Env;
 
-/// Bump when the file layout or the meaning of a field changes.
-const CACHE_VERSION: u32 = 1;
+/// Bump when the file layout or the meaning of a field changes. 2: `env` is the
+/// shell's delta over the process env, not the full capture.
+const CACHE_VERSION: u32 = 2;
 
 pub const CACHE_FILE_NAME: &str = "shell-env.json";
-
-/// Keys that differ between two captures of an unchanged profile. Ignored when
-/// reporting what changed.
-const VOLATILE_KEYS: &[&str] = &["_", "PWD", "OLDPWD", "SHLVL"];
 
 #[derive(Serialize, Deserialize)]
 struct CacheFile {
@@ -31,13 +32,15 @@ struct CacheFile {
     shell: String,
     /// When the capture that produced `env` started, in ms since the epoch.
     captured_at_ms: u64,
+    /// What the shell added to or changed in the process env.
     env: Env,
 }
 
-/// Read a cached env for `shell`. `None` when the file is missing, unreadable,
-/// from another shell or version, has no PATH, or is older than a shell
-/// start-up file. The reason is logged.
-pub fn read(path: &Path, shell: &str, home: Option<&Path>) -> Option<Env> {
+/// Read a cached shell delta for `shell`. `None` when the file is missing,
+/// unreadable, from another shell or version, has no PATH, or is older than a
+/// shell start-up file. The reason is logged. `base` (the process env) supplies
+/// `ZDOTDIR` / `XDG_CONFIG_HOME` when the delta does not set them.
+pub fn read(path: &Path, shell: &str, home: Option<&Path>, base: &Env) -> Option<Env> {
     let raw = match std::fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
@@ -69,16 +72,23 @@ pub fn read(path: &Path, shell: &str, home: Option<&Path>) -> Option<Env> {
         tracing::warn!("cached login-shell env has no PATH");
         return None;
     }
+    let env = without_session_keys(file.env);
     let captured_at = UNIX_EPOCH + Duration::from_millis(file.captured_at_ms);
-    let zdotdir = file.env.get("ZDOTDIR").map(PathBuf::from);
-    if let Some(changed) = newer_startup_file(captured_at, home, zdotdir.as_deref()) {
+    let lookup = |key: &str| env.get(key).or_else(|| base.get(key)).map(PathBuf::from);
+    let (zdotdir, xdg_config) = (lookup("ZDOTDIR"), lookup("XDG_CONFIG_HOME"));
+    let dirs = StartupDirs {
+        home,
+        zdotdir: zdotdir.as_deref(),
+        xdg_config: xdg_config.as_deref(),
+    };
+    if let Some(changed) = newer_startup_file(captured_at, &dirs) {
         tracing::info!(
             file = %changed.display(),
             "shell start-up file changed since the cached capture; waiting for a fresh one"
         );
         return None;
     }
-    Some(file.env)
+    Some(env)
 }
 
 /// Write `env`, captured from `shell` starting at `captured_at`, atomically and
@@ -92,18 +102,24 @@ pub fn write(path: &Path, shell: &str, env: &Env, captured_at: SystemTime) -> st
         version: CACHE_VERSION,
         shell: shell.to_string(),
         captured_at_ms,
-        env: env.clone(),
+        env: without_session_keys(env.clone()),
     })
     .map_err(std::io::Error::other)?;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension(format!("json.tmp-{}", std::process::id()));
+    let tmp = tmp_path(path);
+    // A leftover temp file (a crash mid-write) would keep its old mode, so it
+    // is removed and the new one created fresh with 0600.
+    match std::fs::remove_file(&tmp) {
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err),
+        _ => {}
+    }
     {
         use std::io::Write;
         let mut options = std::fs::OpenOptions::new();
-        options.write(true).create(true).truncate(true);
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
@@ -118,14 +134,18 @@ pub fn write(path: &Path, shell: &str, env: &Env, captured_at: SystemTime) -> st
     })
 }
 
+fn tmp_path(path: &Path) -> PathBuf {
+    path.with_extension(format!("json.tmp-{}", std::process::id()))
+}
+
 /// Names of the keys whose values differ between `old` and `new`, sorted,
-/// ignoring [`VOLATILE_KEYS`]. Only names are returned so values (which can be
-/// secrets) never reach the log.
+/// ignoring session-scoped keys. Only names are returned so values (which can
+/// be secrets) never reach the log.
 pub fn changed_keys(old: &Env, new: &Env) -> Vec<String> {
     let mut keys: Vec<String> = old
         .keys()
         .chain(new.keys())
-        .filter(|k| !VOLATILE_KEYS.contains(&k.as_str()))
+        .filter(|k| !is_session_scoped(k))
         .filter(|k| old.get(*k) != new.get(*k))
         .cloned()
         .collect();
@@ -134,13 +154,18 @@ pub fn changed_keys(old: &Env, new: &Env) -> Vec<String> {
     keys
 }
 
+/// Where per-user shell start-up files live.
+struct StartupDirs<'a> {
+    home: Option<&'a Path>,
+    /// `$ZDOTDIR` (zsh), else `home`.
+    zdotdir: Option<&'a Path>,
+    /// `$XDG_CONFIG_HOME` (fish), else `home/.config`.
+    xdg_config: Option<&'a Path>,
+}
+
 /// The first shell start-up file modified after `captured_at`, if any.
-fn newer_startup_file(
-    captured_at: SystemTime,
-    home: Option<&Path>,
-    zdotdir: Option<&Path>,
-) -> Option<PathBuf> {
-    startup_files(home, zdotdir).into_iter().find(|file| {
+fn newer_startup_file(captured_at: SystemTime, dirs: &StartupDirs<'_>) -> Option<PathBuf> {
+    startup_files(dirs).into_iter().find(|file| {
         std::fs::metadata(file)
             .and_then(|m| m.modified())
             .is_ok_and(|modified| modified > captured_at)
@@ -148,9 +173,9 @@ fn newer_startup_file(
 }
 
 /// Files a login or interactive shell reads that can change the captured env.
-/// `/etc/paths.d` is listed as a directory: adding or removing an entry
-/// updates its mtime.
-fn startup_files(home: Option<&Path>, zdotdir: Option<&Path>) -> Vec<PathBuf> {
+/// `/etc/paths.d` and fish's `conf.d` are listed as directories (adding or
+/// removing an entry updates their mtime) and, for `conf.d`, with each entry.
+fn startup_files(dirs: &StartupDirs<'_>) -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = [
         "/etc/zshenv",
         "/etc/zprofile",
@@ -164,21 +189,28 @@ fn startup_files(home: Option<&Path>, zdotdir: Option<&Path>) -> Vec<PathBuf> {
     .iter()
     .map(PathBuf::from)
     .collect();
-    if let Some(home) = home {
-        let zsh_dir = zdotdir.unwrap_or(home);
-        for name in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
-            files.push(zsh_dir.join(name));
-        }
-        for name in [
-            ".bash_profile",
-            ".bash_login",
-            ".profile",
-            ".bashrc",
-            ".config/fish/config.fish",
-        ] {
-            files.push(home.join(name));
-        }
+    let Some(home) = dirs.home else {
+        return files;
+    };
+    let zsh_dir = dirs.zdotdir.unwrap_or(home);
+    for name in [".zshenv", ".zprofile", ".zshrc", ".zlogin"] {
+        files.push(zsh_dir.join(name));
     }
+    for name in [".bash_profile", ".bash_login", ".profile", ".bashrc"] {
+        files.push(home.join(name));
+    }
+    let fish = dirs
+        .xdg_config
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| home.join(".config"))
+        .join("fish");
+    files.push(fish.join("config.fish"));
+    files.push(fish.join("fish_variables"));
+    let conf_d = fish.join("conf.d");
+    if let Ok(entries) = std::fs::read_dir(&conf_d) {
+        files.extend(entries.flatten().map(|entry| entry.path()));
+    }
+    files.push(conf_d);
     files
 }
 

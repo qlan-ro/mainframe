@@ -31,8 +31,8 @@ struct Session {
 /// lifecycle deterministic regardless of insert-vs-EOF timing.
 pub struct TerminalManager {
     sessions: Mutex<HashMap<String, Session>>,
-    /// Login-shell env, read at each spawn so a refreshed capture applies to
-    /// new terminals.
+    /// What the login shell adds to the app's env, overlaid on the inherited
+    /// process env at each spawn so a refreshed capture applies to new terminals.
     shell_env: SharedEnv,
     reap_tx: Sender<String>,
     reap_rx: Mutex<Receiver<String>>,
@@ -52,11 +52,15 @@ pub fn validate_cwd(cwd: &str) -> Result<std::path::PathBuf, String> {
     Ok(canonical)
 }
 
+/// The shell to run: `SHELL` from the shell env (rarely set, since it holds only
+/// what the login shell adds), else the process `$SHELL`, else `/bin/zsh`.
 fn resolve_shell(env: &HashMap<String, String>) -> String {
     if cfg!(windows) {
         return "powershell.exe".to_string();
     }
-    env.get("SHELL").cloned().unwrap_or_else(|| "/bin/zsh".to_string())
+    env.get("SHELL")
+        .cloned()
+        .unwrap_or_else(crate::shell_env::login_shell)
 }
 
 impl TerminalManager {

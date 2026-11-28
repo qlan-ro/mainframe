@@ -11,10 +11,16 @@
 //!   up to [`DAEMON_ENV_WAIT`] for the capture, then falls back to
 //!   [`build_fallback_env`].
 //!
-//! A cached or fresh capture is handed to the sidecar flagged as resolved
-//! (`MAINFRAME_SHELL_ENV_RESOLVED=1`, see `sidecar.rs`), so the daemon uses its
-//! PATH and skips its own login-shell probe. With the fallback env the flag is
-//! removed and the daemon probes for itself.
+//! A cached or fresh capture is handed to the sidecar with the
+//! `--shell-env-resolved` launch argument (see `sidecar.rs`), so the daemon uses
+//! its PATH and skips its own login-shell probe. With the fallback env the
+//! argument is omitted and the daemon probes for itself.
+//!
+//! A capture is reduced to what the shell adds to the app's own env
+//! ([`delta::shell_delta`]), and only that delta is cached and overlaid on the
+//! live process env of each daemon or terminal spawn. Per-boot and per-terminal
+//! values (`SSH_AUTH_SOCK`, `SECURITYSESSIONID`, `TERM_SESSION_ID`, …) therefore
+//! always come from the current launch, never from an older cache.
 //!
 //! Every successful capture rewrites the cache and replaces the env new
 //! terminals use. A running daemon keeps the env it started with: when a
@@ -28,7 +34,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::shell_env::{self, build_fallback_env, cache, Env};
+use crate::shell_env::{self, build_fallback_env, cache, delta, Env};
 
 /// How long the daemon waits for a capture when there is no usable cache.
 pub const DAEMON_ENV_WAIT: Duration = Duration::from_secs(5);
@@ -79,6 +85,9 @@ pub struct EnvBootConfig {
     pub home: Option<PathBuf>,
     pub daemon_wait: Duration,
     pub kill_after: Duration,
+    /// The app's own process env. Captures are reduced to what the shell adds
+    /// to it, and the result is overlaid on this live env at each spawn.
+    pub base_env: Env,
 }
 
 impl EnvBootConfig {
@@ -91,6 +100,7 @@ impl EnvBootConfig {
             home: dirs::home_dir(),
             daemon_wait: DAEMON_ENV_WAIT,
             kill_after: shell_env::SHELL_KILL_AFTER,
+            base_env: std::env::vars().collect(),
         }
     }
 }
@@ -123,10 +133,14 @@ enum Capture {
 impl EnvBoot {
     /// Read the cache and start the background capture. Never waits for the shell.
     pub fn start(config: EnvBootConfig) -> Self {
-        let cached = config
-            .cache_path
-            .as_deref()
-            .and_then(|path| cache::read(path, &config.shell, config.home.as_deref()));
+        let cached = config.cache_path.as_deref().and_then(|path| {
+            cache::read(
+                path,
+                &config.shell,
+                config.home.as_deref(),
+                &config.base_env,
+            )
+        });
         let initial = cached.clone().unwrap_or_else(build_fallback_env);
         let inner = Arc::new(Inner {
             cached,
@@ -230,7 +244,8 @@ fn refresh(inner: &Inner, config: &EnvBootConfig) {
     let started = Instant::now();
     tracing::info!(shell = %config.shell, "resolving login-shell environment");
     let env = match shell_env::capture_login_env(&config.shell, config.kill_after) {
-        Ok(env) => env,
+        // Keep only what the shell adds; session values come from the live env.
+        Ok(captured) => delta::shell_delta(&captured, &config.base_env),
         Err(err) => {
             tracing::warn!(
                 error = %err,

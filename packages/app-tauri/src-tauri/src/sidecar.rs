@@ -21,9 +21,11 @@ const DAEMON_STOP_POLL: Duration = Duration::from_millis(50);
 const MIN_SIDECAR_BIN_BYTES: u64 = 1024;
 
 /// Tells the daemon its env is the resolved login-shell env, so it skips its own
-/// `$SHELL -lic` PATH probe. Mirrors `mainframe_runtime::spawn_env::SHELL_ENV_RESOLVED_VAR`
-/// (a separate Cargo workspace, so the name is repeated here).
-const SHELL_ENV_RESOLVED_VAR: &str = "MAINFRAME_SHELL_ENV_RESOLVED";
+/// `$SHELL -lic` PATH probe. A launch argument, not an env var, so the daemon's
+/// children (git hooks, agent CLIs, launch processes) never inherit it. Mirrors
+/// `mainframe_runtime::spawn_env::SHELL_ENV_RESOLVED_ARG` (a separate Cargo
+/// workspace, so the literal is repeated here; both sides pin it in a test).
+const SHELL_ENV_RESOLVED_ARG: &str = "--shell-env-resolved";
 
 #[derive(Debug, PartialEq, Eq)]
 enum EnvOverride {
@@ -135,8 +137,9 @@ pub struct DaemonProgram {
 pub struct SidecarConfig {
     /// The implementation-specific program to spawn.
     pub program: DaemonProgram,
-    /// Login-shell env chosen by `env_boot::EnvBoot::daemon_env` (cached,
-    /// freshly captured, or the fallback).
+    /// What the login shell adds to the app's env, chosen by
+    /// `env_boot::EnvBoot::daemon_env` (cached, freshly captured, or the
+    /// fallback). Overlaid on the inherited process env.
     /// Becomes the daemon's own env, so the daemon AND its adapter children
     /// (claude/codex) inherit the resolved PATH — closing the packaged-app
     /// "bare PATH → CLI ENOENT" gap for both impls.
@@ -167,11 +170,7 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
         cmd.env(k, v);
     }
 
-    for env_override in daemon_env_overrides(
-        config.daemon_port,
-        config.data_dir.as_deref(),
-        config.shell_env_resolved,
-    ) {
+    for env_override in daemon_env_overrides(config.daemon_port, config.data_dir.as_deref()) {
         match env_override {
             EnvOverride::Set(key, value) => {
                 cmd.env(key, value);
@@ -184,6 +183,7 @@ pub fn spawn_daemon(config: SidecarConfig) -> Result<DaemonHandle, String> {
 
     #[cfg(unix)]
     configure_parent_watch(&mut cmd);
+    configure_shell_env_handover(&mut cmd, config.shell_env_resolved);
 
     tracing::info!(
         program = %config.program.daemon_bin.display(),
@@ -208,11 +208,13 @@ fn configure_parent_watch(cmd: &mut Command) {
     cmd.arg(format!("--sidecar-parent-pid={}", std::process::id()));
 }
 
-fn daemon_env_overrides(
-    daemon_port: u16,
-    data_dir: Option<&Path>,
-    shell_env_resolved: bool,
-) -> Vec<EnvOverride> {
+fn configure_shell_env_handover(cmd: &mut Command, shell_env_resolved: bool) {
+    if shell_env_resolved {
+        cmd.arg(SHELL_ENV_RESOLVED_ARG);
+    }
+}
+
+fn daemon_env_overrides(daemon_port: u16, data_dir: Option<&Path>) -> Vec<EnvOverride> {
     let port = daemon_port.to_string();
     let mut overrides = vec![
         EnvOverride::Set("NODE_ENV", "production".to_string()),
@@ -228,12 +230,6 @@ fn daemon_env_overrides(
         )),
         None => overrides.push(EnvOverride::Remove("MAINFRAME_DATA_DIR")),
     }
-
-    overrides.push(if shell_env_resolved {
-        EnvOverride::Set(SHELL_ENV_RESOLVED_VAR, "1".to_string())
-    } else {
-        EnvOverride::Remove(SHELL_ENV_RESOLVED_VAR)
-    });
 
     overrides
 }

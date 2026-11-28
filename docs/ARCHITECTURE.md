@@ -176,10 +176,11 @@ tasks) as a function argument rather than by mutating the process
 environment: the Node daemon this replaces set `process.env.PATH` directly,
 but every crate here builds with `#![forbid(unsafe_code)]`, and mutating
 process env is `unsafe` as of Rust edition 2024. The daemon resolves it by
-probing `$SHELL -lic`, unless the desktop app spawned it with
-`MAINFRAME_SHELL_ENV_RESOLVED=1`: the app hands over its own (cached) login-shell
-capture as the sidecar's env, and the daemon takes `PATH` from that env without
-a probe, so a slow shell profile does not delay the HTTP bind.
+probing `$SHELL -lic`, unless the desktop app spawned it with the
+`--shell-env-resolved` argument: the app overlays its own (cached) login-shell
+additions on the sidecar's env, and the daemon takes `PATH` from that env
+without a probe, so a slow shell profile does not delay the HTTP bind. The
+argument is not inherited by the daemon's children.
 
 `mainframe-runtime::process` owns command construction, pipe pumps, captured
 output, process groups, and managed exit tracking. Shutdown awaits child
@@ -211,7 +212,7 @@ Rust modules under `src-tauri/src/`:
 | Module | Responsibility |
 |---|---|
 | `sidecar.rs` | Spawns and supervises the daemon child process; merges the resolved login-shell environment over the process env before spawn. Supports `MAINFRAME_EXTERNAL_DAEMON` to skip spawning and attach to a daemon the user started themselves. |
-| `env_boot.rs`, `shell_env/` | Capture the login-shell environment (`$SHELL -lic env`) on a background thread at launch, and cache the last capture in `<data dir>/shell-env.json`, so neither the window nor the daemon waits for a slow shell. A real capture is handed to the sidecar flagged as resolved, so the daemon skips its own probe. A changed environment reaches new terminals at once and the daemon on its next start. |
+| `env_boot.rs`, `shell_env/` | Capture the login-shell environment (`$SHELL -lic env`) on a background thread at launch, and cache what the shell adds to the app's env (never session values such as `SSH_AUTH_SOCK`) in `<data dir>/shell-env.json`, so neither the window nor the daemon waits for a slow shell. A real capture is handed to the sidecar flagged as resolved, so the daemon skips its own probe. A changed environment reaches new terminals at once and the daemon on its next start. |
 | `daemon_launch.rs` | Starts the sidecar off the main thread once its environment is ready, and answers `get_daemon_status` (`starting`, `running:<pid>`, `error:<reason>`) in the meantime. |
 | `commands/` | `#[tauri::command]` handlers invoked from the webview (`app_info.rs`, `auth.rs`, `daemons.rs`, `fs.rs`) — desktop-native primitives like reading files, the app's OS keychain-backed daemon token, and multi-daemon bookkeeping. |
 | `terminal/` | A native pty (embedded terminal pane in the Workspace surface). |

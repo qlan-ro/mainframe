@@ -21,6 +21,7 @@ fn config(dir: &Path, shell: &Path, daemon_wait: Duration) -> EnvBootConfig {
         home: Some(dir.join("home")),
         daemon_wait,
         kill_after: Duration::from_secs(20),
+        base_env: Env::new(),
     }
 }
 
@@ -50,6 +51,7 @@ fn read_cache(dir: &Path, shell: &Path) -> Option<Env> {
         &cache_path(dir),
         &shell.to_string_lossy(),
         Some(&dir.join("home")),
+        &Env::new(),
     )
 }
 
@@ -193,13 +195,113 @@ fn failing_shell_uses_the_fallback_without_waiting_and_caches_nothing() {
 fn quit_during_the_env_wait_never_spawns_the_daemon() {
     let dir = scratch_dir("quit");
     let shell = fake_shell(&dir, SLOW_SHELL_SECS, FRESH);
-    let boot = EnvBoot::start(config(&dir, &shell, Duration::from_millis(200)));
+    let wait = Duration::from_secs(3);
+    let boot = EnvBoot::start(config(&dir, &shell, wait));
     let slot = DaemonSlot::new();
+    let started = Instant::now();
 
-    slot.close();
-    let launched = launch_with(&slot, &boot, |_, _| panic!("spawned after quit"));
+    std::thread::scope(|scope| {
+        // No cache and a slow shell: the launch blocks in `daemon_env`.
+        let launch = scope
+            .spawn(|| launch_with(&slot, &boot, |_, _| panic!("spawned after quit")).is_none());
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!launch.is_finished(), "the launch did not wait for the env");
+        slot.close(); // quit begins while the launch is still waiting
+        assert!(started.elapsed() < wait);
+        assert!(launch.join().expect("the launch spawned the daemon"));
+    });
 
-    assert!(launched.is_none());
     assert!(slot.get().is_none());
+    assert_eq!(slot.status(), "exited");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// B1: the cache must never replay a per-boot value. With a stale cache holding
+/// `SSH_AUTH_SOCK=/old` and the live process holding `/new`, the spawned daemon
+/// sees `/new`, plus the cached shell additions and the handover argument.
+#[test]
+fn daemon_gets_the_live_ssh_agent_socket_not_the_cached_one() {
+    let dir = scratch_dir("ssh-sock");
+    let shell = fake_shell(&dir, SLOW_SHELL_SECS, FRESH);
+    let live_sock = format!(
+        "/private/tmp/com.apple.launchd.new-{}/Listeners",
+        std::process::id()
+    );
+    // Only this test reads or sets SSH_AUTH_SOCK in this test binary.
+    std::env::set_var("SSH_AUTH_SOCK", &live_sock);
+    let now_ms = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let cache_file = cache_path(&dir);
+    std::fs::create_dir_all(cache_file.parent().unwrap()).unwrap();
+    std::fs::write(
+        &cache_file,
+        format!(
+            r#"{{"version":2,"shell":"{}","captured_at_ms":{now_ms},"env":{{"PATH":"/cached/bin:/usr/bin:/bin","MF_SOURCE":"cached","SSH_AUTH_SOCK":"/old"}}}}"#,
+            shell.display()
+        ),
+    )
+    .unwrap();
+    let out = dir.join("daemon-env.txt");
+    let daemon = dir.join("fake-daemon");
+    std::fs::write(
+        &daemon,
+        format!(
+            "#!/bin/sh\n{{ env; echo \"ARGS=$*\"; }} > '{}'\n",
+            out.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&daemon, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let mut config = config(&dir, &shell, DAEMON_ENV_WAIT);
+    config.base_env = std::env::vars().collect();
+    let boot = EnvBoot::start(config);
+    let slot = DaemonSlot::new();
+    let launched = launch_with(&slot, &boot, |env, source| {
+        assert_eq!(source, EnvSource::Cached);
+        crate::sidecar::spawn_daemon(crate::sidecar::SidecarConfig {
+            program: crate::sidecar::DaemonProgram {
+                daemon_bin: daemon.clone(),
+            },
+            shell_env: env.clone(),
+            shell_env_resolved: true,
+            daemon_port: 31599,
+            data_dir: Some(dir.join("data")),
+        })
+    });
+    assert!(matches!(launched, Some(Ok(_))));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let dumped = loop {
+        if let Ok(text) = std::fs::read_to_string(&out) {
+            if text.contains("ARGS=") {
+                break text;
+            }
+        }
+        assert!(Instant::now() < deadline, "the fake daemon never ran");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let lines: Vec<&str> = dumped.lines().collect();
+    assert!(
+        lines.contains(&format!("SSH_AUTH_SOCK={live_sock}").as_str()),
+        "{dumped}"
+    );
+    assert!(!lines.contains(&"SSH_AUTH_SOCK=/old"), "{dumped}");
+    assert!(lines.contains(&"MF_SOURCE=cached"), "{dumped}");
+    assert!(
+        lines.contains(&"PATH=/cached/bin:/usr/bin:/bin"),
+        "{dumped}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.starts_with("ARGS=") && l.contains("--shell-env-resolved")),
+        "{dumped}"
+    );
+    // Terminals get the same overlay: no stale socket either.
+    assert!(!boot.shared_env().snapshot().contains_key("SSH_AUTH_SOCK"));
     let _ = std::fs::remove_dir_all(&dir);
 }
