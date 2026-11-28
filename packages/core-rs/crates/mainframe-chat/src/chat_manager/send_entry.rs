@@ -31,6 +31,9 @@ impl ChatManager {
             .handoff_locks
             .acquire(&format!("maintenance:{chat_id}"))
             .await;
+        // The user message is appended to the history below, so a history the
+        // idle release dropped comes back first.
+        self.lifecycle.restore_released_history(chat_id).await;
         if let Some(message_id) = self
             .enqueue_when_reserved(chat_id, content, attachment_ids, command.as_ref())
             .await?

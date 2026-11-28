@@ -25,7 +25,7 @@ async fn general_get_empty_body_is_the_defaults() {
     assert_eq!(
         body,
         concat!(
-            r#"{"data":{"defaultAdapterId":null,"idleCompaction":{"enabled":false},"#,
+            r#"{"data":{"defaultAdapterId":null,"historyRelease":{"idleMinutes":10},"idleCompaction":{"enabled":false},"#,
             r#""notifications":{"chat":{"attentionRequest":true,"sessionError":true,"taskComplete":true},"#,
             r#""other":{"plugin":true},"permission":{"planApproval":true,"toolRequest":true,"userQuestion":true}},"#,
             r#""updateChannel":"stable","worktreeDir":".worktrees"},"success":true}"#
@@ -40,6 +40,7 @@ async fn general_get_overlays_stored_values_and_passes_unknown_keys_through() {
     set_setting(&server, "general", "updateChannel", "prerelease").await;
     set_setting(&server, "general", "defaultAdapterId", "codex").await;
     set_setting(&server, "general", "titleGeneration.disabled", "true").await;
+    set_setting(&server, "general", "historyRelease.idleMinutes", "never").await;
     set_setting(
         &server,
         "general",
@@ -52,7 +53,7 @@ async fn general_get_overlays_stored_values_and_passes_unknown_keys_through() {
     assert_eq!(
         body,
         concat!(
-            r#"{"data":{"defaultAdapterId":"codex","idleCompaction":{"enabled":false},"#,
+            r#"{"data":{"defaultAdapterId":"codex","historyRelease":{"idleMinutes":null},"idleCompaction":{"enabled":false},"#,
             r#""notifications":{"chat":{"attentionRequest":true,"sessionError":true,"taskComplete":false},"#,
             r#""other":{"plugin":false},"permission":{"planApproval":true,"toolRequest":true,"userQuestion":false}},"#,
             r#""titleGeneration.disabled":"true","updateChannel":"prerelease","worktreeDir":"trees"},"success":true}"#
@@ -113,6 +114,14 @@ async fn general_put_rejections_have_exact_error_texts() {
         (
             json!({ "defaultAdapterId": "../x" }),
             r#"{"error":"Invalid adapter id","success":false}"#,
+        ),
+        (
+            json!({ "historyRelease": { "idleMinutes": 0 } }),
+            r#"{"error":"historyRelease.idleMinutes must be null or 1 to 1440","success":false}"#,
+        ),
+        (
+            json!({ "historyRelease": {} }),
+            r#"{"error":"Invalid request body","success":false}"#,
         ),
         (
             json!({ "notifications": { "permission": { "toolRequest": 1 } } }),
@@ -214,4 +223,24 @@ async fn general_put_rejects_a_null_notification_leaf() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(text, r#"{"error":"Invalid request body","success":false}"#);
     assert_eq!(rows(&server, "general").await, expected_rows(&[]));
+}
+
+#[tokio::test]
+async fn general_put_stores_the_history_release_and_deletes_the_default() {
+    let server = spawn_test_server(None).await;
+    for (minutes, stored) in [
+        (json!(30), Some("30")),
+        (json!(null), Some("never")),
+        (json!(10), None),
+    ] {
+        let patch = json!({ "historyRelease": { "idleMinutes": minutes } });
+        assert_eq!(
+            put_text(&server, "/api/settings/general", patch).await,
+            (StatusCode::OK, OK_EMPTY.to_string())
+        );
+        let expected: Vec<(&str, &str)> = stored
+            .map(|value| vec![("historyRelease.idleMinutes", value)])
+            .unwrap_or_default();
+        assert_eq!(rows(&server, "general").await, expected_rows(&expected));
+    }
 }

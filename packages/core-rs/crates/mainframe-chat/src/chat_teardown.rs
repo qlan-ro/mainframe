@@ -17,14 +17,15 @@ use crate::message_cache::MessageCache;
 use crate::permission_manager::PermissionManager;
 use crate::worktree_offer::WorktreeOfferRegistry;
 
-/// Which teardown is running. Every mode drops the active cell and the display
-/// overlays; the rest differs by how much of the chat outlives the call:
+/// Which teardown is running. Every mode drops the display overlays; the rest
+/// differs by how much of the chat outlives the call:
 ///
-/// | state            | Discard | Archive | End    | Offload |
-/// |------------------|---------|---------|--------|---------|
-/// | message cache    | release | release | unpin  | release |
-/// | permission state | forget  | clear   | keep   | forget  |
-/// | worktree offers  | forget  | forget  | forget | keep    |
+/// | state            | Discard | Archive | End    | Offload | ReleaseHistory |
+/// |------------------|---------|---------|--------|---------|----------------|
+/// | active cell      | drop    | drop    | drop   | drop    | keep           |
+/// | message cache    | release | release | unpin  | release | release history|
+/// | permission state | forget  | clear   | keep   | forget  | keep           |
+/// | worktree offers  | forget  | forget  | forget | keep    | keep           |
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TeardownMode {
     /// The chat row is deleted (temporary-chat discard, project removal), so
@@ -39,6 +40,10 @@ pub(crate) enum TeardownMode {
     /// The chat is still the user's live chat and reloads on next use, so its
     /// worktree offers survive. Offload runs only when no prompt is pending.
     Offload,
+    /// The idle history release: the chat keeps its cell and its CLI session,
+    /// and only its history and projection go (`message_cache/release.rs`).
+    /// Runs only when no prompt is pending.
+    ReleaseHistory,
 }
 
 pub(crate) struct ChatTeardown {
@@ -51,13 +56,18 @@ pub(crate) struct ChatTeardown {
 
 impl ChatTeardown {
     pub fn clear(&self, chat_id: &str, mode: TeardownMode) {
-        self.active_chats.remove(chat_id);
+        if mode != TeardownMode::ReleaseHistory {
+            self.active_chats.remove(chat_id);
+        }
         {
             let mut messages = self.messages.lock_recover();
             match mode {
                 TeardownMode::End => messages.unpin(chat_id),
                 TeardownMode::Discard | TeardownMode::Archive | TeardownMode::Offload => {
                     messages.release(chat_id)
+                }
+                TeardownMode::ReleaseHistory => {
+                    messages.release_history(chat_id);
                 }
             }
         }
@@ -66,10 +76,10 @@ impl ChatTeardown {
             match mode {
                 TeardownMode::Discard | TeardownMode::Offload => permissions.forget(chat_id),
                 TeardownMode::Archive => permissions.clear(chat_id),
-                TeardownMode::End => {}
+                TeardownMode::End | TeardownMode::ReleaseHistory => {}
             }
         }
-        if mode != TeardownMode::Offload {
+        if !matches!(mode, TeardownMode::Offload | TeardownMode::ReleaseHistory) {
             self.worktree_offers.forget(chat_id);
         }
         self.event_handler.clear_display_state(chat_id);

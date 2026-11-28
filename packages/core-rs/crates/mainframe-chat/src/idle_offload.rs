@@ -114,7 +114,9 @@ impl ChatOffload {
         // Step 5: release the slot.
         drop(claim);
 
-        // Step 6: broadcast.
+        // Step 6: broadcast. The chat surface drops the facade's revision log,
+        // the one copy of the history the teardown cannot reach.
+        self.lifecycle.notify_history_released(chat_id);
         info!(chat_id, "released chat");
         self.lifecycle.emit_event(DaemonEvent::ChatOffloaded {
             chat_id: chat_id.to_string(),

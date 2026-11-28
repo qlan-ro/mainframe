@@ -14,6 +14,11 @@ pub(super) async fn assemble(
     );
     let chats = chats(&bound, &resources, &quota, &facade);
     facade.attach_history_refresh(&chats);
+    let ws_clients: crate::websocket::WsClients = Arc::new(dashmap::DashMap::new());
+    chats.attach_viewers(Arc::new(crate::chat_viewers::DaemonChatViewers::new(
+        facade.clone(),
+        ws_clients.clone(),
+    )));
     chats.recover_stale_working_state();
     chats.sweep_unreferenced_fork_snapshots().await;
     let orchestration = build_orchestration(
@@ -28,6 +33,7 @@ pub(super) async fn assemble(
     let automations = automations(&bound, &resources, &chats).await;
     let plugins = plugins(&bound, &resources, &automations).await;
     let builder = context_builder(&bound, &resources)
+        .ws_clients(ws_clients)
         .facade_hub(facade)
         .chat_manager(chats)
         .orchestration(orchestration)
@@ -158,7 +164,6 @@ fn context_builder(bound: &BoundBootstrap, r: &Resources) -> crate::ctx::AppCtxB
         .auth_secret(input.auth_secret.clone())
         .resolved_path(input.resolved_path.clone())
         .tunnel_url(Arc::new(RwLock::new(None)))
-        .ws_clients(Arc::new(dashmap::DashMap::new()))
         .facade_heartbeat_interval_ms(mainframe_acp::DEFAULT_HEARTBEAT_INTERVAL_MS)
         .adapter_registry(r.adapters.clone())
         .background_tasks(r.background_tasks.clone())

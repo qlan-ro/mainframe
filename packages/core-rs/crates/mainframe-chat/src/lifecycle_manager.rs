@@ -28,6 +28,7 @@ use crate::worktree_offer::WorktreeOfferRegistry;
 mod history;
 mod interrupt;
 mod load_history;
+mod release;
 mod spawn_prep;
 mod transcript_ready;
 
@@ -721,8 +722,7 @@ impl ChatLifecycleManager {
 }
 
 /// Offload/send/history single-flight claims sharing the `Guards` above. A child
-/// module so it can see the private `Guards` without
-/// widening their visibility.
+/// module so it can see the private `Guards` without widening their visibility.
 mod flight_claims;
 
 mod session_helpers;

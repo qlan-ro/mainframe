@@ -25,6 +25,10 @@ The windowed `session/resume` then answers from the tail or the pages and comple
 
 Restoring first would fill the history before the resume arrives, so neither faster path could answer. The provider resume that the full warm-up runs in the background does nothing for these chats: it restarts only a chat left working, and a working chat never takes these paths.
 
+## Returning to a released chat
+
+A chat whose history the idle release dropped keeps its cell and its idle CLI ([spec](../specs/2026-11-28-todo-522-idle-history-release.md)). It takes the same faster paths as a chat nothing has loaded: its idle CLI writes nothing, so a validating tail or the adapter's pages can answer the first window. Every load path restores the history into the live cell without replacing the cell or its session, and a send restores it before it appends.
+
 ## Persisted tails after an update
 
 A tail validates only for the exact first-window request it was written for (`{"turns": 10}` by default) and for the history fingerprint it was written under. The fingerprint holds the daemon version and the snapshot format, so the first start after a released update misses every tail and every snapshot whatever the window. A changed window (another `historyTurns` value, or a build that changed the default) misses the same way. This is expected: the miss writes a new tail and the next start hits. The miss opens from a current snapshot when one exists, otherwise through the adapter's pages, not a whole-transcript parse.

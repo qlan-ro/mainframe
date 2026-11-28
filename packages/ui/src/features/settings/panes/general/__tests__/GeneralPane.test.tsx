@@ -14,6 +14,7 @@ beforeEach(() => {
   useSettingsStore.setState({
     general: {
       idleCompaction: { enabled: false },
+      historyRelease: { idleMinutes: 10 },
       worktreeDir: '.worktrees',
       notifications: useSettingsStore.getState().general.notifications,
       updateChannel: 'stable',

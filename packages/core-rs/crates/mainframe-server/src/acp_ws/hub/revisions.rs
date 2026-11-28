@@ -171,6 +171,24 @@ impl FacadeHub {
     pub(super) fn drop_revision_log(&self, chat_id: &str) {
         self.revisions.drop_chat(chat_id);
     }
+
+    /// `HistoryReleased` (the idle history release, or the idle offload): the
+    /// log is a full encoded copy of the history the daemon just let go of.
+    /// Dropping it is an unknown epoch to the next resume, which then replays
+    /// in full, the same as after a restart. An attached session keeps its
+    /// own stream state.
+    pub(super) fn handle_history_released(&self, chat_id: &str) {
+        self.drop_revision_log(chat_id);
+    }
+
+    /// Whether any connection has a session on the chat: a client is showing
+    /// it (the desktop attaches only the chat on screen) or awaiting its
+    /// resume.
+    pub fn is_viewing(&self, chat_id: &str) -> bool {
+        self.connections
+            .iter()
+            .any(|entry| entry.value().is_attached(chat_id))
+    }
 }
 
 #[cfg(test)]

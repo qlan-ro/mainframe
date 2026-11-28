@@ -14,6 +14,7 @@ pub(crate) struct ChatShared {
     pub(crate) queue_pauses: DashMap<String, String>,
     pub(crate) orchestration: OrchestrationSlot,
     pub(crate) history_cache: Arc<HistorySnapshotCache>,
+    pub(crate) viewers: std::sync::OnceLock<Arc<dyn crate::chat_viewers::ChatViewers>>,
     storage_errors: Mutex<HashMap<String, std::time::Instant>>,
 }
 
@@ -40,6 +41,7 @@ impl ChatShared {
             active_queue_echoes: DashMap::new(),
             queue_pauses: DashMap::new(),
             orchestration: OrchestrationSlot::default(),
+            viewers: std::sync::OnceLock::new(),
             storage_errors: Mutex::new(HashMap::new()),
         })
     }
@@ -96,6 +98,11 @@ impl ChatShared {
         if removed > 0 {
             info!(chat_id, removed, "cleared queued refs for exited chat");
         }
+    }
+
+    /// Whether a client is viewing the chat (`chat_viewers.rs`).
+    pub(crate) fn is_viewed(&self, chat_id: &str) -> bool {
+        self.viewers.get().is_some_and(|v| v.is_viewed(chat_id))
     }
 
     /// The live registry cell for `chat_id`, if the chat is active.

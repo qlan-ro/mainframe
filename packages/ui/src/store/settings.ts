@@ -26,6 +26,7 @@ function mergeGeneral(current: GeneralConfig, patch: GeneralConfigPatch): Genera
     ...current,
     ...patch,
     idleCompaction: { ...current.idleCompaction, ...patch.idleCompaction },
+    historyRelease: { ...current.historyRelease, ...patch.historyRelease },
     notifications: {
       chat: { ...current.notifications.chat, ...patch.notifications?.chat },
       permission: { ...current.notifications.permission, ...patch.notifications?.permission },

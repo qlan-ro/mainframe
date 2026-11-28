@@ -37,8 +37,8 @@ use crate::ws_schemas::parse_client_event;
 /// Per-connection registry entry. Holds the outbound sink and the shared chat
 /// subscription set (read by the fan-out, written by the connection task).
 pub struct ClientHandle {
-    tx: mpsc::UnboundedSender<String>,
-    subscriptions: Arc<Mutex<HashSet<String>>>,
+    pub(crate) tx: mpsc::UnboundedSender<String>,
+    pub(crate) subscriptions: Arc<Mutex<HashSet<String>>>,
 }
 
 /// `Arc<DashMap<ClientId, ClientHandle>>` — the shared live-client registry.

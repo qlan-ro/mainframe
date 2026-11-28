@@ -482,8 +482,8 @@ Source: `routes/settings.rs`, `routes/quota.rs`.
 
 | Method & Path | Purpose | Request | Response |
 |---|---|---|---|
-| `GET /api/settings/general` | General app settings (worktree dir, update channel, default adapter, notification prefs) | — | Settings object |
-| `PUT /api/settings/general` | Update general settings | Partial patch (`worktreeDir?`, `notifications?`, ...) | `ok_empty` |
+| `GET /api/settings/general` | General app settings (worktree dir, update channel, default adapter, notification prefs, idle compaction, idle history release) | — | Settings object |
+| `PUT /api/settings/general` | Update general settings. `historyRelease.idleMinutes` takes whole minutes from 1 to 1440, or `null` for never ([idle history release](specs/2026-11-28-todo-522-idle-history-release.md)) | Partial patch (`worktreeDir?`, `notifications?`, `historyRelease?`, ...) | `ok_empty` |
 | `GET /api/settings/providers` | Per-adapter provider settings, keyed by adapter id, each with a live-resolved `resolvedExecutable` | — | `{ [adapterId]: {...} }` |
 | `PUT /api/settings/providers/{adapterId}` | Update one provider's settings | Partial patch | `ok_empty` |
 | `GET /api/adapters/{adapterId}/config-conflicts` | Detect conflicting settings between Mainframe and the adapter's own config file (e.g. Claude's `settings.json`) | — | Conflict list |

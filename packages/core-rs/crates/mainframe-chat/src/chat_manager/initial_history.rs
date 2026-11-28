@@ -79,8 +79,13 @@ impl ChatManager {
         HistorySnapshotCache::validate(session.as_ref(), context.as_deref(), validation).await
     }
 
+    /// A chat whose first window may come from disk (a persisted tail or the
+    /// adapter's pages). A live CLI rules it out, except on a chat whose
+    /// history the idle release dropped: its idle CLI is not writing, so a
+    /// return opens the way a first open does.
     pub(super) fn initial_history_eligible(&self, chat_id: &str) -> bool {
-        !self.is_chat_running(chat_id) && self.idle_history_eligible(chat_id)
+        (!self.is_chat_running(chat_id) || self.lifecycle.history_released(chat_id))
+            && self.idle_history_eligible(chat_id)
     }
 
     /// A chat whose history may be cached from disk now: no turn in flight and

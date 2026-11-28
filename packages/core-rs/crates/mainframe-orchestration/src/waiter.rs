@@ -1,8 +1,14 @@
 //! Event-driven blocking waits. A waiter subscribes to the daemon broadcast
 //! *before* its first state read, then re-reads only on an event for a chat it
 //! watches (or after the receiver lagged). There is no periodic poll.
+//!
+//! Every wait registers the chats it watches for as long as it runs
+//! ([`is_watched`]): the idle history release keeps a watched chat's history,
+//! which the waiting agent is about to read.
 
+use std::collections::HashMap;
 use std::future::Future;
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use mainframe_types::events::DaemonEvent;
@@ -13,6 +19,48 @@ use tokio_util::sync::CancellationToken;
 
 use crate::calls::CallCtx;
 use crate::service::OrchestrationService;
+
+/// How many running waits watch each chat.
+static WATCHED: LazyLock<Mutex<HashMap<String, usize>>> = LazyLock::new(Mutex::default);
+
+/// Whether a running wait (`chat_wait`, a task wait, the external MCP wait)
+/// watches the chat.
+pub fn is_watched(chat_id: &str) -> bool {
+    watched().contains_key(chat_id)
+}
+
+fn watched() -> std::sync::MutexGuard<'static, HashMap<String, usize>> {
+    WATCHED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// One wait's registration, removed when the wait ends however it ends.
+struct Watching(Vec<String>);
+
+impl Watching {
+    fn new(chat_ids: &[String]) -> Self {
+        let mut watched = watched();
+        for id in chat_ids {
+            *watched.entry(id.clone()).or_default() += 1;
+        }
+        Self(chat_ids.to_vec())
+    }
+}
+
+impl Drop for Watching {
+    fn drop(&mut self) {
+        let mut watched = watched();
+        for id in &self.0 {
+            if let Some(count) = watched.get_mut(id) {
+                *count -= 1;
+                if *count == 0 {
+                    watched.remove(id);
+                }
+            }
+        }
+    }
+}
 
 pub enum WaitEnd<T> {
     Matched(T),
@@ -96,6 +144,7 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Option<T>>,
 {
+    let _watching = Watching::new(watched);
     let deadline = Instant::now() + timeout;
     loop {
         if let Some(found) = probe().await {
@@ -115,3 +164,7 @@ where
         }
     }
 }
+
+#[cfg(test)]
+#[path = "waiter_tests.rs"]
+mod tests;

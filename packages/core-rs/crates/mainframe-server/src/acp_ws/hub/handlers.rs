@@ -239,6 +239,7 @@ impl ChatSurface for FacadeHub {
             }
             ChatSurfaceEvent::Usage { chat_id, usage } => self.handle_usage(&chat_id, &usage),
             ChatSurfaceEvent::ChatEnded { chat_id } => self.handle_chat_ended(&chat_id),
+            ChatSurfaceEvent::HistoryReleased { chat_id } => self.handle_history_released(&chat_id),
         }
     }
 }

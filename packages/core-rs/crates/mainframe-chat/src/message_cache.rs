@@ -16,6 +16,8 @@ pub struct MessageCache {
     /// Per-chat incremental-display-projection state: a display projector plus
     /// its mutation journal. See `projection.rs`.
     projections: HashMap<String, projection::ProjectionSlot>,
+    /// Pinned chats whose history the idle release dropped (`release.rs`).
+    released: HashSet<String>,
     now_epoch_ms: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
@@ -32,6 +34,7 @@ impl MessageCache {
     /// recovery clear: the chat is still in the registry, so a bare `delete`
     /// without `unpin` would let `evict_if_needed` treat it as evictable).
     pub fn delete(&mut self, chat_id: &str) {
+        self.forget_release(chat_id);
         self.tool_timings.remove(chat_id);
         self.drop_projection(chat_id);
         self.generations.remove(chat_id);
@@ -50,6 +53,7 @@ impl MessageCache {
     /// Unpin `chat_id` without touching its cache entry (`end_chat`: the
     /// registry cell goes, but the cache stays, now evictable).
     pub(crate) fn unpin(&mut self, chat_id: &str) {
+        self.forget_release(chat_id);
         self.pinned.remove(chat_id);
     }
 
@@ -72,6 +76,9 @@ impl MessageCache {
     /// whole transcript, and `evict_if_needed` is the only bound, applied
     /// across chats rather than within one.
     pub fn append(&mut self, chat_id: &str, mut message: ChatMessage) {
+        if self.skips_released_append(chat_id) {
+            return;
+        }
         self.tool_timings
             .entry(chat_id.to_owned())
             .or_default()
@@ -271,3 +278,5 @@ mod history_timing_tests;
 mod history;
 
 mod projection;
+
+mod release;

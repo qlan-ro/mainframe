@@ -35,6 +35,7 @@ pub mod attention_request;
 pub mod chat_cwd;
 pub mod chat_manager;
 pub mod chat_surface;
+pub mod chat_viewers;
 
 mod chat_teardown;
 pub mod config_manager;
@@ -50,6 +51,7 @@ pub mod handoff;
 mod idle_compaction;
 mod idle_compaction_history;
 pub mod idle_offload;
+pub mod idle_release;
 pub mod idle_scanner;
 pub mod lifecycle_manager;
 pub mod message_cache;

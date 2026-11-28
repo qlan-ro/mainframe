@@ -66,8 +66,14 @@ impl ChatManager {
                 collab.lifecycle.clone(),
                 teardown.clone(),
             ));
+        let releaser = Arc::new(crate::idle_release::ChatRelease::new(
+            shared.clone(),
+            collab.lifecycle.clone(),
+            teardown.clone(),
+        ));
         let mut idle_scanner =
-            crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader);
+            crate::idle_scanner::IdleSessionScanner::new(shared.active_chats.clone(), offloader)
+                .with_releaser(releaser);
         idle_scanner.start();
 
         Self {
@@ -169,6 +175,13 @@ impl ChatManager {
         if let Some(handle) = self.compaction_scanner.lock_recover().take() {
             handle.abort();
         }
+    }
+
+    /// Attach the viewer seam the idle history release consults
+    /// (`chat_viewers.rs`). First attachment wins.
+    pub fn attach_viewers(&self, viewers: Arc<dyn crate::chat_viewers::ChatViewers>) {
+        /* expected */
+        let _ = self.shared.viewers.set(viewers); // First attachment wins.
     }
 
     /// Exposed for tests — runs one idle-eviction pass immediately. The scanner

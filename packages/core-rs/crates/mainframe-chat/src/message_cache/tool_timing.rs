@@ -23,11 +23,15 @@ impl MessageCache {
             pinned: HashSet::new(),
             tool_timings: HashMap::new(),
             projections: HashMap::new(),
+            released: HashSet::new(),
             now_epoch_ms,
         }
     }
 
     pub(crate) fn append_live(&mut self, chat_id: &str, session: &str, message: ChatMessage) {
+        if self.skips_released_append(chat_id) {
+            return;
+        }
         let now = (self.now_epoch_ms)().min(MAX_EPOCH_MS);
         let store = self.tool_timings.entry(chat_id.to_owned()).or_default();
         store.observe(session, &message.content, now);

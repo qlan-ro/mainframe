@@ -9,6 +9,13 @@ struct RestoredHistory {
 
 impl ChatLifecycleManager {
     pub(super) async fn do_load_chat(&self, chat_id: &str, mut ready: RestorationClaim) -> bool {
+        if ready.restores_released() {
+            // The cell, its worktree baseline and its history scan all
+            // outlived the release; only the history comes back.
+            let restored = self.restore_released(chat_id).await;
+            ready.finish();
+            return restored.is_some_and(|restored| restored.changed);
+        }
         let restored = self.restore_chat(chat_id, &mut ready).await;
         ready.finish();
         self.seed_worktree_baseline(chat_id).await;
@@ -68,6 +75,24 @@ impl ChatLifecycleManager {
         let mut restored = self.restore_snapshot(chat_id, history, canonical);
         restored.files = session.take_history_files();
         Some(restored)
+    }
+
+    /// [`Self::restore_chat`] for a chat whose history the idle release
+    /// dropped: the live cell and its CLI session stay, so the history is read
+    /// through a stateless session that never replaces the live one.
+    async fn restore_released(&self, chat_id: &str) -> Option<RestoredHistory> {
+        let chat = self.get_active(chat_id)?.lock_recover().chat.clone();
+        let composed = self.compose_history(chat_id).await;
+        let canonical = composed.is_none();
+        let history = match composed {
+            Some(history) => Some(history),
+            None => {
+                let session =
+                    crate::chat_manager::build_history_session(&self.shared.deps, &chat, chat_id)?;
+                history::load_session_history(chat_id, session.as_ref(), &self.shared).await
+            }
+        };
+        Some(self.restore_snapshot(chat_id, history, canonical))
     }
 
     fn create_restore_session(
