@@ -22,6 +22,14 @@ impl StubAdapter {
     }
 }
 
+/// `load_history` for a stub session: every page, oldest first (nothing for
+/// a session that cannot page).
+pub(super) fn whole(pager: Option<&FakePages>) -> Vec<ChatMessage> {
+    pager.map_or_else(Vec::new, |pager| {
+        pager.pages.iter().rev().flatten().cloned().collect()
+    })
+}
+
 /// `load_history_window` for a stub session: its pages, or "cannot page".
 pub(super) fn window<'a>(
     pager: Option<&'a FakePages>,

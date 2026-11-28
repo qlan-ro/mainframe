@@ -52,13 +52,7 @@ impl ChatManager {
         page_turns: usize,
         enough: &(dyn Fn(&[DisplayMessage]) -> bool + Send + Sync),
     ) -> Option<AdapterWindow> {
-        if !self.initial_history_eligible(chat_id)
-            || self.shared.messages.lock_recover().get(chat_id).is_some()
-            || self.shared.history_cache.has_snapshot(chat_id).await
-        {
-            return None;
-        }
-        let session = self.history_session(chat_id)?;
+        let session = self.adapter_window_session(chat_id).await?;
         let categories = self.shared.deps.get_tool_categories(chat_id);
         let last = Probed::default();
         let probe = |raw: &[ChatMessage]| {
@@ -92,6 +86,33 @@ impl ChatManager {
             messages,
             has_older: page.older,
         })
+    }
+
+    /// Whether the first window of this open may come from the adapter's
+    /// pages: an idle chat with no history in memory and no current snapshot.
+    /// The viewing warm-up uses it to leave the full restore to the resume
+    /// that follows, as it does for a persisted tail. The adapter can still
+    /// decline to page; the resume then reads the whole history itself.
+    pub async fn adapter_window_candidate(&self, chat_id: &str) -> bool {
+        self.adapter_window_session(chat_id).await.is_some()
+    }
+
+    async fn adapter_window_session(&self, chat_id: &str) -> Option<Arc<dyn AdapterSession>> {
+        if !self.initial_history_eligible(chat_id)
+            || self.shared.messages.lock_recover().get(chat_id).is_some()
+        {
+            return None;
+        }
+        let session = self.history_session(chat_id)?;
+        // A current snapshot loads faster than any page; a stale one is no
+        // better than a miss, so only a current one sends the open to it.
+        let context = self.shared.history_context(chat_id);
+        let current = self
+            .shared
+            .history_cache
+            .has_current_snapshot(chat_id, session.as_ref(), context.as_deref())
+            .await;
+        (!current).then_some(session)
     }
 
     /// The display of the page with the idle-compaction records the normal

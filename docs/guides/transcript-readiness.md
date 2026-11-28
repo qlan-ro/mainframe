@@ -8,10 +8,26 @@ Viewing a chat waits for history and pending permissions to be restored. Metadat
 | --- | --- |
 | Omitted | Existing full lifecycle resume, including metadata work and any required provider restart |
 | `waitFor=transcript` | History, pending permissions and restoration resync are ready; the remaining lifecycle work continues in the daemon |
+| `waitFor=transcript&initialWindow=true` | As above, except it returns at once when the next windowed `session/resume` can answer its first window without the whole history (see below) |
 
 Both modes return the normal success envelope without a response body payload. Unknown chats return 404. An unsupported `waitFor` value returns 400.
 
 An older daemon ignores the query and retains its full lifecycle wait. The desktop can therefore request transcript readiness without an extra capability handshake or a failed endpoint probe.
+
+## Opens that skip the restore
+
+With `initialWindow=true` the request does not restore the history first when the first window can come from:
+
+- a persisted transcript tail that still validates, or
+- the adapter's newest pages (Claude reads the end of the transcript, Codex asks `thread/turns/list`): the chat is idle, nothing of it is in memory and no current history snapshot exists. A stale snapshot (left by an update or by a turn the daemon never saw) counts as none; its fingerprint is read from the start of the file.
+
+The windowed `session/resume` then answers from the tail or the pages and completes the history in the background (`complete_history`). The full load compares its tail with the window it served and sends a resync only when they differ, or when it restores a pending permission, which a window read from pages never carries. When the adapter declines to page (a short Claude transcript, for one), the resume reads the whole history itself, as before.
+
+Restoring first would fill the history before the resume arrives, so neither faster path could answer. The provider resume that the full warm-up runs in the background does nothing for these chats: it restarts only a chat left working, and a working chat never takes these paths.
+
+## Persisted tails after an update
+
+A tail validates only for the exact first-window request it was written for (`{"turns": 10}` by default) and for the history fingerprint it was written under. The fingerprint holds the daemon version and the snapshot format, so the first start after a released update misses every tail and every snapshot whatever the window. A changed window (another `historyTurns` value, or a build that changed the default) misses the same way. This is expected: the miss writes a new tail and the next start hits. The miss opens from a current snapshot when one exists, otherwise through the adapter's pages, not a whole-transcript parse.
 
 ## Ordering
 

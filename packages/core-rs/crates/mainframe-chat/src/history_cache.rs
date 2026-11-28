@@ -128,15 +128,6 @@ impl HistorySnapshotCache {
         }
     }
 
-    /// Whether a snapshot file exists for `chat_id`, valid or not. A cheap
-    /// stand-in for a hit: a stale one costs the full read it would have cost
-    /// anyway, a missing one is what paged reads are for.
-    pub(crate) async fn has_snapshot(&self, chat_id: &str) -> bool {
-        tokio::fs::metadata(self.snapshot_path(chat_id))
-            .await
-            .is_ok()
-    }
-
     pub(crate) fn mark_window(&self, chat_id: &str, marker: Vec<crate::window_marker::Mark>) {
         let mut windows = self.windows.lock().unwrap_or_else(|e| e.into_inner());
         if windows.len() >= self.max_snapshots
@@ -178,6 +169,10 @@ impl HistorySnapshotCache {
         chat_id: &str,
         expected: &HistoryFingerprint,
     ) -> Option<Snapshot> {
+        // A stale snapshot is told from its first bytes, not a whole read.
+        if self.peek_fingerprint(chat_id).await.as_ref() != Some(expected) {
+            return None;
+        }
         let bytes = tokio::fs::read(self.snapshot_path(chat_id)).await.ok()?;
         let snapshot: Snapshot =
             match tokio::task::spawn_blocking(move || serde_json::from_slice(&bytes))
@@ -334,3 +329,6 @@ enum SnapshotWriteError {
 
 #[path = "history_cache_load.rs"]
 mod load;
+
+#[path = "history_cache_peek.rs"]
+mod peek;

@@ -254,7 +254,7 @@ impl AdapterSession for StubSession {
         ContextFiles::default()
     }
     fn load_history(&self) -> BoxFuture<'_, Result<Vec<ChatMessage>, AdapterError>> {
-        Box::pin(async { Ok(Vec::new()) })
+        Box::pin(async { Ok(paged::whole(self.pager.as_deref())) })
     }
     fn load_history_window<'a>(&'a self, req: WindowRequest<'a>) -> HistoryPageFuture<'a> {
         paged::window(self.pager.as_deref(), req)

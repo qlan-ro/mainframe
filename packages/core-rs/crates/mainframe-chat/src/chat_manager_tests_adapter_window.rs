@@ -98,25 +98,61 @@ async fn a_chat_already_in_the_cache_is_not_rebuilt_from_pages() {
     assert!(session.pager.requests.lock().unwrap().is_empty());
 }
 
-#[tokio::test]
-async fn a_snapshot_keeps_serving_instead_of_pages() {
-    let dir = tempfile::tempdir().unwrap();
-    let session = session(pages(2, 5));
+/// A manager over `transcript` whose snapshot cache lives in `cache`, and its
+/// session, which pages `pages(2, 5)`.
+fn snapshot_manager(
+    cache: &std::path::Path,
+    transcript: &std::path::Path,
+) -> (Arc<FakeSession>, ChatManager) {
+    let session = Arc::new(FakeSession {
+        pager: FakePages {
+            pages: pages(2, 5),
+            ..Default::default()
+        },
+        history: vec![message("whole")],
+        history_sources: vec![transcript.to_path_buf()],
+        ..Default::default()
+    });
     let (deps, _) = manager(Arc::clone(&session));
-    deps.set_history_cache_dir(&dir.path().join("cache").to_string_lossy());
-    let manager = ChatManager::new(deps);
-    tokio::fs::create_dir_all(dir.path().join("cache")).await.unwrap();
-    assert!(
-        manager.adapter_first_window("c1", 4).await.is_some(),
-        "without a snapshot the pages serve"
-    );
-    session.pager.requests.lock().unwrap().clear();
-    tokio::fs::write(dir.path().join("cache").join("c1.json"), "{}")
-        .await
-        .unwrap();
+    deps.set_history_cache_dir(&cache.to_string_lossy());
+    (session, ChatManager::new(deps))
+}
 
+/// Writes the snapshot a full load leaves behind, as a previous run would.
+async fn write_snapshot(cache: &std::path::Path, transcript: &std::path::Path) {
+    let (_, manager) = snapshot_manager(cache, transcript);
+    manager.get_messages("c1").await;
+    manager.shared.history_cache.flush().await;
+    manager.dispose();
+}
+
+#[tokio::test]
+async fn a_current_snapshot_keeps_serving_instead_of_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let (cache, transcript) = (dir.path().join("cache"), dir.path().join("session.jsonl"));
+    tokio::fs::write(&transcript, "{}\n").await.unwrap();
+    write_snapshot(&cache, &transcript).await;
+    let (session, manager) = snapshot_manager(&cache, &transcript);
+
+    assert!(!manager.adapter_window_candidate("c1").await);
     assert!(manager.adapter_first_window("c1", 4).await.is_none());
     assert!(session.pager.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_stale_snapshot_lets_the_pages_serve() {
+    let dir = tempfile::tempdir().unwrap();
+    let (cache, transcript) = (dir.path().join("cache"), dir.path().join("session.jsonl"));
+    tokio::fs::write(&transcript, "{}\n").await.unwrap();
+    write_snapshot(&cache, &transcript).await;
+    // A turn the daemon never saw (or an update) leaves the snapshot stale:
+    // reading it would only lead to the full parse.
+    tokio::fs::write(&transcript, "{}\n{}\n").await.unwrap();
+    let (session, manager) = snapshot_manager(&cache, &transcript);
+
+    assert!(manager.adapter_window_candidate("c1").await);
+    assert!(manager.adapter_first_window("c1", 4).await.is_some());
+    assert_eq!(*session.pager.requests.lock().unwrap(), [0]);
 }
 
 #[derive(Default)]
@@ -132,9 +168,13 @@ impl crate::chat_surface::ChatSurface for Resyncs {
 /// A chat whose pages are `pages(3, 5)` and whose whole history is `full`,
 /// opened through a window and then loaded in full, as a resume does.
 async fn resyncs_after_window_then_load(full: Vec<ChatMessage>) -> usize {
+    resyncs_after_paged_load(pages(3, 5), full).await
+}
+
+async fn resyncs_after_paged_load(pages: Vec<Vec<ChatMessage>>, full: Vec<ChatMessage>) -> usize {
     let session = Arc::new(FakeSession {
         pager: FakePages {
-            pages: pages(3, 5),
+            pages,
             ..Default::default()
         },
         history: full,
@@ -161,6 +201,24 @@ async fn a_full_load_that_differs_from_the_window_resyncs() {
     full.push(message("late"));
 
     assert_eq!(resyncs_after_window_then_load(full).await, 1);
+}
+
+#[tokio::test]
+async fn a_full_load_that_restores_a_permission_gate_resyncs_even_when_the_window_matches() {
+    // The newest message is a tool call nothing answered: the full load
+    // restores it as a pending gate, which a window from pages never carries.
+    let mut full: Vec<_> = (0..15).map(|n| message(&format!("m{n}"))).collect();
+    full[14] = serde_json::from_value(json!({"id":"m14","chatId":"c1","type":"assistant",
+        "timestamp":"2026-11-27T00:00:00Z",
+        "content":[{"type":"tool_use","id":"pending-call","name":"Bash","input":{"command":"pwd"}}]}))
+    .unwrap();
+    let pages = vec![
+        full[10..].to_vec(),
+        full[5..10].to_vec(),
+        full[..5].to_vec(),
+    ];
+
+    assert_eq!(resyncs_after_paged_load(pages, full).await, 1);
 }
 
 #[path = "chat_manager_tests_claude_tail.rs"]
