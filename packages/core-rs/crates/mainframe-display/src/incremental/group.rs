@@ -19,9 +19,9 @@ pub(crate) struct Group {
     /// condition that makes it eligible to absorb a merge, a tool result, or
     /// a duration-marker patch.
     pub(crate) mergeable: bool,
-    /// `None` when conversion suppressed this group (an orphan tool_result)
-    /// or a display-id duplicate dropped it.
-    pub(crate) display: Option<DisplayMessage>,
+    /// The group's container, or where it lives once settled. See
+    /// [`DisplaySlot`].
+    pub(crate) display: DisplaySlot,
     /// This group's ordinal in the materialized list, i.e. its position
     /// among groups with `display.is_some()`. Recomputed after every fold.
     pub(crate) ordinal: Option<usize>,
@@ -34,6 +34,77 @@ pub(crate) struct Group {
     /// The `turnDurationMs` value a later system marker patched onto this
     /// group, if any — reapplied when this group is re-converted in place.
     pub(crate) duration_override: Option<Value>,
+}
+
+/// Where one group's container lives.
+///
+/// The projector keeps a single copy of every container. A freshly folded
+/// group owns its container until the call ends; then the container moves
+/// into the projector's `DisplaySnapshot` list at the group's ordinal and the
+/// group keeps only `Parked`. A later in-place patch moves it back out
+/// (`projector/park.rs`) for the length of that call. The accessors below
+/// therefore see only owned containers: a parked group must be unparked
+/// before its container is read or patched.
+pub(crate) enum DisplaySlot {
+    /// No container: conversion suppressed this group (an orphan
+    /// tool_result) or a display-id duplicate dropped it.
+    None,
+    /// The group holds its container for the length of the current call.
+    Owned(DisplayMessage),
+    /// The container lives in the snapshot list at this group's ordinal.
+    Parked,
+}
+
+impl DisplaySlot {
+    /// Whether the group has a container, wherever it lives.
+    pub(crate) fn is_present(&self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    pub(crate) fn owned(&self) -> Option<&DisplayMessage> {
+        match self {
+            Self::Owned(display) => Some(display),
+            Self::None | Self::Parked => None,
+        }
+    }
+
+    pub(crate) fn owned_mut(&mut self) -> Option<&mut DisplayMessage> {
+        match self {
+            Self::Owned(display) => Some(display),
+            Self::None | Self::Parked => None,
+        }
+    }
+
+    /// Take an owned container, leaving `None`. A parked slot is untouched.
+    pub(crate) fn take_owned(&mut self) -> Option<DisplayMessage> {
+        if !matches!(self, Self::Owned(_)) {
+            return None;
+        }
+        match std::mem::replace(self, Self::None) {
+            Self::Owned(display) => Some(display),
+            Self::None | Self::Parked => None,
+        }
+    }
+
+    /// The container's id: from the slot when owned, else from `parked` at
+    /// `ordinal`.
+    pub(crate) fn id<'a>(
+        &'a self,
+        ordinal: Option<usize>,
+        parked: &'a [DisplayMessage],
+    ) -> Option<&'a str> {
+        match self {
+            Self::Owned(display) => Some(&display.id),
+            Self::Parked => parked.get(ordinal?).map(|display| display.id.as_str()),
+            Self::None => None,
+        }
+    }
+}
+
+impl From<Option<DisplayMessage>> for DisplaySlot {
+    fn from(display: Option<DisplayMessage>) -> Self {
+        display.map_or(Self::None, Self::Owned)
+    }
 }
 
 /// Binary-search `groups` for the one whose `raw_range` contains `idx`.
@@ -134,10 +205,11 @@ pub(crate) fn rebuild_display_owner(
     display_owner: &mut HashMap<String, usize>,
     groups: &[Group],
     from: usize,
+    parked: &[DisplayMessage],
 ) {
     for (idx, group) in groups.iter().enumerate().skip(from) {
-        if let Some(display) = group.display.as_ref() {
-            display_owner.insert(display.id.clone(), idx);
+        if let Some(id) = group.display.id(group.ordinal, parked) {
+            display_owner.insert(id.to_string(), idx);
         }
     }
 }
@@ -150,7 +222,7 @@ mod tests {
         Group {
             raw_range: range,
             mergeable: false,
-            display: None,
+            display: DisplaySlot::None,
             ordinal: None,
             claimed_tool_ids: Vec::new(),
             late_results: Default::default(),

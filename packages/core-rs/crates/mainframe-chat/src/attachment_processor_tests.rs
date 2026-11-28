@@ -52,7 +52,7 @@ fn image_becomes_inline_content_and_image_input() {
         out.message_content[0],
         MessageContent::Leaf(LeafContent::Image {
             media_type: "image/png".to_string(),
-            data: "BASE64DATA".to_string(),
+            data: "BASE64DATA".into(),
             parent_tool_use_id: None,
         })
     );

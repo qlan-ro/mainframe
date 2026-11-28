@@ -8,6 +8,8 @@ mod presentation_equivalence;
 mod random_sequence;
 #[path = "incremental_tests_scaling.rs"]
 mod scaling;
+#[path = "incremental_tests_sharing.rs"]
+mod sharing;
 #[path = "incremental_tests_smoke.rs"]
 mod smoke;
 #[path = "incremental_tests_turn_equivalence.rs"]

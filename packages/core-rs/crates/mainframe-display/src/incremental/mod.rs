@@ -16,10 +16,12 @@
 //!   point.
 //! - `patches`: the `timing(id)` and `nested(index)` in-place patches, with
 //!   the nested patch's counted fallback to a rewind.
-//! - `ordinals`: renumbering and snapshot sync once a call's groups settle.
+//! - `ordinals`: renumbering once a call's groups settle.
 //! - `post_process`: subject backfill and per-group tool-call timing for a
 //!   freshly folded tail.
-//! - `projector`: wires the above into `DisplayProjector::project`.
+//! - `projector`: wires the above into `DisplayProjector::project`;
+//!   `projector/park` keeps one copy of every container, in the snapshot list
+//!   consumers read, moving a settled one out only while a call patches it.
 
 mod fold;
 mod group;

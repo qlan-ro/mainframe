@@ -48,7 +48,7 @@ fn reference(chat_id: &str, agent_id: Option<&str>, update: &mut SessionUpdate) 
                     source_id,
                     hash.finish()
                 ));
-                data.clear();
+                *data = mainframe_types::shared_str::SharedStr::default();
             }
             index += 1;
         }

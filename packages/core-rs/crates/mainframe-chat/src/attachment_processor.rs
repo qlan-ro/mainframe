@@ -26,7 +26,7 @@ pub fn process_attachments(attachments: &[StoredAttachment]) -> ProcessedAttachm
                 out.message_content
                     .push(MessageContent::Leaf(LeafContent::Image {
                         media_type: attachment.media_type.clone(),
-                        data: attachment.data.clone(),
+                        data: attachment.data.as_str().into(),
                         parent_tool_use_id: None,
                     }));
             }

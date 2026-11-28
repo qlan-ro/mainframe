@@ -25,10 +25,10 @@ pub(super) fn emit_display_for(
         deps.display_projector(chat_id)
     });
     // The streaming rule reads only the current last container (ordinal
-    // `len - 1`), via the snapshot's cheap `with_mut` peek — never a full
+    // `len - 1`), via the snapshot's cheap `read` peek — never a full
     // `materialize()` clone of settled history.
     let streaming = overlay.as_ref().and_then(|o| {
-        let last = delta.snapshot.with_mut(|list| list.last().cloned());
+        let last = delta.snapshot.read(|list| list.last().cloned());
         streaming_leaf_kind(Some(o), last.as_ref())
     });
     chat_surface::notify(

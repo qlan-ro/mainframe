@@ -9,7 +9,7 @@ fn task_group(ordinal_tag: &str, items: Vec<TaskProgressItem>) -> Group {
     Group {
         raw_range: 0..1,
         mergeable: true,
-        display: Some(DisplayMessage {
+        display: super::super::group::DisplaySlot::Owned(DisplayMessage {
             id: ordinal_tag.to_string(),
             chat_id: "c".to_string(),
             r#type: DisplayMessageType::Assistant,
@@ -50,7 +50,7 @@ fn update_item(task_id: &str) -> TaskProgressItem {
 
 fn progress_items(group: &Group) -> Vec<TaskProgressItem> {
     let DisplayContent::Node(mainframe_types::display::DisplayNode::TaskProgress { items }) =
-        &group.display.as_ref().unwrap().content[0]
+        &group.display.owned().unwrap().content[0]
     else {
         panic!("expected task progress");
     };
@@ -64,6 +64,7 @@ fn backfill_tail_continues_a_scope_seeded_from_the_frozen_prefix() {
         vec![create_item("1", "Seeded task")],
     )
     .display
+    .take_owned()
     .unwrap()]);
     let mut groups = vec![task_group("tail", vec![update_item("1")])];
     let mut scope_before = Vec::new();

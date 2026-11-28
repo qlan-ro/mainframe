@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+mod park;
 mod rebuild;
 mod result_dependencies;
 
@@ -12,13 +13,13 @@ use crate::{
     DisplayDelta, DisplayProjector, DisplaySnapshot, ProjectionInput, ProjectionStats, RawChange,
 };
 use mainframe_types::chat::ChatMessage;
-use mainframe_types::display::ToolCategories;
+use mainframe_types::display::{DisplayMessage, ToolCategories};
 
 use super::group::{
-    FrozenTracker, Group, group_at_raw_index, offset_groups, rebuild_display_owner,
+    DisplaySlot, FrozenTracker, Group, group_at_raw_index, offset_groups, rebuild_display_owner,
     rebuild_tool_owner,
 };
-use super::ordinals::{renumber_from, sync_snapshot, total_len};
+use super::ordinals::{renumber_from, total_len};
 use super::patches::{NestedPatchOutcome, apply_timing_patch, try_patch_nested};
 use super::post_process::{apply_timing_tail, backfill_tail};
 use super::refold::refold_range;
@@ -47,7 +48,11 @@ pub struct IncrementalProjector {
     durable_len: usize,
     result_dependencies: std::collections::BTreeMap<usize, usize>,
     initialized: bool,
+    /// The one store of settled containers: `groups` keep `Parked` and the
+    /// container sits here at the group's ordinal (`projector/park.rs`).
     snapshot: DisplaySnapshot,
+    /// Groups whose container this call moved out of `snapshot` to patch it.
+    unparked: Vec<usize>,
     stats: ProjectionStats,
 }
 
@@ -65,6 +70,7 @@ impl Default for IncrementalProjector {
             result_dependencies: Default::default(),
             initialized: false,
             snapshot: DisplaySnapshot::new(Vec::new()),
+            unparked: Vec::new(),
             stats: ProjectionStats::default(),
         }
     }
@@ -99,11 +105,7 @@ impl DisplayProjector for IncrementalProjector {
         };
         self.decoders.prepare(input.raw, rewind);
         let categories_changed = input.categories != self.categories.as_ref();
-        if !self.initialized || categories_changed {
-            return self.full_rebuild(&input);
-        }
-        let entries = input.changes.drain();
-        self.incremental(input.raw, &entries, input.overlay, input.categories)
+        self.project_parked(&mut input, categories_changed)
     }
 }
 
@@ -114,6 +116,7 @@ impl IncrementalProjector {
         entries: &[RawChange],
         overlay: Option<&ChatMessage>,
         categories: Option<&ToolCategories>,
+        parked: &mut Vec<DisplayMessage>,
     ) -> DisplayDelta {
         let had_append = entries.iter().any(|c| matches!(c, RawChange::Appended));
         let overlay_now = overlay.is_some();
@@ -127,6 +130,7 @@ impl IncrementalProjector {
         let r = apply_structural_entries(&self.groups, entries, base_r);
 
         let r = self.result_rewind(raw, entries, r);
+        self.unpark_patch_targets(entries, r, parked);
 
         let mut suffix_rebuilds = 0usize;
         let mut patched: Vec<usize> = Vec::new();
@@ -140,15 +144,14 @@ impl IncrementalProjector {
         );
 
         let (groups_rebuilt, raw_folded) =
-            self.refold_and_postprocess(raw, overlay, categories, r, &mut patched);
+            self.refold_and_postprocess(raw, overlay, categories, r, &mut patched, parked);
 
         self.categories = categories.cloned();
         self.had_overlay = overlay_now;
         self.durable_len = raw.len();
 
         let len = total_len(&self.groups);
-        let changes = self.collect_changes(r, &patched);
-        sync_snapshot(&self.snapshot, len, &changes);
+        let changes = self.settle(r, &patched, len, parked);
         self.stats = ProjectionStats {
             raw_folded,
             groups_rebuilt,
@@ -182,6 +185,7 @@ impl IncrementalProjector {
         categories: Option<&ToolCategories>,
         r: usize,
         patched: &mut Vec<usize>,
+        parked: &mut [DisplayMessage],
     ) -> (usize, usize) {
         let mut scope = scope_before(&self.scope_before, r);
         let start = refold_start(&self.groups, r);
@@ -193,10 +197,12 @@ impl IncrementalProjector {
         for id in ids_owned_by_discarded(&self.groups, r) {
             self.tool_owner.remove(&id);
         }
-        for id in display_ids_owned_by_discarded(&self.groups, r) {
+        for id in display_ids_owned_by_discarded(&self.groups, r, parked) {
             self.display_owner.remove(&id);
         }
+        self.repark_discarded(r, parked);
         self.groups.truncate(r);
+        self.unpark_duration_target(&combined, parked);
 
         let mut frozen_tool_ids = FrozenTracker::new(&self.tool_owner, r);
         let mut frozen_display_ids = FrozenTracker::new(&self.display_owner, r);
@@ -217,7 +223,7 @@ impl IncrementalProjector {
         apply_timing_tail(&mut self.groups, raw, r);
         renumber_from(&mut self.groups, r);
         rebuild_tool_owner(&mut self.tool_owner, &self.groups, r);
-        rebuild_display_owner(&mut self.display_owner, &self.groups, r);
+        rebuild_display_owner(&mut self.display_owner, &self.groups, r, parked);
 
         self.refresh_result_dependencies(raw, start);
 
@@ -280,21 +286,5 @@ impl IncrementalProjector {
             }
         }
         r
-    }
-
-    fn collect_changes(
-        &self,
-        r: usize,
-        patched: &[usize],
-    ) -> Vec<(usize, mainframe_types::display::DisplayMessage)> {
-        let mut ordinals: Vec<usize> = patched.to_vec();
-        ordinals.extend(r..self.groups.len());
-        ordinals.sort_unstable();
-        ordinals.dedup();
-        ordinals
-            .into_iter()
-            .filter_map(|gi| self.groups.get(gi))
-            .filter_map(|g| Some((g.ordinal?, g.display.clone()?)))
-            .collect()
     }
 }

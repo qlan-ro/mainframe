@@ -23,7 +23,7 @@ pub(crate) fn apply_timing_patch(
     timing: Option<ToolCallTiming>,
 ) {
     if let Some(group) = groups.get_mut(group_idx)
-        && let Some(display) = group.display.as_mut()
+        && let Some(display) = group.display.owned_mut()
     {
         apply_tool_call_timing_to_container(display, id, timing);
     }
@@ -82,7 +82,7 @@ pub(crate) fn try_patch_nested(
         &frozen,
     );
 
-    if new_display.is_some() != groups[g].display.is_some() {
+    if new_display.is_some() != groups[g].display.is_present() {
         return NestedPatchOutcome::FallBack(g);
     }
     if claimed.len() != groups[g].claimed_tool_ids.len()
@@ -93,11 +93,11 @@ pub(crate) fn try_patch_nested(
     {
         return NestedPatchOutcome::FallBack(g);
     }
-    if task_registrations_changed(groups[g].display.as_ref(), new_display.as_ref()) {
+    if task_registrations_changed(groups[g].display.owned(), new_display.as_ref()) {
         return NestedPatchOutcome::FallBack(g);
     }
 
-    groups[g].display = new_display;
+    groups[g].display = new_display.into();
     groups[g].claimed_tool_ids = claimed;
     reapply_post_processing(groups, raw, g, scope_before_g);
     NestedPatchOutcome::Patched(g)
@@ -113,18 +113,18 @@ fn reapply_post_processing(
     g: usize,
     mut scope: SubjectScope,
 ) {
-    let Some(display) = groups[g].display.as_mut() else {
+    let Some(display) = groups[g].display.owned_mut() else {
         return;
     };
     let end = groups[g].raw_range.end.min(raw.len());
     let start = groups[g].raw_range.start.min(end);
     apply_tool_call_timing(&raw[start..end], std::slice::from_mut(display));
 
-    let Some(display) = groups[g].display.take() else {
+    let Some(display) = groups[g].display.take_owned() else {
         return;
     };
     let backfilled = backfill_from(std::slice::from_ref(&display), &mut scope);
-    groups[g].display = backfilled.into_iter().next();
+    groups[g].display = backfilled.into_iter().next().into();
 }
 
 /// The ids of top-level `TaskCreate` entries a container registers — a

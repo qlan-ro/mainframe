@@ -1,10 +1,7 @@
-//! Ordinal bookkeeping and snapshot sync once a call's groups
-//! have settled: groups below the rewind point keep their ordinal (nothing
-//! about their presence changed), the newly folded tail gets numbered
-//! continuing from there, and the materialized snapshot list is patched to
-//! match without re-cloning untouched entries.
-
-use crate::DisplaySnapshot;
+//! Ordinal bookkeeping once a call's groups have settled: groups below the
+//! rewind point keep their ordinal (nothing about their presence changed),
+//! and the newly folded tail gets numbered continuing from there. Moving the
+//! settled containers into the snapshot list is `projector/park.rs`.
 
 use super::group::Group;
 
@@ -19,7 +16,7 @@ pub(crate) fn renumber_from(groups: &mut [Group], from: usize) {
         .map(|o| o + 1)
         .unwrap_or(0);
     for group in &mut groups[from..] {
-        group.ordinal = group.display.as_ref().map(|_| {
+        group.ordinal = group.display.is_present().then(|| {
             let ordinal = next;
             next += 1;
             ordinal
@@ -37,29 +34,6 @@ pub(crate) fn total_len(groups: &[Group]) -> usize {
         .unwrap_or(0)
 }
 
-/// Patch the materialized snapshot in place for every `(ordinal, display)`
-/// pair, truncating to `len` first. Pairs must be in ascending ordinal order
-/// with no gaps beyond the snapshot's current length (the fold invariant:
-/// ordinals are assigned contiguously).
-pub(crate) fn sync_snapshot(
-    snapshot: &DisplaySnapshot,
-    len: usize,
-    changes: &[(usize, mainframe_types::display::DisplayMessage)],
-) {
-    snapshot.with_mut(|list| {
-        if list.len() > len {
-            list.truncate(len);
-        }
-        for (ordinal, display) in changes {
-            if *ordinal < list.len() {
-                list[*ordinal] = display.clone();
-            } else {
-                list.push(display.clone());
-            }
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,14 +43,16 @@ mod tests {
         Group {
             raw_range: 0..1,
             mergeable: false,
-            display: has_display.then(|| DisplayMessage {
-                id: "x".to_string(),
-                chat_id: "c".to_string(),
-                r#type: DisplayMessageType::User,
-                content: Vec::new(),
-                timestamp: "t".to_string(),
-                metadata: None,
-            }),
+            display: has_display
+                .then(|| DisplayMessage {
+                    id: "x".to_string(),
+                    chat_id: "c".to_string(),
+                    r#type: DisplayMessageType::User,
+                    content: Vec::new(),
+                    timestamp: "t".to_string(),
+                    metadata: None,
+                })
+                .into(),
             ordinal,
             claimed_tool_ids: Vec::new(),
             late_results: Default::default(),
