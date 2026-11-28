@@ -37,22 +37,24 @@ fn seed_cache(dir: &Path, shell: &Path) {
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
     .collect();
-    cache::write(
-        &cache_path(dir),
-        &shell.to_string_lossy(),
-        &env,
-        SystemTime::now(),
-    )
-    .unwrap();
+    let shell = shell.to_string_lossy();
+    let scope = cache::CacheScope {
+        shell: &shell,
+        home: None,
+        base: &Env::new(),
+    };
+    cache::write(&cache_path(dir), &scope, &env, SystemTime::now()).unwrap();
 }
 
 fn read_cache(dir: &Path, shell: &Path) -> Option<Env> {
-    cache::read(
-        &cache_path(dir),
-        &shell.to_string_lossy(),
-        Some(&dir.join("home")),
-        &Env::new(),
-    )
+    let shell = shell.to_string_lossy();
+    let home = dir.join("home");
+    let scope = cache::CacheScope {
+        shell: &shell,
+        home: Some(&home),
+        base: &Env::new(),
+    };
+    cache::read(&cache_path(dir), &scope)
 }
 
 /// Launch the daemon the way `lib.rs` does, recording the env it was given.
@@ -196,7 +198,10 @@ fn quit_during_the_env_wait_never_spawns_the_daemon() {
     let dir = scratch_dir("quit");
     let shell = fake_shell(&dir, SLOW_SHELL_SECS, FRESH);
     let wait = Duration::from_secs(3);
-    let boot = EnvBoot::start(config(&dir, &shell, wait));
+    let mut config = config(&dir, &shell, wait);
+    // Kill the shell after the quit so its late capture cannot recreate `dir`.
+    config.kill_after = Duration::from_secs(1);
+    let boot = EnvBoot::start(config);
     let slot = DaemonSlot::new();
     let started = Instant::now();
 
@@ -216,9 +221,10 @@ fn quit_during_the_env_wait_never_spawns_the_daemon() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// B1: the cache must never replay a per-boot value. With a stale cache holding
-/// `SSH_AUTH_SOCK=/old` and the live process holding `/new`, the spawned daemon
-/// sees `/new`, plus the cached shell additions and the handover argument.
+/// The cache must never replay a per-boot value. With a stale cache holding
+/// `SSH_AUTH_SOCK=/old` (an agent from an earlier boot, its socket now gone)
+/// and the live process holding `/new`, the spawned daemon sees `/new`, plus
+/// the cached shell additions and the handover argument.
 #[test]
 fn daemon_gets_the_live_ssh_agent_socket_not_the_cached_one() {
     let dir = scratch_dir("ssh-sock");
@@ -227,8 +233,9 @@ fn daemon_gets_the_live_ssh_agent_socket_not_the_cached_one() {
         "/private/tmp/com.apple.launchd.new-{}/Listeners",
         std::process::id()
     );
-    // Only this test reads or sets SSH_AUTH_SOCK in this test binary.
-    std::env::set_var("SSH_AUTH_SOCK", &live_sock);
+    // Only this test reads or sets SSH_AUTH_SOCK in this test binary; the
+    // guard puts the original value back even if an assertion fails.
+    let _restore = EnvVarGuard::set("SSH_AUTH_SOCK", &live_sock);
     let now_ms = SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -258,6 +265,9 @@ fn daemon_gets_the_live_ssh_agent_socket_not_the_cached_one() {
 
     let mut config = config(&dir, &shell, DAEMON_ENV_WAIT);
     config.base_env = std::env::vars().collect();
+    // The cache answers at once; the slow capture is killed before it could
+    // rewrite the cache after `dir` is removed.
+    config.kill_after = Duration::from_secs(1);
     let boot = EnvBoot::start(config);
     let slot = DaemonSlot::new();
     let launched = launch_with(&slot, &boot, |env, source| {
@@ -303,5 +313,94 @@ fn daemon_gets_the_live_ssh_agent_socket_not_the_cached_one() {
     );
     // Terminals get the same overlay: no stale socket either.
     assert!(!boot.shared_env().snapshot().contains_key("SSH_AUTH_SOCK"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Restores an env var on drop.
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<std::ffi::OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &str) -> Self {
+        let original = std::env::var_os(key);
+        std::env::set_var(key, value);
+        Self { key, original }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.original {
+            Some(value) => std::env::set_var(self.key, value),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
+
+/// A profile that points `SSH_AUTH_SOCK` at its own agent (1Password,
+/// Secretive, gpg-agent) or exports `CLAUDE_CODE_USE_BEDROCK` keeps both: from
+/// the capture into the cache, and from the cache into the next daemon env.
+#[test]
+fn profile_set_agent_socket_and_claude_code_settings_survive_the_cache() {
+    let dir = scratch_dir("profile-values");
+    let agent = dir.join("1password-agent.sock");
+    std::fs::write(&agent, "").unwrap();
+    let lines = format!(
+        "PATH=/fresh/bin:/usr/bin:/bin\nSSH_AUTH_SOCK={}\nCLAUDE_CODE_USE_BEDROCK=1",
+        agent.display()
+    );
+    let shell = fake_shell(&dir, 0, &lines);
+    let base: Env = [(
+        "SSH_AUTH_SOCK",
+        "/private/tmp/com.apple.launchd.x/Listeners",
+    )]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+
+    let mut first = config(&dir, &shell, DAEMON_ENV_WAIT);
+    first.base_env = base.clone();
+    let boot = EnvBoot::start(first);
+    assert!(boot.wait_for_capture(Duration::from_secs(10)));
+    let cached = read_cache(&dir, &shell).expect("capture was not cached");
+    assert_eq!(cached["SSH_AUTH_SOCK"], agent.to_string_lossy());
+    assert_eq!(cached["CLAUDE_CODE_USE_BEDROCK"], "1");
+
+    // Next launch, same shell path, now slow: the daemon starts from the cache.
+    std::fs::write(
+        &shell,
+        format!("#!/bin/sh\nsleep {SLOW_SHELL_SECS}\necho PATH=/usr/bin\n"),
+    )
+    .unwrap();
+    let mut second = config(&dir, &shell, DAEMON_ENV_WAIT);
+    second.base_env = base;
+    second.kill_after = Duration::from_secs(1);
+    let (env, source) = launch(&EnvBoot::start(second));
+    assert_eq!(source, EnvSource::Cached);
+    assert_eq!(env["SSH_AUTH_SOCK"], agent.to_string_lossy());
+    assert_eq!(env["CLAUDE_CODE_USE_BEDROCK"], "1");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A launch from a terminal inherits most of the profile, so its delta is
+/// near-empty: it is used in memory but never written over the cache.
+#[test]
+fn a_launch_from_a_terminal_does_not_write_the_cache() {
+    let dir = scratch_dir("terminal-launch");
+    let shell = fake_shell(&dir, 0, FRESH);
+    let mut config = config(&dir, &shell, DAEMON_ENV_WAIT);
+    config.base_env = [("SHLVL", "1"), ("TERM_PROGRAM", "Apple_Terminal")]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+
+    let boot = EnvBoot::start(config);
+    let (env, source) = launch(&boot);
+
+    assert_eq!(source, EnvSource::LoginShell);
+    assert_eq!(env["MF_SOURCE"], "fresh");
+    assert!(!cache_path(&dir).exists());
     let _ = std::fs::remove_dir_all(&dir);
 }

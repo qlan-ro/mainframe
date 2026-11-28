@@ -105,6 +105,22 @@ impl EnvBootConfig {
     }
 }
 
+impl EnvBootConfig {
+    fn cache_scope(&self) -> cache::CacheScope<'_> {
+        cache::CacheScope {
+            shell: &self.shell,
+            home: self.home.as_deref(),
+            base: &self.base_env,
+        }
+    }
+}
+
+/// A process env inherited from a shell session (a terminal, `tauri dev`), not
+/// from launchd: shells set `SHLVL`, terminal emulators `TERM_PROGRAM`.
+fn launched_from_terminal(base: &Env) -> bool {
+    base.contains_key("SHLVL") || base.contains_key("TERM_PROGRAM")
+}
+
 #[derive(Clone)]
 pub struct EnvBoot {
     inner: Arc<Inner>,
@@ -133,14 +149,10 @@ enum Capture {
 impl EnvBoot {
     /// Read the cache and start the background capture. Never waits for the shell.
     pub fn start(config: EnvBootConfig) -> Self {
-        let cached = config.cache_path.as_deref().and_then(|path| {
-            cache::read(
-                path,
-                &config.shell,
-                config.home.as_deref(),
-                &config.base_env,
-            )
-        });
+        let cached = config
+            .cache_path
+            .as_deref()
+            .and_then(|path| cache::read(path, &config.cache_scope()));
         let initial = cached.clone().unwrap_or_else(build_fallback_env);
         let inner = Arc::new(Inner {
             cached,
@@ -264,10 +276,18 @@ fn refresh(inner: &Inner, config: &EnvBootConfig) {
         "login-shell env captured"
     );
 
-    if let Some(path) = &config.cache_path {
-        if let Err(err) = cache::write(path, &config.shell, &env, started_at) {
-            tracing::warn!(error = %err, path = %path.display(), "could not cache login-shell env");
+    match &config.cache_path {
+        // A terminal's env already holds most of what the profile sets, so the
+        // delta from such a launch would be near-empty: keep it in memory only.
+        Some(_) if launched_from_terminal(&config.base_env) => {
+            tracing::info!("launched from a terminal; not caching the login-shell env");
         }
+        Some(path) => {
+            if let Err(err) = cache::write(path, &config.cache_scope(), &env, started_at) {
+                tracing::warn!(error = %err, path = %path.display(), "could not cache login-shell env");
+            }
+        }
+        None => {}
     }
     inner.shared.replace(env.clone());
     let changed = inner

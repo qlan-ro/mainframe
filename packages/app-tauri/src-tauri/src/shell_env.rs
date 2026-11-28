@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 
 pub mod cache;
 pub mod delta;
+mod kill;
 
 pub type Env = HashMap<String, String>;
 
@@ -102,17 +103,21 @@ fn capture_shell_env(shell: &str, kill_after: Duration) -> Result<Env, String> {
                 kill_tree(&mut child);
                 let _ = child.wait();
                 return Err(format!(
-                    "shell still running after {}s, killed",
-                    kill_after.as_secs()
+                    "shell still running after {:.1}s, killed",
+                    kill_after.as_secs_f32()
                 ));
             }
             Err(e) => return Err(format!("waiting for shell failed: {e}")),
         }
     };
 
-    let stdout = out_rx
-        .recv_timeout(STDOUT_DRAIN)
-        .map_err(|_| "shell exited but its stdout stayed open".to_string())?;
+    let stdout = out_rx.recv_timeout(STDOUT_DRAIN).map_err(|_| {
+        // Something the start-up files launched still holds the pipe. The shell
+        // is gone, but its session id lives on in those processes.
+        #[cfg(unix)]
+        kill::kill_session(child.id());
+        "shell exited but its stdout stayed open".to_string()
+    })?;
 
     if !status.success() && stdout.is_empty() {
         return Err(format!("shell exited {:?} with no output", status.code()));
@@ -140,15 +145,10 @@ fn own_session(command: &mut Command) {
     }
 }
 
-/// Kill the shell and its process group (the session it leads).
+/// Kill the shell and everything in the session it leads (see [`kill`]).
 fn kill_tree(child: &mut std::process::Child) {
     #[cfg(unix)]
-    if let Ok(pid) = libc::pid_t::try_from(child.id()) {
-        // SAFETY: plain syscall; a negative pid targets the group the child leads.
-        unsafe {
-            libc::kill(-pid, libc::SIGKILL);
-        }
-    }
+    kill::kill_session(child.id());
     let _ = child.kill();
 }
 
@@ -282,6 +282,95 @@ mod tests {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    fn wait_until_gone(pid: libc::pid_t, what: &str) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        // SAFETY: signal 0 only checks that the pid exists.
+        while unsafe { libc::kill(pid, 0) } == 0 {
+            assert!(Instant::now() < deadline, "{what} outlived the kill");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[cfg(unix)]
+    fn script(dir: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    }
+
+    #[cfg(unix)]
+    fn read_pid(path: &std::path::Path) -> libc::pid_t {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Some(pid) = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| s.trim().parse().ok())
+            {
+                return pid;
+            }
+            assert!(Instant::now() < deadline, "no pid written");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// `bash -i` keeps job control on, so an `&` job gets a process group of its
+    /// own; killing the shell's group alone would leave it running.
+    #[cfg(unix)]
+    #[test]
+    fn capture_timeout_kills_bash_jobs_in_their_own_process_group() {
+        if !std::path::Path::new("/bin/bash").exists() {
+            return;
+        }
+        let dir = crate::env_boot::test_support::scratch_dir("killjob");
+        let pid_file = dir.join("job.pid");
+        let shell = script(
+            &dir,
+            "job-shell",
+            &format!(
+                "#!/bin/bash\nset -m\nsleep 30 &\necho $! > '{}'\nwait\n",
+                pid_file.display()
+            ),
+        );
+
+        let err =
+            capture_login_env(shell.to_str().unwrap(), Duration::from_millis(700)).unwrap_err();
+        assert!(err.contains("killed"), "unexpected error: {err}");
+
+        let job = read_pid(&pid_file);
+        wait_until_gone(job, "the bash job");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A shell that exits while something it started keeps stdout open: the
+    /// capture gives up after the drain wait and kills that process too.
+    #[cfg(unix)]
+    #[test]
+    fn a_process_holding_stdout_after_the_shell_exits_is_killed() {
+        let dir = crate::env_boot::test_support::scratch_dir("drain");
+        let pid_file = dir.join("holder.pid");
+        let shell = script(
+            &dir,
+            "leaky-shell",
+            &format!(
+                "#!/bin/sh\nsleep 30 &\necho $! > '{}'\necho PATH=/x\n",
+                pid_file.display()
+            ),
+        );
+
+        let err = capture_login_env(shell.to_str().unwrap(), SHELL_KILL_AFTER).unwrap_err();
+        assert!(
+            err.contains("stdout stayed open"),
+            "unexpected error: {err}"
+        );
+
+        let holder = read_pid(&pid_file);
+        wait_until_gone(holder, "the process holding stdout");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

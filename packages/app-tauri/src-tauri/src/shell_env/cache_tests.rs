@@ -6,6 +6,14 @@ use crate::env_boot::test_support::scratch_dir;
 
 const SHELL: &str = "/bin/zsh";
 
+fn scope<'a>(home: Option<&'a Path>, base: &'a Env) -> CacheScope<'a> {
+    CacheScope {
+        shell: SHELL,
+        home,
+        base,
+    }
+}
+
 fn env(pairs: &[(&str, &str)]) -> Env {
     pairs
         .iter()
@@ -34,9 +42,18 @@ fn round_trips_a_capture() {
     let path = dir.join("nested").join(CACHE_FILE_NAME);
     let home = dir.join("home");
 
-    write(&path, SHELL, &sample(), SystemTime::now()).unwrap();
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &sample(),
+        SystemTime::now(),
+    )
+    .unwrap();
 
-    assert_eq!(read(&path, SHELL, Some(&home), &Env::new()), Some(sample()));
+    assert_eq!(
+        read(&path, &scope(Some(&home), &Env::new())),
+        Some(sample())
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -47,7 +64,13 @@ fn is_written_owner_only() {
     let dir = scratch_dir("cache-mode");
     let path = dir.join(CACHE_FILE_NAME);
 
-    write(&path, SHELL, &sample(), SystemTime::now()).unwrap();
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &sample(),
+        SystemTime::now(),
+    )
+    .unwrap();
 
     let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
@@ -58,7 +81,7 @@ fn is_written_owner_only() {
 fn missing_file_reads_as_none() {
     let dir = scratch_dir("cache-missing");
     assert_eq!(
-        read(&dir.join(CACHE_FILE_NAME), SHELL, None, &Env::new()),
+        read(&dir.join(CACHE_FILE_NAME), &scope(None, &Env::new())),
         None
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -68,9 +91,14 @@ fn missing_file_reads_as_none() {
 fn ignores_a_capture_from_another_shell() {
     let dir = scratch_dir("cache-shell");
     let path = dir.join(CACHE_FILE_NAME);
-    write(&path, "/bin/bash", &sample(), SystemTime::now()).unwrap();
+    let bash = CacheScope {
+        shell: "/bin/bash",
+        home: None,
+        base: &Env::new(),
+    };
+    write(&path, &bash, &sample(), SystemTime::now()).unwrap();
 
-    assert_eq!(read(&path, SHELL, None, &Env::new()), None);
+    assert_eq!(read(&path, &scope(None, &Env::new())), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -97,7 +125,7 @@ fn ignores_malformed_other_version_and_pathless_files() {
     ] {
         std::fs::write(&path, &body).unwrap();
         assert_eq!(
-            read(&path, SHELL, None, &Env::new()),
+            read(&path, &scope(None, &Env::new())),
             None,
             "accepted {body}"
         );
@@ -111,17 +139,17 @@ fn a_profile_edited_after_the_capture_invalidates_it() {
     let path = dir.join(CACHE_FILE_NAME);
     let home = dir.join("home");
     let captured = SystemTime::now() - Duration::from_secs(3600);
-    write(&path, SHELL, &sample(), captured).unwrap();
+    write(&path, &scope(None, &Env::new()), &sample(), captured).unwrap();
 
     touch(&home.join(".zprofile"), captured - Duration::from_secs(60));
     assert_eq!(
-        read(&path, SHELL, Some(&home), &Env::new()),
+        read(&path, &scope(Some(&home), &Env::new())),
         Some(sample()),
         "an older profile invalidated the cache"
     );
 
     touch(&home.join(".zshrc"), captured + Duration::from_secs(60));
-    assert_eq!(read(&path, SHELL, Some(&home), &Env::new()), None);
+    assert_eq!(read(&path, &scope(Some(&home), &Env::new())), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -134,11 +162,11 @@ fn checks_zsh_files_in_the_cached_zdotdir() {
     let captured = SystemTime::now() - Duration::from_secs(3600);
     let mut captured_env = sample();
     captured_env.insert("ZDOTDIR".into(), zdotdir.to_string_lossy().into_owned());
-    write(&path, SHELL, &captured_env, captured).unwrap();
+    write(&path, &scope(None, &Env::new()), &captured_env, captured).unwrap();
 
     touch(&zdotdir.join(".zshrc"), captured + Duration::from_secs(60));
 
-    assert_eq!(read(&path, SHELL, Some(&home), &Env::new()), None);
+    assert_eq!(read(&path, &scope(Some(&home), &Env::new())), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -179,22 +207,28 @@ fn a_version_1_full_capture_is_ignored() {
     )
     .unwrap();
 
-    assert_eq!(read(&path, SHELL, None, &Env::new()), None);
+    assert_eq!(read(&path, &scope(None, &Env::new())), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn session_scoped_keys_are_never_written_or_read() {
-    let dir = scratch_dir("cache-session");
+fn app_owned_keys_are_never_written_or_read() {
+    let dir = scratch_dir("cache-app-keys");
     let path = dir.join(CACHE_FILE_NAME);
     let mut captured = sample();
-    captured.insert("SSH_AUTH_SOCK".into(), "/old".into());
     captured.insert("MAINFRAME_MCP_TOKEN".into(), "token".into());
+    captured.insert("SHLVL".into(), "2".into());
 
-    write(&path, SHELL, &captured, SystemTime::now()).unwrap();
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &captured,
+        SystemTime::now(),
+    )
+    .unwrap();
     let raw = std::fs::read_to_string(&path).unwrap();
     assert!(
-        !raw.contains("SSH_AUTH_SOCK") && !raw.contains("MAINFRAME_MCP_TOKEN"),
+        !raw.contains("MAINFRAME_MCP_TOKEN") && !raw.contains("SHLVL"),
         "{raw}"
     );
 
@@ -206,14 +240,84 @@ fn session_scoped_keys_are_never_written_or_read() {
     std::fs::write(
         &path,
         format!(
-            r#"{{"version":2,"shell":"{SHELL}","captured_at_ms":{now_ms},"env":{{"PATH":"/bin","SSH_AUTH_SOCK":"/old","TERM_SESSION_ID":"w0"}}}}"#
+            r#"{{"version":2,"shell":"{SHELL}","captured_at_ms":{now_ms},"env":{{"PATH":"/bin","MAINFRAME_DATA_DIR":"/x","DAEMON_PORT":"1"}}}}"#
         ),
     )
     .unwrap();
     assert_eq!(
-        read(&path, SHELL, None, &Env::new()),
+        read(&path, &scope(None, &Env::new())),
         Some(env(&[("PATH", "/bin")]))
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A profile that points `SSH_AUTH_SOCK` at 1Password, Secretive or gpg-agent
+/// keeps that socket across launches while it exists.
+#[test]
+fn a_profile_ssh_agent_socket_that_still_exists_survives() {
+    let dir = scratch_dir("cache-ssh-live");
+    let path = dir.join(CACHE_FILE_NAME);
+    let sock = dir.join("agent.sock");
+    std::fs::write(&sock, "").unwrap();
+    let mut captured = sample();
+    captured.insert("SSH_AUTH_SOCK".into(), sock.to_string_lossy().into_owned());
+
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &captured,
+        SystemTime::now(),
+    )
+    .unwrap();
+
+    assert_eq!(read(&path, &scope(None, &Env::new())), Some(captured));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `eval $(ssh-agent)` in a profile: after a reboot the cached socket is gone,
+/// so it and its agent pid are dropped and the inherited socket applies.
+#[test]
+fn a_cached_ssh_agent_socket_that_is_gone_is_dropped() {
+    let dir = scratch_dir("cache-ssh-dead");
+    let path = dir.join(CACHE_FILE_NAME);
+    let mut captured = sample();
+    captured.insert(
+        "SSH_AUTH_SOCK".into(),
+        dir.join("gone.sock").to_string_lossy().into_owned(),
+    );
+    captured.insert("SSH_AGENT_PID".into(), "4242".into());
+
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &captured,
+        SystemTime::now(),
+    )
+    .unwrap();
+
+    assert_eq!(read(&path, &scope(None, &Env::new())), Some(sample()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_exported_claude_code_setting_survives() {
+    let dir = scratch_dir("cache-bedrock");
+    let path = dir.join(CACHE_FILE_NAME);
+    let mut captured = sample();
+    captured.insert("CLAUDE_CODE_USE_BEDROCK".into(), "1".into());
+    captured.insert("CLAUDE_CODE_USE_VERTEX".into(), "0".into());
+
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &captured,
+        SystemTime::now(),
+    )
+    .unwrap();
+
+    let read_back = read(&path, &scope(None, &Env::new())).unwrap();
+    assert_eq!(read_back["CLAUDE_CODE_USE_BEDROCK"], "1");
+    assert_eq!(read_back["CLAUDE_CODE_USE_VERTEX"], "0");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -230,43 +334,88 @@ fn overwriting_keeps_the_file_owner_only_despite_a_leftover_temp_file() {
     std::fs::write(&leftover, "partial").unwrap();
     std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-    write(&path, SHELL, &sample(), SystemTime::now()).unwrap();
+    write(
+        &path,
+        &scope(None, &Env::new()),
+        &sample(),
+        SystemTime::now(),
+    )
+    .unwrap();
 
     let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o600);
     assert!(!leftover.exists());
-    assert_eq!(read(&path, SHELL, None, &Env::new()), Some(sample()));
+    assert_eq!(read(&path, &scope(None, &Env::new())), Some(sample()));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn fish_files_under_xdg_config_home_invalidate_it() {
-    let dir = scratch_dir("cache-fish");
+fn changed_keys_ignores_capture_made_keys() {
+    let old = env(&[("PATH", "/a"), ("SHLVL", "1"), ("MAINFRAME_X", "1")]);
+    let new = env(&[("PATH", "/a"), ("SHLVL", "2"), ("MAINFRAME_X", "2")]);
+    assert!(changed_keys(&old, &new).is_empty());
+}
+
+fn set_mtime(path: &Path, at: SystemTime) {
+    filetime::set_file_mtime(path, filetime::FileTime::from_system_time(at)).unwrap();
+}
+
+#[test]
+fn fish_conf_d_entries_under_xdg_config_home_invalidate_it() {
+    let dir = scratch_dir("cache-fish-confd");
     let path = dir.join(CACHE_FILE_NAME);
     let home = dir.join("home");
     let xdg = dir.join("xdg");
     let base = env(&[("XDG_CONFIG_HOME", xdg.to_str().unwrap())]);
     let captured = SystemTime::now() - Duration::from_secs(3600);
+    let before = captured - Duration::from_secs(60);
     let later = captured + Duration::from_secs(60);
-    write(&path, SHELL, &sample(), captured).unwrap();
+    let entry = xdg.join("fish/conf.d/nvm.fish");
+    touch(&entry, before);
+    set_mtime(&xdg.join("fish/conf.d"), before);
+    write(&path, &scope(Some(&home), &base), &sample(), captured).unwrap();
 
     // Under ~/.config, which XDG_CONFIG_HOME overrides: ignored.
     touch(&home.join(".config/fish/config.fish"), later);
-    assert_eq!(read(&path, SHELL, Some(&home), &base), Some(sample()));
+    assert_eq!(read(&path, &scope(Some(&home), &base)), Some(sample()));
 
-    for file in ["fish/fish_variables", "fish/conf.d/nvm.fish"] {
-        touch(&xdg.join(file), later);
-        assert_eq!(read(&path, SHELL, Some(&home), &base), None, "{file}");
-        let _ = std::fs::remove_dir_all(&xdg);
-    }
-    // Without XDG_CONFIG_HOME, ~/.config/fish counts.
-    assert_eq!(read(&path, SHELL, Some(&home), &Env::new()), None);
+    // Edit an existing conf.d entry: the directory's own mtime stays old, so
+    // only the per-entry check can catch it.
+    std::fs::write(&entry, "set -gx PATH /nvm/bin $PATH\n").unwrap();
+    set_mtime(&entry, later);
+    set_mtime(&xdg.join("fish/conf.d"), before);
+    assert_eq!(read(&path, &scope(Some(&home), &base)), None);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn changed_keys_ignores_session_scoped_keys() {
-    let old = env(&[("PATH", "/a"), ("SSH_AUTH_SOCK", "/x")]);
-    let new = env(&[("PATH", "/a"), ("SSH_AUTH_SOCK", "/y")]);
-    assert!(changed_keys(&old, &new).is_empty());
+fn only_exported_fish_universal_variables_invalidate_it() {
+    let dir = scratch_dir("cache-fish-vars");
+    let path = dir.join(CACHE_FILE_NAME);
+    let home = dir.join("home");
+    let vars = home.join(".config/fish/fish_variables");
+    std::fs::create_dir_all(vars.parent().unwrap()).unwrap();
+    let write_vars = |body: &str| {
+        std::fs::write(&vars, body).unwrap();
+        // Always newer than the capture: the mtime alone must not matter.
+        set_mtime(&vars, SystemTime::now() + Duration::from_secs(60));
+    };
+    write_vars("# fish\nSETUVAR --export EDITOR:vim\nSETUVAR fish_greeting:hi\n");
+    write(
+        &path,
+        &scope(Some(&home), &Env::new()),
+        &sample(),
+        SystemTime::now(),
+    )
+    .unwrap();
+
+    write_vars("# fish\nSETUVAR --export EDITOR:vim\nSETUVAR fish_greeting:hello\n");
+    assert_eq!(
+        read(&path, &scope(Some(&home), &Env::new())),
+        Some(sample())
+    );
+
+    write_vars("# fish\nSETUVAR --export EDITOR:nvim\nSETUVAR fish_greeting:hello\n");
+    assert_eq!(read(&path, &scope(Some(&home), &Env::new())), None);
+    let _ = std::fs::remove_dir_all(&dir);
 }

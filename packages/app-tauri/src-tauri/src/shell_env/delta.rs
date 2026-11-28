@@ -1,84 +1,45 @@
 //! What a login shell adds to the app's own environment.
 //!
 //! Only this delta is kept, cached and overlaid on child spawns; everything else
-//! comes from the live process env of the launch at hand. That keeps per-boot
-//! launchd values (`SSH_AUTH_SOCK`, `SECURITYSESSIONID`, `DISPLAY`) and the
-//! variables of whatever terminal started the app (`TERM_SESSION_ID`,
-//! `MAINFRAME_*`, `CLAUDECODE`) current, instead of replaying the ones a cached
-//! capture saw on an earlier boot or launch.
+//! comes from the live process env of the launch at hand. Values the app
+//! inherits from launchd or a terminal (`SSH_AUTH_SOCK`, `SECURITYSESSIONID`,
+//! `TERM_SESSION_ID`, …) reach the capture unchanged, so they are not part of
+//! the delta and never replay from an older cache. Values the profile sets on
+//! purpose (`SSH_AUTH_SOCK` for 1Password or gpg-agent, `CLAUDE_CODE_USE_BEDROCK`)
+//! differ from the inherited ones, so they are kept.
 
 use super::Env;
 
-/// Keys scoped to a login session, a boot, a terminal or this app's own launch.
-/// Never taken from a capture, even when a profile re-exports them.
-const SESSION_KEYS: &[&str] = &[
-    "_",
-    "PWD",
-    "OLDPWD",
-    "SHLVL",
-    "SSH_AUTH_SOCK",
-    "SSH_AGENT_PID",
-    "SSH_CLIENT",
-    "SSH_CONNECTION",
-    "SSH_TTY",
-    "SECURITYSESSIONID",
-    "DISPLAY",
-    "XAUTHORITY",
-    "LaunchInstanceID",
-    "Apple_PubSub_Socket_Render",
-    "TERM",
-    "TERM_PROGRAM",
-    "TERM_PROGRAM_VERSION",
-    "TERM_SESSION_ID",
-    "COLORTERM",
-    "TMUX",
-    "TMUX_PANE",
-    "STY",
-    "WINDOWID",
-    "WT_SESSION",
-    "CLAUDECODE",
-    "DAEMON_PORT",
-];
+/// Keys the capture itself changes (`env` runs one shell level down, in its
+/// own working directory) and keys the app owns for its daemon. Never taken
+/// from a capture.
+const NEVER_CACHED_KEYS: &[&str] = &["_", "PWD", "OLDPWD", "SHLVL", "DAEMON_PORT"];
 
-const SESSION_PREFIXES: &[&str] = &[
-    "MAINFRAME_",
-    "VITE_DAEMON_",
-    "CLAUDE_CODE_",
-    "XPC_",
-    "__CF",
-    "ITERM_",
-    "KITTY_",
-    "WEZTERM_",
-    "GHOSTTY_",
-    "ALACRITTY_",
-    "VSCODE_",
-    "LC_TERMINAL",
-    "VTE_",
-];
+const NEVER_CACHED_PREFIXES: &[&str] = &["MAINFRAME_", "VITE_DAEMON_"];
 
-/// Whether `key` is session-, boot- or terminal-scoped and so must never be
-/// taken from a (possibly cached) capture.
-pub fn is_session_scoped(key: &str) -> bool {
-    SESSION_KEYS.contains(&key) || SESSION_PREFIXES.iter().any(|p| key.starts_with(p))
+/// Whether `key` is set by the capture itself or owned by the app, and so must
+/// never be taken from a (possibly cached) capture.
+pub fn is_never_cached(key: &str) -> bool {
+    NEVER_CACHED_KEYS.contains(&key) || NEVER_CACHED_PREFIXES.iter().any(|p| key.starts_with(p))
 }
 
-/// The keys `captured` adds to or changes in `base`, minus session-scoped keys.
-/// `PATH` is always kept (when captured) so the delta states the shell's PATH
-/// explicitly even when it equals the base one. Keys the shell removed are
+/// The keys `captured` adds to or changes in `base`, minus [`is_never_cached`]
+/// keys. `PATH` is always kept (when captured) so the delta states the shell's
+/// PATH explicitly even when it equals the base one. Keys the shell removed are
 /// ignored: the base value stays.
 pub fn shell_delta(captured: &Env, base: &Env) -> Env {
     captured
         .iter()
-        .filter(|(key, _)| !is_session_scoped(key))
+        .filter(|(key, _)| !is_never_cached(key))
         .filter(|(key, value)| key.as_str() == "PATH" || base.get(*key) != Some(*value))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
 }
 
-/// `env` without session-scoped keys (for a cache file written elsewhere).
-pub fn without_session_keys(env: Env) -> Env {
+/// `env` without [`is_never_cached`] keys (for a cache file written elsewhere).
+pub fn without_never_cached(env: Env) -> Env {
     env.into_iter()
-        .filter(|(key, _)| !is_session_scoped(key))
+        .filter(|(key, _)| !is_never_cached(key))
         .collect()
 }
 
@@ -119,36 +80,78 @@ mod tests {
         assert_eq!(shell_delta(&base, &base), env(&[("PATH", "/usr/bin")]));
     }
 
+    /// Inherited launchd and terminal values pass through the shell unchanged,
+    /// so the delta drops them without any denylist.
     #[test]
-    fn drops_session_and_terminal_scoped_keys_even_when_re_exported() {
-        let base = env(&[("SSH_AUTH_SOCK", "/new")]);
-        let captured = env(&[
-            ("PATH", "/usr/bin"),
-            ("SSH_AUTH_SOCK", "/old"),
+    fn inherited_session_values_are_not_part_of_the_delta() {
+        let inherited = [
+            (
+                "SSH_AUTH_SOCK",
+                "/private/tmp/com.apple.launchd.x/Listeners",
+            ),
             ("SECURITYSESSIONID", "186a4"),
             ("DISPLAY", "/private/tmp/xquartz:0"),
             ("TERM_SESSION_ID", "w0t0p0"),
-            ("MAINFRAME_MCP_TOKEN", "secret"),
             ("CLAUDECODE", "1"),
-            ("CLAUDE_CODE_ENTRYPOINT", "cli"),
-            ("ITERM_SESSION_ID", "x"),
-            ("SHLVL", "2"),
-        ]);
+        ];
+        let base = env(&inherited);
+        let mut captured = env(&inherited);
+        captured.insert("PATH".into(), "/usr/bin".into());
 
         assert_eq!(shell_delta(&captured, &base), env(&[("PATH", "/usr/bin")]));
     }
 
     #[test]
-    fn ordinary_tool_variables_are_not_session_scoped() {
+    fn values_the_profile_sets_on_purpose_are_kept() {
+        let base = env(&[(
+            "SSH_AUTH_SOCK",
+            "/private/tmp/com.apple.launchd.x/Listeners",
+        )]);
+        let captured = env(&[
+            ("PATH", "/usr/bin"),
+            ("SSH_AUTH_SOCK", "/h/.1password/agent.sock"),
+            ("CLAUDE_CODE_USE_BEDROCK", "1"),
+            ("CLAUDE_CODE_OAUTH_TOKEN", "token"),
+        ]);
+
+        let delta = shell_delta(&captured, &base);
+        assert_eq!(delta["SSH_AUTH_SOCK"], "/h/.1password/agent.sock");
+        assert_eq!(delta["CLAUDE_CODE_USE_BEDROCK"], "1");
+        assert_eq!(delta["CLAUDE_CODE_OAUTH_TOKEN"], "token");
+    }
+
+    #[test]
+    fn capture_made_and_app_owned_keys_are_never_cached() {
+        let captured = env(&[
+            ("PATH", "/usr/bin"),
+            ("SHLVL", "2"),
+            ("PWD", "/h"),
+            ("OLDPWD", "/"),
+            ("_", "/usr/bin/env"),
+            ("MAINFRAME_MCP_TOKEN", "secret"),
+            ("DAEMON_PORT", "31416"),
+            ("VITE_DAEMON_HTTP_PORT", "31416"),
+        ]);
+
+        assert_eq!(
+            shell_delta(&captured, &Env::new()),
+            env(&[("PATH", "/usr/bin")])
+        );
+    }
+
+    #[test]
+    fn tool_and_auth_variables_are_cacheable() {
         for key in [
             "PATH",
             "NVM_DIR",
             "ANTHROPIC_API_KEY",
+            "CLAUDE_CODE_USE_BEDROCK",
+            "CLAUDE_CODE_USE_VERTEX",
+            "SSH_AUTH_SOCK",
             "GOPATH",
             "LANG",
-            "HOMEBREW_PREFIX",
         ] {
-            assert!(!is_session_scoped(key), "{key}");
+            assert!(!is_never_cached(key), "{key}");
         }
     }
 }
