@@ -52,6 +52,14 @@ export const params = {
   scrollbar: query.get('scrollbar') === '1',
   /** `composer=real`: assistant-ui's autosizing composer input instead of the stub; Enter sends through `onNew`. */
   realComposer: query.get('composer') === 'real',
+  /**
+   * `queue=1` (`app`, with `composer=real`): the footer the app draws while a turn runs: an activity strip stub above
+   * the composer and the real `QueuedRows` in it. A send while the run is on queues, as the app's does: no prompt row
+   * in the transcript, the user-sent re-pin, and the daemon's queue snapshot `rtt` ms later (default 40; `rtt=0`
+   * lands it right after the send's task, before the next frame).
+   */
+  queue: query.get('queue') === '1',
+  rtt: query.has('rtt') ? Math.max(0, Number(query.get('rtt')) || 0) : 40,
   /** `content-visibility: auto` on every row (the P6 fallback in the decision rule). */
   contentVisibility: query.get('cv') === '1',
   /** v1: mount the newest rows first and prepend the rest of the window in slices. */

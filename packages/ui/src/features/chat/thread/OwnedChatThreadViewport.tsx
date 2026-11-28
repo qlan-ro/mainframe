@@ -58,7 +58,14 @@ export function OwnedChatThreadViewport({
   const messageCount = useAuiState((s) => s.thread.messages.length);
   const rootRef = useRef<HTMLDivElement>(null);
   const transcriptWidth = useUiPrefs((s) => s.transcriptWidth);
-  const footerRef = useCallback((node: HTMLDivElement | null) => setFooterEl(node), []);
+  const { setFooter } = owner;
+  const footerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setFooterEl(node);
+      setFooter(node);
+    },
+    [setFooter],
+  );
   return (
     <TranscriptScrollProvider value={owner.controller}>
       {/* WebKit loses scroll offsets when size containment is on the scroller itself. */}

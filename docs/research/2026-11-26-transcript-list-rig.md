@@ -662,3 +662,31 @@ Raw results: [`results/app-wk.json`](../../packages/ui/benchmarks/transcript-lis
 **A third finding, from the second review round: a short tail jumped from the top to the bottom on open.** With `shape=real&window=24` the newest six rows are shorter than the viewport. The first frame painted them at the top of an empty list, and the next slice made the list overflow and the owner pinned: the newest row moved 315 px (5 of 5 runs, the new boot cell `B-short`, which tracks the newest row's bottom edge against the viewport's from the first visible frame). Two changes close it: while the content does not overflow and rows are waiting, the next slice mounts in a layout effect, before paint (`use-tail-first-rows.ts`); and the list asks the owner to follow from that layout effect (`controller.followNow`), because the owner's resize observer only exists after the first paint. Result: 0 px in 5 of 5, rows at the tail on the first visible frame, 0 wrong frames. P1 to P5 and S-top pass in the same pass. S-top ran three more times on the final build; the parked and real-shape cells held in all of them, and `window=2` from the tail at -60 px showed the single 60.2 px ledger frame in 1 of 3. One intermediate build, which cleared an unused landing record on a timer, failed `window=2` parked at 0 with -60 px steps once (17,319 px, pinned: the page of 17,499 px committed after the timer had dropped the record). The record is now dropped two frames after the rows change (a `MutationObserver` on the content), not after the call, and that cell passed in all four runs since. Before paint at most eight passes mount a slice, growing 12, 24, 48 then 96 rows, because a folded turn draws most of its messages as 1 px slices and an unbounded loop throws React's update-depth error on a long agent run; the rest lands in task-sized slices (`B-short` after the bound: 0 px in 5 of 5; the `window=2` from-the-tail -60 px cell showed its ledger frame once, end 0.2 px). A capped tail whose roughly 570 mounted rows are still shorter than the viewport can paint short and then drop once; that needs a newest turn of about 600 or more folded messages, and it is the price of not throwing.
 
 **Manual mode** (`?manual=1`) no longer draws the overlay scrollbar thumb by default, as the app's transcript has none (it jumped and resized as pages landed); `scrollbar=1` brings it back.
+
+### 9.9 A send that queues (#519, 28 November 2026)
+
+The owner recorded the jump: a send while the agent was still working, so the message queued. In the same moment the strip above the composer lost a line, the transcript moved down, and the jump-to-latest button appeared. The R-send cases only sent while idle. R-send-queued (`queue=1`) adds the footer the app draws during a run: an activity strip stub, and the real `QueuedRows` in the real composer field. A send while running queues: no row in the transcript, the user-sent re-pin, and the queue snapshot after the commit, before the next frame (`rtt=0`) or 40 ms later.
+
+**The cause.** The re-pin fires for a queued send: the frame log shows it, and `chat-actions-queue-steer.test.ts` asserts it. Follow drops on the scroll event that comes after it. One frame of `R-send-queued`, main at 874cdfd0, a three-line draft:
+
+| | `scrollTop` | `scrollHeight` | `clientHeight` | footer | following |
+| --- | --- | --- | --- | --- | --- |
+| before the send | 68157 | 68625 | 468 | 252 | yes |
+| the send's frame | 68055 | 68625 | 530 | 190 | **no** |
+
+In the send's task the composer cleared and the strip lost 12 px, so the viewport grew by 102 px. The field's autosize read layout, and WebKit clamped the position to the bottom of that taller viewport (68625 − 570 = 68055). The queue snapshot then put a 40 px row in the composer, shrinking the viewport again before the frame. The scroll event saw the position 102 px up and 40 px above the bottom, while the net viewport change was only 62 px. `layoutExplains` compared the move with that net change and with the current bottom, found neither explained it, and released follow. The reply then streamed below a reader who was no longer followed.
+
+**The fix.** The owner keeps the lowest bottom position (`scrollHeight − clientHeight`) since it last acted, as #1016 keeps the lowest content height. It samples it whenever the rows change and whenever the thread footer changes (a mutation observer on the footer: rows, text, and the styles an autosizing field sets). A clamp lands on one of those samples. A reader's scroll lands anywhere, so it still releases.
+
+**WKWebView, one pass, load average 2.9 (recorded, not waited out):**
+
+| Case | `app@main` | `app@fix` |
+| --- | --- | --- |
+| R-send-queued / -real | **fail: follow dropped, gap 316 / 336 px** | pass, gap 0 |
+| R-send-queued-tasks-end / -real | **fail: gap 352 / 372 px** | pass, gap 0 |
+| R-send-queued-line, -rtt40, -idle (each / -real) | pass | pass |
+| R-send (14 cases), R-read (16), B-short, P1 to P5 | not rerun | pass; R-send matches #1016's recorded run case for case |
+
+A one-line message passes on main: the strip's 12 px clamp is smaller than the queued row's 40 px, so the net change explains it. A draft over one line, or a wrapped line, fails. The default list (`v0`) keeps following through the same send. Its bottom pin treats a scroll with no reader input as layout and follows again. Its only gaps are single frames as rows grow, which it shows on every streamed row.
+
+Raw results: [`results/queued-send-wk.json`](../../packages/ui/benchmarks/transcript-list/results/queued-send-wk.json).

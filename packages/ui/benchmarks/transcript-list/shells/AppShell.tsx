@@ -53,7 +53,10 @@ export function AppShell() {
           </div>
           <TranscriptEdgeFades />
         </div>
-        <ComposerStub />
+        {/* As `ThreadFooter` sits under the app's viewport: the owner samples what changes in it (#519). */}
+        <div ref={owner.setFooter} className="flex shrink-0 flex-col">
+          <ComposerStub />
+        </div>
       </div>
     </TranscriptScrollProvider>
   );
