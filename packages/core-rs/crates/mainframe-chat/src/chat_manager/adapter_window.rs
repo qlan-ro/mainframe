@@ -89,10 +89,12 @@ impl ChatManager {
     }
 
     /// Whether the first window of this open may come from the adapter's
-    /// pages: an idle chat with no history in memory and no current snapshot.
-    /// The viewing warm-up uses it to leave the full restore to the resume
-    /// that follows, as it does for a persisted tail. The adapter can still
-    /// decline to page; the resume then reads the whole history itself.
+    /// pages: an idle chat with no history in memory and no current snapshot,
+    /// on a session the adapter expects to page (`will_page_history`). The
+    /// viewing warm-up uses it to leave the full restore to the resume that
+    /// follows, as it does for a persisted tail; a chat the adapter will not
+    /// page keeps the full warm-up. A read that still declines makes the
+    /// resume read the whole history itself.
     pub async fn adapter_window_candidate(&self, chat_id: &str) -> bool {
         self.adapter_window_session(chat_id).await.is_some()
     }
@@ -104,6 +106,9 @@ impl ChatManager {
             return None;
         }
         let session = self.history_session(chat_id)?;
+        if !session.will_page_history().await {
+            return None;
+        }
         // A current snapshot loads faster than any page; a stale one is no
         // better than a miss, so only a current one sends the open to it.
         let context = self.shared.history_context(chat_id);

@@ -132,6 +132,14 @@ impl ClaudeSession {
         };
         crate::history::load_history_window(&id, &discovered, req).await
     }
+    /// Whether [`load_history_window`](Self::load_history_window) would read
+    /// from the end at all: one complete main transcript long enough for it.
+    pub async fn will_page_history(&self) -> bool {
+        match self.discover_history().await {
+            Some((_, _, discovered)) => crate::history::history_window_eligible(&discovered).await,
+            None => false,
+        }
+    }
     /// [`load_history`](Self::load_history) with a capped parse budget, for a
     /// refresh nobody is waiting on.
     pub async fn load_history_background(&self) -> Result<Vec<ChatMessage>, AdapterError> {

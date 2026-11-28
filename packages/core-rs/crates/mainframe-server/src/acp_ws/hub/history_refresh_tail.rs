@@ -31,8 +31,20 @@ pub(in crate::acp_ws::hub) async fn write_tail(
     };
     let request = first_window_request(chat_id, &window.window);
     let port = StoredHistory(messages);
-    let (response, replay): (JsonRpcResponse, _) =
-        mainframe_acp::dispatch_resume_with(request, &port, None, options).await;
+    let encoded = mainframe_acp::dispatch_resume_with(request, &port, None, options).await;
+    store_encoded(manager, store, chat_id, window, validation, encoded).await;
+}
+
+/// Stores a first window already encoded for `chat_id`, once the history it
+/// was built from still validates.
+pub(in crate::acp_ws::hub) async fn store_encoded(
+    manager: &ChatManager,
+    store: &TailStore,
+    chat_id: &str,
+    window: TailWindow,
+    validation: mainframe_chat::HistoryValidation,
+    (response, replay): (JsonRpcResponse, mainframe_acp::ResumeReplay),
+) {
     let prepared =
         tokio::task::spawn_blocking(move || PreparedHistoryTail::capture(&response, &replay)).await;
     let Ok(Some(tail)) = prepared else {

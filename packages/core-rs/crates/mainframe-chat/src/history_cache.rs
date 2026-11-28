@@ -75,11 +75,14 @@ async fn stat(path: &Path) -> Option<SourceFingerprint> {
     })
 }
 
+/// Written in field order: `fingerprint` first, so a stale snapshot is told
+/// from the file's first bytes (`history_cache_peek.rs`). Files written before
+/// it led hold it after `adapter_state` and `dependencies`; they still parse.
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
+    fingerprint: HistoryFingerprint,
     adapter_state: serde_json::Value,
     dependencies: Vec<mainframe_adapter_api::HistoryDependency>,
-    fingerprint: HistoryFingerprint,
     messages: Vec<ChatMessage>,
     /// Older snapshots lack it; the scan then reads the transcript as before.
     #[serde(default)]

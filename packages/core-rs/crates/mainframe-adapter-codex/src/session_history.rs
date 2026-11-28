@@ -63,6 +63,31 @@ impl CodexSession {
             }
         }
     }
+    /// [`load_history_window_inner`](Self::load_history_window_inner) in the
+    /// session's span, as the adapter trait returns it.
+    pub(super) fn history_window_future<'a>(
+        &'a self,
+        req: mainframe_adapter_api::WindowRequest<'a>,
+    ) -> mainframe_adapter_api::HistoryPageFuture<'a> {
+        use tracing::Instrument as _;
+        Box::pin(
+            self.load_history_window_inner(req)
+                .instrument(self.span.clone()),
+        )
+    }
+    /// [`will_page_history_inner`](Self::will_page_history_inner) in the session's span.
+    pub(super) fn will_page_future(&self) -> mainframe_adapter_api::BoxFuture<'_, bool> {
+        use tracing::Instrument as _;
+        Box::pin(self.will_page_history_inner().instrument(self.span.clone()))
+    }
+    /// The checks [`load_history_window_inner`] starts with, without starting
+    /// an app-server: a thread to resume (not a fork that has not sent, not a
+    /// thread never started) and a CLI not known to lack the method.
+    pub(super) async fn will_page_history_inner(&self) -> bool {
+        let executable = self.history_executable.lock_recover().clone();
+        !crate::history_page::known_to_lack(&executable)
+            && matches!(self.resolve_target(false).await, ThreadTarget::Resume(_))
+    }
     /// The newest turns through `thread/turns/list`, or `None` when this
     /// session cannot be paged (a fork that has not sent, a thread that is not
     /// yet started, or a CLI without the method).

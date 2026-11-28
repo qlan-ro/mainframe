@@ -234,9 +234,8 @@ async fn deliver_resume(
         progress,
     );
     connection.clear_resume_failures(&session_id);
-    if options.windowed_history {
-        prepare::complete_history(Arc::clone(ctx), session_id.clone(), tail_request);
-    }
+    let windowed = options.windowed_history;
+    prepare::complete_history(Arc::clone(ctx), session_id.clone(), tail_request, windowed);
     // A cache hit leaves the log unseeded on purpose; only a resume that read
     // the transcript has the work to do.
     if !from_cache && let (Some(log), Some(copy)) = (log.log, replay.seed_copy.take()) {

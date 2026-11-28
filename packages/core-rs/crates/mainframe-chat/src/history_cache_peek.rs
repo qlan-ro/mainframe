@@ -14,8 +14,10 @@ use serde::de::{Error as _, IgnoredAny, MapAccess, Visitor};
 
 use super::*;
 
-/// The most of a snapshot's start the peek reads: the fields before the
-/// fingerprint are a few small records, never the messages.
+/// The most of a snapshot's start the peek reads. The fingerprint is the first
+/// field; a file written before that leads with `adapter_state` and
+/// `dependencies`, and one whose fingerprint lies past this reads as stale:
+/// the load then parses the transcript and rewrites it in the current order.
 const HEAD_LIMIT: u64 = 1 << 20;
 
 /// What the visitor reports when it stops the read on purpose.
@@ -54,9 +56,14 @@ fn read_fingerprint(path: &Path) -> Option<HistoryFingerprint> {
     let mut found = None;
     let mut deserializer = serde_json::Deserializer::from_reader(reader);
     // The visitor ends the read with an error as soon as it holds the
-    // fingerprint, so the messages after it are never parsed.
-    /* expected */
-    let _ = (&mut deserializer).deserialize_map(Head(&mut found));
+    // fingerprint, so the messages after it are never parsed: an error with a
+    // fingerprint in hand is the normal end.
+    let read = (&mut deserializer).deserialize_map(Head(&mut found));
+    if found.is_none()
+        && let Err(err) = read
+    {
+        tracing::debug!(error = %err, path = %path.display(), "snapshot fingerprint unreadable");
+    }
     found
 }
 

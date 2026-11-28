@@ -203,10 +203,8 @@ async fn a_full_load_that_differs_from_the_window_resyncs() {
     assert_eq!(resyncs_after_window_then_load(full).await, 1);
 }
 
-#[tokio::test]
-async fn a_full_load_that_restores_a_permission_gate_resyncs_even_when_the_window_matches() {
-    // The newest message is a tool call nothing answered: the full load
-    // restores it as a pending gate, which a window from pages never carries.
+/// 15 messages whose newest is a tool call nothing answered, and their pages.
+fn gated_history() -> (Vec<Vec<ChatMessage>>, Vec<ChatMessage>) {
     let mut full: Vec<_> = (0..15).map(|n| message(&format!("m{n}"))).collect();
     full[14] = serde_json::from_value(json!({"id":"m14","chatId":"c1","type":"assistant",
         "timestamp":"2026-11-27T00:00:00Z",
@@ -217,8 +215,52 @@ async fn a_full_load_that_restores_a_permission_gate_resyncs_even_when_the_windo
         full[5..10].to_vec(),
         full[..5].to_vec(),
     ];
+    (pages, full)
+}
 
-    assert_eq!(resyncs_after_paged_load(pages, full).await, 1);
+#[tokio::test]
+async fn a_full_load_that_restores_a_permission_gate_resyncs_and_the_next_resume_carries_it() {
+    // The full load restores the call as a pending gate, which a window from
+    // pages never carries: the client must replay, and that replay has it.
+    let (pages, full) = gated_history();
+    let session = Arc::new(FakeSession {
+        pager: FakePages {
+            pages,
+            ..Default::default()
+        },
+        history: full,
+        ..Default::default()
+    });
+    let (deps, _) = manager(session);
+    let surface = Arc::new(Resyncs::default());
+    let manager = ChatManager::new(deps).with_chat_surface(surface.clone());
+    let window = manager.adapter_first_window("c1", 4).await.unwrap();
+    assert!(window.messages.iter().any(|m| m.id == "m14"));
+
+    manager.load_chat("c1").await;
+
+    assert_eq!(surface.0.load(Ordering::SeqCst), 1);
+    let replay = manager.get_resume_snapshot("c1").await;
+    assert_eq!(
+        replay.pending.map(|gate| gate.tool_use_id).as_deref(),
+        Some("pending-call")
+    );
+}
+
+#[tokio::test]
+async fn a_pending_gate_or_a_session_that_will_not_page_keeps_the_full_restore() {
+    let (_, declined) = manager(session(Vec::new()));
+    assert!(!declined.adapter_window_candidate("c1").await);
+
+    let (_, gated) = manager(session(pages(3, 5)));
+    assert!(gated.adapter_window_candidate("c1").await);
+    gated
+        .shared
+        .permissions
+        .lock()
+        .unwrap()
+        .restore_pending_permission("c1", &gated_history().1);
+    assert!(!gated.adapter_window_candidate("c1").await);
 }
 
 #[path = "chat_manager_tests_claude_tail.rs"]

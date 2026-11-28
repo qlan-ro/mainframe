@@ -243,6 +243,10 @@ impl AdapterSession for FakeSession {
     ) -> crate::HistoryPageFuture<'a> {
         self.pager.window(req)
     }
+    fn will_page_history(&self) -> BoxFuture<'_, bool> {
+        let pages = !self.pager.pages.is_empty();
+        Box::pin(async move { pages })
+    }
     fn history_sources(&self) -> BoxFuture<'_, Vec<PathBuf>> {
         let sources = self.history_sources.clone();
         Box::pin(async move { sources })

@@ -6,3 +6,6 @@ include!("resume_tests_part_2.rs");
 
 #[path = "resume_tests_deferred_seed.rs"]
 mod deferred_seed;
+
+#[path = "resume_tests_loaded_tail.rs"]
+mod loaded_tail;

@@ -2,7 +2,7 @@ use super::*;
 
 #[path = "history_tail.rs"]
 mod tail;
-pub(crate) use tail::load_window as load_history_window;
+pub(crate) use tail::{eligible as history_window_eligible, load_window as load_history_window};
 
 /// Workers a background load (a turn-end refresh) may hold; a chat the user
 /// opens meanwhile gets the rest of the budget.

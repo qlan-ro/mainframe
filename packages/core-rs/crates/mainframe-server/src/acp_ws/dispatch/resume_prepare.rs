@@ -10,9 +10,10 @@ pub(super) struct PreparedResume {
     pub cache_request: JsonRpcRequest,
     pub cache_validation: Option<mainframe_chat::HistoryValidation>,
     pub from_cache: bool,
-    /// Set when the reply came from the adapter's pages: no tail was read or
-    /// will be stored from it, so this first-window request (and its options)
-    /// is stored once the history is complete (`complete_history`).
+    /// Set when this reply leaves no tail behind: it came from the adapter's
+    /// pages, or it read the history itself before any validation existed
+    /// (`persist_resume` then stores nothing). The first-window request and
+    /// its options are stored once the history is complete (`complete_history`).
     pub tail_request: Option<(JsonRpcRequest, ResumeOptions)>,
     pub response: JsonRpcResponse,
     pub replay: ResumeReplay,
@@ -55,12 +56,13 @@ pub(super) async fn prepare_resume(
     };
     let from_cache = cached.is_some();
     let from_pages = from_cache && !from_tail;
+    let untailed = from_pages || (!from_cache && cache_validation.is_none());
     let (response, replay) = match cached {
         Some(cached) => cached,
         None => dispatch_resume_with(request, ports, revision_log, options).await,
     };
 
-    let tail_request = from_pages.then(|| (cache_request.clone(), options));
+    let tail_request = untailed.then(|| (cache_request.clone(), options));
     PreparedResume {
         cache_request,
         cache_validation,
@@ -71,22 +73,28 @@ pub(super) async fn prepare_resume(
     }
 }
 
-/// Loads the chat in full behind a windowed reply. `tail` (the first-window
-/// request and its options) is set when the reply came from adapter pages:
+/// Loads the chat in full behind a resume reply: after every windowed reply,
+/// and after any other reply on a chat nothing has loaded (a warm-up that
+/// returned early leaves the lifecycle load to the resume). `tail` (the
+/// first-window request and its options) is set when the reply left no tail:
 /// the loaded history then becomes the chat's persisted tail.
 pub(super) fn complete_history(
     ctx: std::sync::Arc<AppCtx>,
     chat_id: String,
     tail: Option<(JsonRpcRequest, ResumeOptions)>,
+    windowed: bool,
 ) {
+    let manager = std::sync::Arc::clone(&ctx.chat.chat_manager);
+    if !windowed && manager.is_chat_loaded(&chat_id) {
+        return;
+    }
     tokio::spawn(async move {
-        let manager = &ctx.chat.chat_manager;
         manager.load_chat(&chat_id).await;
         manager.publish_initial_history_state(&chat_id);
         if let Some((request, options)) = tail {
             ctx.chat
                 .facade_hub
-                .persist_loaded_tail(manager, &request, options)
+                .persist_loaded_tail(manager, request, options)
                 .await;
         }
     });

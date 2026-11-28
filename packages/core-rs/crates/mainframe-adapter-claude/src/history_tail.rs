@@ -72,6 +72,16 @@ pub(crate) async fn load_window(
     load_window_within(session_id, discovered, req, Limits::PRODUCTION).await
 }
 
+/// Whether a window read could start at all: one complete main transcript, at
+/// least [`MIN_FILE`] long. Stats only; the read can still decline later.
+pub(crate) async fn eligible(discovered: &DiscoveredFiles) -> bool {
+    discovered.complete
+        && discovered.parent_files().count() == 1
+        && tokio::fs::metadata(&discovered.primary_path)
+            .await
+            .is_ok_and(|meta| meta.len() >= MIN_FILE)
+}
+
 async fn load_window_within(
     session_id: &str,
     discovered: &DiscoveredFiles,

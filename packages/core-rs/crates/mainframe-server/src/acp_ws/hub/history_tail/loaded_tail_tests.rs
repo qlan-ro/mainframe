@@ -13,7 +13,7 @@ async fn a_history_loaded_behind_a_paged_reply_becomes_the_tail_the_next_start_s
         .ctx
         .chat
         .facade_hub
-        .persist_loaded_tail(&manager, &request, options())
+        .persist_loaded_tail(manager.clone(), request.clone(), options())
         .await;
     let port = ManagerPorts::new(Some(manager.clone()));
     let (_, full) =
@@ -47,7 +47,7 @@ async fn no_tail_is_stored_before_the_history_is_complete() {
         .ctx
         .chat
         .facade_hub
-        .persist_loaded_tail(&manager, &request(&fixture.chat_id), options())
+        .persist_loaded_tail(manager.clone(), request(&fixture.chat_id), options())
         .await;
 
     let store = fixture.ctx.chat.facade_hub.history_tails.as_ref().unwrap();

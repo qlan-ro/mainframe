@@ -120,11 +120,11 @@ impl FacadeHub {
     /// a pending permission or no current validation.
     pub(crate) async fn persist_loaded_tail(
         &self,
-        manager: &ChatManager,
-        request: &JsonRpcRequest,
+        manager: Arc<ChatManager>,
+        request: JsonRpcRequest,
         options: ResumeOptions,
     ) {
-        let Some((chat_id, window)) = first_window(request, options) else {
+        let Some((chat_id, window)) = first_window(&request, options) else {
             return;
         };
         let (Some(store), Some(validation)) =
@@ -132,19 +132,22 @@ impl FacadeHub {
         else {
             return;
         };
-        let snapshot = manager.get_resume_snapshot(&chat_id).await;
-        if snapshot.pending.is_some() || snapshot.streaming.is_some() {
-            return;
-        }
+        // Encoded straight from the cached history, borrowed: only the window
+        // is copied. A pending gate or a stream leaves nothing to store.
+        let port = crate::acp_ws::ports::ManagerPorts::new(Some(Arc::clone(&manager)));
+        let options = ResumeOptions {
+            defer_log_seed: false,
+            ..options
+        };
+        let encoded = mainframe_acp::dispatch_resume_with(request, &port, None, options).await;
         let window = TailWindow {
             window,
             previews: options.result_previews,
         };
-        let loaded = mainframe_chat::chat_manager::RefreshedHistory {
-            messages: snapshot.messages,
-            validation,
-        };
-        super::history_refresh::write_tail(manager, store, &chat_id, window, loaded).await;
+        super::history_refresh::store_encoded(
+            &manager, store, &chat_id, window, validation, encoded,
+        )
+        .await;
     }
 
     fn remember_window(&self, chat_id: &str, window: &Value, options: ResumeOptions) {
