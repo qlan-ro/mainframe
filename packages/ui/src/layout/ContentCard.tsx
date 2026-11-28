@@ -1,12 +1,23 @@
-import { useEffect, useRef, type ComponentProps } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ComponentProps } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { focusVisibleComposer } from '@/features/chat/composer/focus-composer';
-import { useBootRestoring } from '@/features/sessions/runtime/boot-restore';
-import { useDelayedVisible } from '@/lib/use-delayed-visible';
+import { bootHoldElapsedMs, useBootRestoring } from '@/features/sessions/runtime/boot-restore';
 
 /** A restore that outlasts this shows a spinner on the cover, so a quick one never flashes it. */
 export const BOOT_SPINNER_DELAY_MS = 400;
+
+/**
+ * The spinner is on the cover from its first frame, transparent, and a CSS animation delay
+ * (`[data-boot-spinner]` in `app.css`) brings it in once the hold has lasted `BOOT_SPINNER_DELAY_MS`.
+ * A timer would start in an effect after the shell's first commit and fire only when the main thread
+ * is free; at boot the thread is busy mounting the shell and then the restored transcript, and such a
+ * timer often fired after the cover had lifted. The delay counts from the hold's start, not this mount.
+ */
+function spinnerDelayStyle(): CSSProperties {
+  const delay = Math.max(0, Math.round(BOOT_SPINNER_DELAY_MS - bootHoldElapsedMs()));
+  return { '--mf-boot-spinner-delay': `${delay}ms` } as CSSProperties;
+}
 
 /**
  * An opaque sheet over the card while the last chat is restored. The surfaces
@@ -16,7 +27,7 @@ export const BOOT_SPINNER_DELAY_MS = 400;
  * preview webview, which composites above all DOM, steps aside for it too.
  */
 function BootCover() {
-  const spinner = useDelayedVisible(true, { delay: BOOT_SPINNER_DELAY_MS, minVisible: 0 });
+  const [spinnerStyle] = useState(spinnerDelayStyle);
   return (
     <div
       data-testid="content-card-boot-cover"
@@ -24,12 +35,9 @@ function BootCover() {
       aria-hidden
       className="absolute inset-0 z-50 flex items-center justify-center bg-background"
     >
-      {spinner && (
-        <Loader2Icon
-          data-testid="content-card-boot-spinner"
-          className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none"
-        />
-      )}
+      <span data-testid="content-card-boot-spinner" data-boot-spinner style={spinnerStyle}>
+        <Loader2Icon className="size-6 animate-spin text-muted-foreground motion-reduce:animate-none" />
+      </span>
     </div>
   );
 }

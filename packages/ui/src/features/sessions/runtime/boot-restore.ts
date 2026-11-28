@@ -18,21 +18,18 @@
  * - `decideBootRestore(chatId)` is called by the boot auto-select once the list
  *   has answered: `null` when there is nothing to reopen (the welcome is then
  *   the right screen), else the daemon id of the chat that was opened. The hold
- *   then ends when the chat's history is in and its first pin has landed at the
- *   tail of the transcript.
+ *   then ends on the first frame the chat's rows are shown at the tail of the
+ *   transcript.
  */
 import { create } from 'zustand';
 import { chatControllerRegistry } from './chat-controller-registry';
 
 /** The longest the app waits for the restore before it shows what it has. A running turn never holds past it. */
 export const BOOT_HOLD_MAX_MS = 1500;
-/** A chat with no transcript on screen (nothing to settle) is shown this long after it reports ready. */
+/** A chat with no rows on screen (nothing to settle) is shown this long after it reports ready. */
 const SETTLE_MS = 48;
-/** The first pin has landed once the main transcript has sat at its tail for this many polls in a row. */
-const TAIL_POLLS = 3;
 /** Within this many px of the end counts as the tail. */
 const TAIL_SLOP_PX = 2;
-const POLL_MS = 16;
 
 type Phase = 'idle' | 'holding' | 'released';
 
@@ -43,21 +40,32 @@ interface BootRestoreState {
 export const useBootRestore = create<BootRestoreState>(() => ({ phase: 'idle' }));
 
 let deadline: ReturnType<typeof setTimeout> | undefined;
-let watch: ReturnType<typeof setTimeout> | undefined;
+let watch: number | undefined;
+let startedAt = 0;
+
+function stopWatching(): void {
+  if (watch !== undefined) cancelAnimationFrame(watch);
+  watch = undefined;
+}
 
 function release(): void {
   clearTimeout(deadline);
-  clearTimeout(watch);
   deadline = undefined;
-  watch = undefined;
+  stopWatching();
   if (useBootRestore.getState().phase === 'holding') useBootRestore.setState({ phase: 'released' });
 }
 
 /** Starts the hold. Idempotent: only the first call of a page load takes effect. */
 export function beginBootRestore(): void {
   if (useBootRestore.getState().phase !== 'idle') return;
+  startedAt = performance.now();
   useBootRestore.setState({ phase: 'holding' });
   deadline = setTimeout(release, BOOT_HOLD_MAX_MS);
+}
+
+/** How long the hold has lasted: the cover's spinner counts its delay from the hold's start, not its own mount. */
+export function bootHoldElapsedMs(): number {
+  return useBootRestore.getState().phase === 'holding' ? performance.now() - startedAt : 0;
 }
 
 /** Whether the boot restore is still pending: session surfaces stay unpainted. */
@@ -89,12 +97,27 @@ function atTail(el: HTMLElement): boolean {
 }
 
 /**
+ * Whether the transcript has rows and shows them. The default list keeps its rows
+ * `visibility:hidden` until it has measured and pinned them; the plain list fills the
+ * viewport with its newest rows before its first paint. Layout-free on purpose.
+ */
+function rowsState(el: HTMLElement): 'none' | 'hidden' | 'shown' {
+  const row = el.querySelector('[data-message-id]');
+  if (row == null) return 'none';
+  const list = row.closest<HTMLElement>('[data-testid="chat-message-list"]') ?? row;
+  return getComputedStyle(list).visibility === 'hidden' ? 'hidden' : 'shown';
+}
+
+/**
  * The router has decided what to open. With nothing to open the hold ends at
- * once. Otherwise it ends when the chat's history is in, its transcript is
- * mounted in the chat column, and the first pin has landed at its tail: the
- * window arrives in pieces and the thread pins a few frames behind, so earlier
- * would draw it half-scrolled. A turn still streaming does not matter: the
- * tail is only checked, never waited to go quiet.
+ * once. Otherwise it ends on the first frame where the chat's history is in, its
+ * transcript is mounted in the chat column, its rows are shown and it sits at
+ * the tail. The check runs in an animation frame, before that frame paints, so
+ * the cover lifts in the very frame the pinned transcript is first drawn: no
+ * earlier frame can show it half-scrolled or still hidden, and no later one is
+ * spent covering a finished picture. A transcript with no rows (an empty chat)
+ * is shown `SETTLE_MS` after the chat is ready. A turn still streaming does not
+ * matter: the tail is only checked, never waited to go quiet.
  *
  * Until the chat column shows THIS chat's transcript the hold keeps waiting:
  * assistant-ui switches threads asynchronously, and for a moment the column
@@ -108,32 +131,32 @@ export function decideBootRestore(chatId: string | null): void {
     release();
     return;
   }
-  clearTimeout(watch);
+  stopWatching();
   let loadedAt = 0;
-  let atTailPolls = 0;
-  const poll = () => {
-    if (!isBootRestoring()) return;
-    if (chatLoaded(chatId)) {
-      loadedAt ||= Date.now();
-      const column = mainTranscripts();
-      const mine = column.find((el) => el.getAttribute('data-mf-chat-id') === chatId);
-      if (mine != null) {
-        atTailPolls = atTail(mine) ? atTailPolls + 1 : 0;
-        if (atTailPolls >= TAIL_POLLS) return release();
-      } else if (chatColumnUnmounted() && Date.now() - loadedAt >= SETTLE_MS) {
-        return release();
-      }
-    }
-    watch = setTimeout(poll, POLL_MS);
+  const settled = (): boolean => {
+    if (!chatLoaded(chatId)) return false;
+    loadedAt ||= performance.now();
+    const waited = performance.now() - loadedAt >= SETTLE_MS;
+    const mine = mainTranscripts().find((el) => el.getAttribute('data-mf-chat-id') === chatId);
+    if (mine == null) return chatColumnUnmounted() && waited;
+    const rows = rowsState(mine);
+    return atTail(mine) && (rows === 'shown' || (rows === 'none' && waited));
   };
-  poll();
+  const frame = () => {
+    watch = undefined;
+    if (!isBootRestoring()) return;
+    if (settled()) return release();
+    watch = requestAnimationFrame(frame);
+  };
+  if (settled()) return release();
+  watch = requestAnimationFrame(frame);
 }
 
 /** Test seam: a fresh page load. */
 export function resetBootRestore(): void {
   clearTimeout(deadline);
-  clearTimeout(watch);
   deadline = undefined;
-  watch = undefined;
+  stopWatching();
+  startedAt = 0;
   useBootRestore.setState({ phase: 'idle' });
 }

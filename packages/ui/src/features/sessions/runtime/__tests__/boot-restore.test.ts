@@ -25,6 +25,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** A message list holding one row, as both transcript lists render it. */
+function addRows(el: HTMLElement) {
+  const list = document.createElement('div');
+  list.setAttribute('data-testid', 'chat-message-list');
+  const row = document.createElement('div');
+  row.setAttribute('data-message-id', 'm1');
+  list.append(row);
+  el.append(list);
+  return list;
+}
+
 /** A transcript in the chat column (`main`) or a workspace tab (a side chat). jsdom has no layout: set the box by hand. */
 function mountTranscript(chatId: string | null, where: 'main' | 'side' = 'main') {
   const host = document.createElement('div');
@@ -125,28 +136,58 @@ describe('boot restore hold', () => {
   });
 
   describe('the transcript on screen', () => {
-    it('waits for the first pin to land at the tail: rows arrive in pieces and the offset trails them', () => {
-      const { box } = mountTranscript('chat-1');
-      beginBootRestore();
-      loadState['chat-1'] = 'ready';
-      decideBootRestore('chat-1');
-
+    it('shows the transcript on the first frame its rows sit at the tail, and not before', () => {
+      const { el, box } = mountTranscript('chat-1');
+      addRows(el);
       // Window grew, offset still at the top: not pinned.
       box.scrollHeight = 9000;
       box.scrollTop = 0;
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
       vi.advanceTimersByTime(200);
       expect(isBootRestoring()).toBe(true);
 
-      // Pinned for a poll or two is not enough...
+      // The pin lands: the next frame lifts the cover, with no further polls of a finished picture.
       box.scrollTop = 8900;
-      vi.advanceTimersByTime(32);
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('releases at the decision itself when the rows already sit at the tail', () => {
+      const { el, box } = mountTranscript('chat-1');
+      addRows(el);
+      box.scrollHeight = 3000;
+      box.scrollTop = 2900;
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('keeps holding while the list hides its rows (the default list before it has measured and pinned)', () => {
+      const { el } = mountTranscript('chat-1');
+      const list = addRows(el);
+      list.style.visibility = 'hidden';
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(400);
       expect(isBootRestoring()).toBe(true);
-      // ...a growth under it resets the count.
-      box.scrollHeight = 11000;
+
+      list.style.visibility = '';
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(false);
+    });
+
+    it('shows a transcript with no rows a beat after the chat is ready (an empty chat)', () => {
+      mountTranscript('chat-1');
+      beginBootRestore();
+      loadState['chat-1'] = 'ready';
+      decideBootRestore('chat-1');
+      vi.advanceTimersByTime(16);
+      expect(isBootRestoring()).toBe(true);
       vi.advanceTimersByTime(48);
-      expect(isBootRestoring()).toBe(true);
-      box.scrollTop = 10900;
-      vi.advanceTimersByTime(100);
       expect(isBootRestoring()).toBe(false);
     });
 

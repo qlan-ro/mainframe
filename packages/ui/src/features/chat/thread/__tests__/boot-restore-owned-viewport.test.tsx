@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * #1006's boot cover lifts once the main transcript has sat at its tail for three polls. It reads
+ * #1006's boot cover lifts on the first frame the main transcript shows its rows at its tail. It reads
  * `data-surface="chat"`, `data-mf-chat-thread` and `data-mf-chat-id` and the viewport's scroll position,
  * so the plain list's viewport has to carry the markers and reach the tail by itself.
  */

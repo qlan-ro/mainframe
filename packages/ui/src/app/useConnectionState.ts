@@ -18,6 +18,12 @@ import { beginBootRestore } from '../features/sessions/runtime/boot-restore';
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 const POLL_INTERVAL_MS = 2000;
+/**
+ * Until the daemon first answers, /health is asked this often. At app start the shell spawns the
+ * daemon and reports it before it listens; a refused connection fails at once, so a 2 s interval
+ * here left a just-started daemon unnoticed for up to 2 s with the window showing "Starting up…".
+ */
+export const BOOT_POLL_INTERVAL_MS = 100;
 const HEALTH_TIMEOUT_MS = 3000;
 
 /** Daemon health endpoint. IPv4 loopback — the daemon binds 127.0.0.1 only,
@@ -105,7 +111,7 @@ export function useConnectionState(): {
           beginBootRestore();
         }
       }
-      pollTimer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      pollTimer = setTimeout(() => void poll(), seededRef.current ? POLL_INTERVAL_MS : BOOT_POLL_INTERVAL_MS);
     }
 
     // Acquire the daemon port (+ status). A bridge/port reject must NOT pin the
